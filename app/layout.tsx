@@ -1,30 +1,29 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Amiri } from "next/font/google";
+import { Nunito_Sans, Amiri } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/shared/Header";
 import { Footer } from "@/components/shared/Footer";
 import { Toaster } from "@/components/ui/sonner";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const nunito = Nunito_Sans({
+  variable: "--font-nunito",
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  style: ["normal", "italic"],
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 const amiri = Amiri({
   variable: "--font-arabic",
   weight: ["400", "700"],
   subsets: ["arabic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Assessment Al-Fatihah — Muhajir Project Tilawah",
+  title: "Muhajir Project Tilawah — Assessment Al-Fatihah",
   description:
-    "Rekam bacaan Al-Fatihah, dapatkan analisis 4 jenis kesalahan baca dan rapot pribadi dari Muhajir Project Tilawah.",
+    "Rekam bacaan Al-Fatihah Anda — sistem memberi umpan balik awal dari 4 indikator kesalahan umum dalam 30 detik.",
 };
 
 export default function RootLayout({
@@ -35,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`${geistSans.variable} ${geistMono.variable} ${amiri.variable} h-full antialiased`}
+      className={`${nunito.variable} ${amiri.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Header />

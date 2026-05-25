@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { Copy, MessageCircle, Check } from "lucide-react";
 import { useState } from "react";
 
@@ -32,30 +31,41 @@ export function ShareButtons({ slug, skor }: Props) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button asChild variant="outline" className="min-h-11">
-        <a
-          href={`https://wa.me/?text=${waText}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <MessageCircle className="size-4 mr-2" />
-          Bagikan via WA
-        </a>
-      </Button>
-      <Button onClick={copy} variant="outline" className="min-h-11">
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 10,
+      }}
+    >
+      <a
+        href={`https://wa.me/?text=${waText}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn-mpt btn-mpt-outline"
+        style={{ minHeight: 48, fontSize: 14 }}
+      >
+        <MessageCircle className="size-4" />
+        Bagikan via WhatsApp
+      </a>
+      <button
+        type="button"
+        onClick={copy}
+        className="btn-mpt btn-mpt-outline"
+        style={{ minHeight: 48, fontSize: 14 }}
+      >
         {copied ? (
           <>
-            <Check className="size-4 mr-2" />
+            <Check className="size-4" />
             Tersalin
           </>
         ) : (
           <>
-            <Copy className="size-4 mr-2" />
-            Salin Link
+            <Copy className="size-4" />
+            Salin Tautan
           </>
         )}
-      </Button>
+      </button>
     </div>
   );
 }

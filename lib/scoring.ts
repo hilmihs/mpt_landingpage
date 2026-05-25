@@ -27,6 +27,40 @@ export const INDIKATOR_LABEL: Record<IndikatorKey, string> = {
   syaddah: "Penekanan Huruf (Syaddah)",
 };
 
+export interface IndikatorMeta {
+  label: string;
+  arab: string;
+  color: string;
+  desc: string;
+}
+
+export const INDIKATOR_META: Record<IndikatorKey, IndikatorMeta> = {
+  harakat: {
+    label: "Harakat",
+    arab: "حَرَكَة",
+    color: "var(--indikator-harakat)",
+    desc: "Fathah, kasrah, dhammah, sukun",
+  },
+  huruf: {
+    label: "Huruf",
+    arab: "حُرُوف",
+    color: "var(--indikator-huruf)",
+    desc: "Pengucapan makharijul huruf",
+  },
+  panjang_pendek: {
+    label: "Mad",
+    arab: "مَدّ",
+    color: "var(--indikator-mad)",
+    desc: "Panjang pendek bacaan",
+  },
+  syaddah: {
+    label: "Syaddah",
+    arab: "شَدَّة",
+    color: "var(--indikator-syaddah)",
+    desc: "Penekanan huruf bertasydid",
+  },
+};
+
 export interface ScoreResult {
   skor: number;
   status_label: string;
