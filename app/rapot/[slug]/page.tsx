@@ -4,7 +4,8 @@ import { supabaseService } from "@/lib/supabase";
 import { ScoreCircle } from "@/components/assessment/ScoreCircle";
 import { AyatCard } from "@/components/rapot/AyatCard";
 import { IndikatorCard } from "@/components/rapot/IndikatorCard";
-import { CTATahsin } from "@/components/rapot/CTATahsin";
+import { InterestGate } from "@/components/rapot/InterestGate";
+import { AINarrative } from "@/components/rapot/AINarrative";
 import { ShareButtons } from "@/components/rapot/ShareButtons";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import { INDIKATOR_META } from "@/lib/scoring";
@@ -18,6 +19,7 @@ interface Props {
 
 interface RapotWithSubmission extends RapotRow {
   submissions: {
+    id: string;
     nama: string;
     jenis_kelamin: "ikhwan" | "akhwat";
     audio_duration_sec: number | null;
@@ -28,7 +30,7 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
   const sb = supabaseService();
   const { data, error } = await sb
     .from("rapot")
-    .select("*, submissions(nama, jenis_kelamin, audio_duration_sec)")
+    .select("*, submissions(id, nama, jenis_kelamin, audio_duration_sec)")
     .eq("slug", slug)
     .maybeSingle();
   if (error || !data) return null;
@@ -232,9 +234,12 @@ export default async function RapotPage({ params }: Props) {
       </div>
 
       {/* Share row */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 26 }}>
         <ShareButtons slug={slug} skor={rapot.skor} />
       </div>
+
+      {/* AI Narrative — optional, only if generated */}
+      {rapot.ai_narrative && <AINarrative narrative={rapot.ai_narrative} />}
 
       {/* Tinjauan per Ayat */}
       <section style={{ marginBottom: 36 }}>
@@ -366,7 +371,13 @@ export default async function RapotPage({ params }: Props) {
         <MountainGlyph size={28} color="var(--accent)" />
       </div>
 
-      <CTATahsin />
+      {submission && (
+        <InterestGate
+          rapotSlug={slug}
+          submissionId={submission.id}
+          jenisKelamin={submission.jenis_kelamin}
+        />
+      )}
 
       <div
         style={{
