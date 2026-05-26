@@ -9,7 +9,10 @@ export function Footer() {
   if (
     pathname === "/" ||
     pathname.startsWith("/assessment") ||
-    pathname.startsWith("/rapot")
+    pathname.startsWith("/rapot") ||
+    pathname.startsWith("/booking") ||
+    pathname.startsWith("/portal-mpt-x7") ||
+    pathname.startsWith("/admin")
   ) {
     return null;
   }
