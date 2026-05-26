@@ -4,6 +4,7 @@ import { ArrowLeft, GraduationCap } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { CohortPicker } from "@/components/tahsin/CohortPicker";
+import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,14 @@ export default async function TahsinEnrollPage({
   }
 
   const cohorts = await fetchAvailableCohorts(eligibility.jenis_kelamin);
+
+  // Emit funnel impression: peserta saw the Tahsin enrollment offer.
+  // Best-effort, fire-and-forget. trackEvent has its own try/catch.
+  await trackEvent({
+    event_name: FUNNEL_EVENTS.TAHSIN_INVITED,
+    submission_id: eligibility.submission_id,
+    metadata: { available_cohorts: cohorts.length },
+  });
 
   return (
     <div

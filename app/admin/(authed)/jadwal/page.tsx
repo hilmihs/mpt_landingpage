@@ -19,7 +19,11 @@ interface Slot {
 
 async function fetchSlots(): Promise<Slot[]> {
   const sb = supabaseService();
-  const horizon = new Date();
+  const now = new Date();
+  // Window: 1 day in the past (to include sessions ending today) through 28 days ahead.
+  const earliest = new Date(now);
+  earliest.setDate(earliest.getDate() - 1);
+  const horizon = new Date(now);
   horizon.setDate(horizon.getDate() + 28);
 
   try {
@@ -29,8 +33,10 @@ async function fetchSlots(): Promise<Slot[]> {
         `id, teacher_id, kind, scheduled_at, duration_min, capacity, reserved_count, gender_target, status, zoom_join_url,
          teachers:teacher_id(nama)`,
       )
+      .gte("scheduled_at", earliest.toISOString())
       .lte("scheduled_at", horizon.toISOString())
-      .order("scheduled_at", { ascending: true });
+      .order("scheduled_at", { ascending: true })
+      .limit(500);
 
     const rows = (data ?? []) as unknown as {
       id: string;

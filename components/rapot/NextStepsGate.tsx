@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import type { ParticipantEligibility } from "@/lib/eligibility";
 import { InterestGate } from "@/components/rapot/InterestGate";
+import { GateImpressionTracker } from "@/components/rapot/GateImpressionTracker";
+import { ChangeMindButton } from "@/components/rapot/ChangeMindButton";
 
 interface Props {
   rapotSlug: string;
@@ -19,10 +21,11 @@ interface Props {
 
 /**
  * Smart "what's next" section on the rapot page. Picks one of:
- *   - Gate 1 (default): peserta hasn't booked yet → show InterestGate
- *   - Gate 2: peserta attended assessment, not enrolled → cohort enrollment CTA
- *   - Enrolled state: peserta is in a cohort → show schedule + progress
- *   - Gate 3: peserta qualified for HITS → unlock CTA
+ *   - Gate 3 (highest reward): peserta ever_qualified_for_hits → HITS unlock
+ *   - Enrolled state: peserta in active cohort → progress display
+ *   - Gate 2: peserta attended assessment, not enrolled → Tahsin enrollment CTA
+ *   - Gate 2 declined: peserta said "no/later" earlier → soft reminder + change-mind
+ *   - Gate 1 (default fallback): peserta hasn't booked yet → InterestGate
  */
 export function NextStepsGate({
   rapotSlug,
@@ -41,18 +44,57 @@ export function NextStepsGate({
   }
 
   // Priority 1: Gate 3 — HITS unlock (highest reward, most engaged peserta)
+  // Falls back if user already declined.
   if (eligibility.gate3_eligible) {
-    return <Gate3HitsSection rapotSlug={rapotSlug} eligibility={eligibility} />;
+    return (
+      <Gate3HitsSection
+        rapotSlug={rapotSlug}
+        submissionId={eligibility.submission_id}
+        eligibility={eligibility}
+      />
+    );
   }
 
-  // Priority 2: Enrolled in cohort (showing progress, not a gate per se)
+  // Gate 3 declined → soft reminder
+  if (
+    eligibility.ever_qualified_for_hits &&
+    (eligibility.gate3_response === "no" || eligibility.gate3_response === "later")
+  ) {
+    return (
+      <Gate3DeclinedSection
+        rapotSlug={rapotSlug}
+        submissionId={eligibility.submission_id}
+      />
+    );
+  }
+
+  // Priority 2: Active enrollment — show progress
   if (eligibility.enrolled_cohort) {
     return <EnrolledSection eligibility={eligibility} />;
   }
 
   // Priority 3: Gate 2 — Eligible to enroll in Tahsin
   if (eligibility.gate2_eligible) {
-    return <Gate2TahsinSection rapotSlug={rapotSlug} />;
+    return (
+      <Gate2TahsinSection
+        rapotSlug={rapotSlug}
+        submissionId={eligibility.submission_id}
+      />
+    );
+  }
+
+  // Gate 2 declined (said 'no' or 'later') but assessment attended → reminder
+  if (
+    eligibility.attended_assessment_at &&
+    (eligibility.gate2_response === "no" || eligibility.gate2_response === "later")
+  ) {
+    return (
+      <Gate2DeclinedSection
+        rapotSlug={rapotSlug}
+        submissionId={eligibility.submission_id}
+        gate2Response={eligibility.gate2_response}
+      />
+    );
   }
 
   // Default: Gate 1 — Booking assessment
@@ -65,7 +107,13 @@ export function NextStepsGate({
   );
 }
 
-function Gate2TahsinSection({ rapotSlug }: { rapotSlug: string }) {
+function Gate2TahsinSection({
+  rapotSlug,
+  submissionId,
+}: {
+  rapotSlug: string;
+  submissionId: string;
+}) {
   return (
     <section
       className="card-mpt"
@@ -76,6 +124,10 @@ function Gate2TahsinSection({ rapotSlug }: { rapotSlug: string }) {
         border: "2px solid color-mix(in oklab, var(--accent), transparent 70%)",
       }}
     >
+      <GateImpressionTracker
+        gate="gate2_post_assessment"
+        submissionId={submissionId}
+      />
       <div
         style={{
           display: "inline-flex",
@@ -179,12 +231,76 @@ function Gate2TahsinSection({ rapotSlug }: { rapotSlug: string }) {
   );
 }
 
+function Gate2DeclinedSection({
+  rapotSlug,
+  submissionId,
+  gate2Response,
+}: {
+  rapotSlug: string;
+  submissionId: string;
+  gate2Response: "no" | "later";
+}) {
+  return (
+    <section
+      className="card-mpt"
+      style={{
+        padding: "22px 24px",
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--ink-mute)",
+          marginBottom: 8,
+        }}
+      >
+        {gate2Response === "later" ? "Disimpan untuk Nanti" : "Anda memilih tidak lanjut"}
+      </div>
+      <h3
+        className="font-display"
+        style={{
+          fontSize: 18,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        Pintu Tahsin Al-Fatihah masih terbuka untuk Anda.
+      </h3>
+      <p
+        style={{
+          fontSize: 13,
+          color: "var(--ink-soft)",
+          lineHeight: 1.6,
+          margin: "0 0 14px",
+        }}
+      >
+        Bila kemudian ingin lanjut, tinggal klik tombol di bawah untuk lihat
+        cohort yang sedang dibuka.
+      </p>
+      <ChangeMindButton
+        rapotSlug={rapotSlug}
+        submissionId={submissionId}
+        gate="gate2_post_assessment"
+        ctaLabel="Lihat Cohort Tahsin"
+        ctaHref={`/tahsin/${rapotSlug}`}
+      />
+    </section>
+  );
+}
+
 function EnrolledSection({
   eligibility,
 }: {
   eligibility: ParticipantEligibility;
 }) {
-  const c = eligibility.enrolled_cohort!;
+  const c = eligibility.enrolled_cohort;
+  if (!c) return null; // defensive — getter chain depends on non-null
   const startStr = new Date(c.start_date).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -322,12 +438,17 @@ function EnrolledSection({
 
 function Gate3HitsSection({
   rapotSlug,
+  submissionId,
   eligibility,
 }: {
   rapotSlug: string;
+  submissionId: string;
   eligibility: ParticipantEligibility;
 }) {
-  const c = eligibility.enrolled_cohort!;
+  const c = eligibility.enrolled_cohort;
+  const completedNote = c
+    ? `${c.completed_sessions} dari 4 sesi pada cohort terbaru`
+    : "Program Tahsin Al-Fatihah";
 
   return (
     <section
@@ -341,6 +462,10 @@ function Gate3HitsSection({
         overflow: "hidden",
       }}
     >
+      <GateImpressionTracker
+        gate="gate3_post_tahsin"
+        submissionId={submissionId}
+      />
       <div
         style={{
           width: 64,
@@ -398,11 +523,9 @@ function Gate3HitsSection({
         }}
       >
         Anda menyelesaikan{" "}
-        <strong style={{ color: "var(--ink)" }}>
-          {c.completed_sessions} dari 4 sesi
-        </strong>{" "}
-        Tahsin Al-Fatihah. Program-program lanjutan tilawah di Hilmi Institute
-        of Tilawah Studies sekarang terbuka untuk Anda.
+        <strong style={{ color: "var(--ink)" }}>{completedNote}</strong>.
+        Program-program lanjutan tilawah di Hilmi Institute of Tilawah Studies
+        sekarang terbuka untuk Anda.
       </p>
 
       <Link
@@ -420,6 +543,67 @@ function Gate3HitsSection({
         Buka Program Lanjutan HITS
         <ArrowRight size={15} strokeWidth={2.4} />
       </Link>
+    </section>
+  );
+}
+
+function Gate3DeclinedSection({
+  rapotSlug,
+  submissionId,
+}: {
+  rapotSlug: string;
+  submissionId: string;
+}) {
+  return (
+    <section
+      className="card-mpt"
+      style={{
+        padding: "22px 24px",
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--ink-mute)",
+          marginBottom: 8,
+        }}
+      >
+        Lulus Tahsin Al-Fatihah
+      </div>
+      <h3
+        className="font-display"
+        style={{
+          fontSize: 18,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        Program lanjutan HITS masih terbuka kapanpun Anda siap.
+      </h3>
+      <p
+        style={{
+          fontSize: 13,
+          color: "var(--ink-soft)",
+          lineHeight: 1.6,
+          margin: "0 0 14px",
+        }}
+      >
+        Anda sudah menyelesaikan syarat dasar. Klik tombol di bawah kalau
+        ingin lihat daftar program lanjutan.
+      </p>
+      <ChangeMindButton
+        rapotSlug={rapotSlug}
+        submissionId={submissionId}
+        gate="gate3_post_tahsin"
+        ctaLabel="Buka HITS"
+        ctaHref={`/hits/${rapotSlug}`}
+      />
     </section>
   );
 }

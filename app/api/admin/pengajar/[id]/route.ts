@@ -13,6 +13,8 @@ const patchSchema = z.object({
   email_zoom: z.string().email().optional().or(z.literal("")),
 });
 
+const idSchema = z.string().uuid();
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -23,6 +25,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  if (!idSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "invalid_id" }, { status: 400 });
+  }
 
   let body: unknown;
   try {

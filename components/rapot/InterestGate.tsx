@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Heart, CheckCircle2 } from "lucide-react";
+import { GateImpressionTracker } from "@/components/rapot/GateImpressionTracker";
 
 interface Props {
   rapotSlug: string;
@@ -10,7 +11,7 @@ interface Props {
   jenisKelamin: "ikhwan" | "akhwat";
 }
 
-export function InterestGate({ rapotSlug }: Props) {
+export function InterestGate({ rapotSlug, submissionId }: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState<"yes" | "no" | null>(null);
   const [declined, setDeclined] = useState(false);
@@ -121,6 +122,7 @@ export function InterestGate({ rapotSlug }: Props) {
         position: "relative",
         overflow: "hidden",
       }}
+      data-gate="gate1_post_rapot"
     >
       <div
         style={{
@@ -138,6 +140,7 @@ export function InterestGate({ rapotSlug }: Props) {
         aria-hidden
       />
 
+      <GateImpressionTracker gate="gate1_post_rapot" submissionId={submissionId} />
       <div style={{ position: "relative", maxWidth: 720 }}>
         <div
           className="pill"

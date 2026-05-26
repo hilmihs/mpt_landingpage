@@ -14,9 +14,6 @@ export const maxDuration = 60;
  *   - endpoint.url_validation  (one-time setup)
  *   - meeting.started
  *   - meeting.ended
- *
- * (Participant join/leave events are optional. We rely on past_meetings API
- * called from meeting.ended to get the full participant list.)
  */
 export async function POST(req: Request) {
   const secretToken = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
@@ -37,7 +34,6 @@ export async function POST(req: Request) {
   }
 
   // URL validation challenge — Zoom sends this once when setting up the webhook.
-  // Must respond synchronously with HMAC-encrypted plainToken.
   if (parsed.event === "endpoint.url_validation") {
     const plainToken = (parsed.payload as { plainToken?: string } | undefined)
       ?.plainToken;
@@ -114,12 +110,45 @@ async function handleEnded(meetingId: string, endTime?: string) {
     })
     .eq("zoom_meeting_id", meetingId);
 
-  // Zoom needs a few seconds before past_meetings API is populated. We retry
-  // with backoff in the reconcile loop, but in production prefer queuing via
-  // BullMQ for the participant pull. For now, reconcile inline.
-  // Delay briefly to give Zoom time to flush participants list.
-  await new Promise((r) => setTimeout(r, 5_000));
+  // Zoom's past_meetings API can take 5-30+ seconds to populate after a
+  // meeting ends. Retry the reconcile with backoff: if listMeetingParticipants
+  // returns empty (which would otherwise mark everyone no_show), wait and
+  // retry up to 4 times.
+  //
+  // Total worst case: 5 + 10 + 15 + 20 = 50s, fits within maxDuration=60.
+  const backoffMs = [5_000, 10_000, 15_000, 20_000];
+  let lastResult = null;
+  for (let attempt = 0; attempt < backoffMs.length; attempt++) {
+    await new Promise((r) => setTimeout(r, backoffMs[attempt]));
 
-  const result = await reconcileSlotAttendance(meetingId);
-  console.log("[zoom-webhook] reconcile:", JSON.stringify(result));
+    const result = await reconcileSlotAttendance(meetingId);
+    lastResult = result;
+
+    // If anyone was actually marked attended, Zoom data was ready — done.
+    if (result.attended_auto > 0 || result.attended_review > 0) {
+      console.log(
+        `[zoom-webhook] reconcile attempt ${attempt + 1} succeeded:`,
+        JSON.stringify(result),
+      );
+      return;
+    }
+
+    // If there were no candidates at all (slot had no bookings/enrollments),
+    // also done — nothing to retry.
+    if (result.targets_total === 0) {
+      console.log("[zoom-webhook] reconcile: no targets, exit", JSON.stringify(result));
+      return;
+    }
+
+    // Otherwise: all targets marked no_show (or hit errors). This is the
+    // suspicious case — likely past_meetings not populated yet. Try again.
+    console.warn(
+      `[zoom-webhook] reconcile attempt ${attempt + 1} found 0 attendees out of ${result.targets_total}; retrying`,
+    );
+  }
+
+  console.error(
+    "[zoom-webhook] reconcile exhausted retries — Zoom past_meetings may have been unavailable. Last result:",
+    JSON.stringify(lastResult),
+  );
 }

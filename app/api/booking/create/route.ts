@@ -78,7 +78,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Check existing booking (idempotent for same submission + slot)
+  // Check existing booking (idempotent for same submission + slot).
+  // Schema has UNIQUE(slot_id, submission_id) so a cancelled row still
+  // occupies the slot — INSERT would 23505. Resurrect it via UPDATE
+  // instead of INSERT for the rebook-after-cancel case.
   const { data: existing } = await sb
     .from("bookings")
     .select("id, status")
@@ -90,22 +93,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ booking_id: existing.id, reused: true });
   }
 
-  const { data: booking, error: insertErr } = await sb
-    .from("bookings")
-    .insert({
-      slot_id,
-      submission_id,
-      status: "reserved",
-      notes_from_user: notes_from_user ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (insertErr || !booking) {
-    return NextResponse.json(
-      { error: "db_error", message: insertErr?.message ?? "insert failed" },
-      { status: 500 },
-    );
+  let booking: { id: string };
+  if (existing && existing.status === "cancelled") {
+    // Resurrect: move back to reserved, clear cancellation metadata.
+    const { data: updated, error: updateErr } = await sb
+      .from("bookings")
+      .update({
+        status: "reserved",
+        reserved_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+        notes_from_user: notes_from_user ?? null,
+        cancelled_at: null,
+        cancellation_reason: null,
+      })
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+    if (updateErr || !updated) {
+      return NextResponse.json(
+        { error: "db_error", message: updateErr?.message ?? "rebook failed" },
+        { status: 500 },
+      );
+    }
+    booking = updated;
+  } else {
+    const { data: inserted, error: insertErr } = await sb
+      .from("bookings")
+      .insert({
+        slot_id,
+        submission_id,
+        status: "reserved",
+        notes_from_user: notes_from_user ?? null,
+      })
+      .select("id")
+      .single();
+    if (insertErr || !inserted) {
+      return NextResponse.json(
+        { error: "db_error", message: insertErr?.message ?? "insert failed" },
+        { status: 500 },
+      );
+    }
+    booking = inserted;
   }
 
   await trackEvent({

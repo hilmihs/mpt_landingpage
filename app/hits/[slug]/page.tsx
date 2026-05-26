@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Trophy, ExternalLink, ArrowLeft } from "lucide-react";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
-import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
+import { GateImpressionTracker } from "@/components/rapot/GateImpressionTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +17,16 @@ export default async function HitsUnlockPage({
   const eligibility = await getParticipantEligibilityBySlug(slug);
   if (!eligibility) notFound();
 
-  // Hard gate: only peserta who completed Tahsin (≥3 sessions attended) can pass
-  if (!eligibility.enrolled_cohort?.qualified_for_hits) {
+  // Hard gate: only peserta who ever completed Tahsin (≥3 sessions in any
+  // non-dropped enrollment) can pass. Re-enrolling in a new cohort doesn't
+  // revoke this.
+  if (!eligibility.ever_qualified_for_hits) {
     redirect(`/rapot/${slug}?hits_locked=1`);
   }
 
-  // Track view + click event in one go (page load = "shown")
-  await trackEvent({
-    event_name: FUNNEL_EVENTS.GATE3_SHOWN,
-    submission_id: eligibility.submission_id,
-    metadata: { cohort_id: eligibility.enrolled_cohort.id },
-  });
+  // Use the most-recent enrollment's stats for display (could be the
+  // qualifying cohort, could be a newer review cohort).
+  const cohortForDisplay = eligibility.enrolled_cohort;
 
   return (
     <div
@@ -119,13 +118,19 @@ export default async function HitsUnlockPage({
               margin: "0 auto 28px",
             }}
           >
-            Anda telah menyelesaikan{" "}
-            <strong style={{ color: "var(--ink)" }}>
-              {eligibility.enrolled_cohort.completed_sessions} dari 4 sesi
-            </strong>{" "}
-            program Tahsin Al-Fatihah. Selamat — Anda kini eligible untuk lanjut ke
-            program lanjutan di Hilmi Institute of Tilawah Studies (HITS).
+            Anda telah menyelesaikan program{" "}
+            <strong style={{ color: "var(--ink)" }}>Tahsin Al-Fatihah</strong>
+            {cohortForDisplay
+              ? ` (${cohortForDisplay.completed_sessions} dari 4 sesi pada cohort terbaru). `
+              : ". "}
+            Selamat — Anda kini eligible untuk lanjut ke program lanjutan di
+            Hilmi Institute of Tilawah Studies (HITS).
           </p>
+
+          <GateImpressionTracker
+            gate="gate3_post_tahsin"
+            submissionId={eligibility.submission_id}
+          />
         </div>
 
         <div

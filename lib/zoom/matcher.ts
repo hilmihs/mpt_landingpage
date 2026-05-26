@@ -154,8 +154,24 @@ export function matchParticipants(
   pairs.sort((a, b) => b.confidence - a.confidence);
 
   const claimedParticipants = new Set<string>();
+  // Stable fallback index when zoom_participant_id is missing AND name +
+  // join_time collide (two "Pengguna" joining the same second on shared
+  // devices). Without this, only the highest-confidence pair survives —
+  // the rest are wrongly skipped. The index makes each Zoom row unique.
+  const fallbackIndex = new Map<ZoomParticipantInput, number>();
+  let seenIdx = 0;
   for (const pair of pairs) {
-    const pKey = pair.p.zoom_participant_id ?? pair.p.name + (pair.p.join_time ?? "");
+    let pKey: string;
+    if (pair.p.zoom_participant_id) {
+      pKey = pair.p.zoom_participant_id;
+    } else {
+      let idx = fallbackIndex.get(pair.p);
+      if (idx === undefined) {
+        idx = seenIdx++;
+        fallbackIndex.set(pair.p, idx);
+      }
+      pKey = `${pair.p.name}|${pair.p.join_time ?? ""}|${idx}`;
+    }
     if (claimedKeys.has(pair.c.key)) continue;
     if (claimedParticipants.has(pKey)) continue;
     claimedKeys.add(pair.c.key);

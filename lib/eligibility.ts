@@ -10,7 +10,8 @@ export interface ParticipantEligibility {
   gate2_response: "yes" | "no" | "later" | null;
   attended_assessment_at: string | null;
 
-  // Tahsin enrollment state
+  // Current Tahsin enrollment (active = not dropped, most recent).
+  // Used to decide whether to show "you're enrolled" state in NextStepsGate.
   enrolled_cohort: {
     id: string;
     name: string;
@@ -21,6 +22,12 @@ export interface ParticipantEligibility {
     qualified_for_hits: boolean;
     enrollment_status: string;
   } | null;
+
+  // True if ANY non-dropped enrollment (current or past) has
+  // qualified_for_hits=true. This is the source-of-truth for Gate 3 and
+  // /hits/[slug] — a peserta who lulus once never loses HITS access by
+  // enrolling in another cohort for review.
+  ever_qualified_for_hits: boolean;
 
   // Gate 3 (post-tahsin, HITS unlock)
   gate3_eligible: boolean;
@@ -49,7 +56,7 @@ export async function getParticipantEligibility(
     jenis_kelamin: "ikhwan" | "akhwat";
   };
 
-  // 1. Did peserta attend an assessment?
+  // 1. Attendance: did peserta attend an assessment session?
   const { data: attendedRaw } = await sb
     .from("attendance")
     .select(
@@ -85,21 +92,21 @@ export async function getParticipantEligibility(
     responses.set(r.gate, r.response as "yes" | "no" | "later");
   }
 
-  // 3. Tahsin enrollment (most recent, non-dropped)
+  // 3. ALL non-dropped enrollments — needed to compute ever_qualified.
+  // We separately pick the most-recent one as the "current" cohort for UI.
   const { data: enrollRaw } = await sb
     .from("cohort_enrollments")
     .select(
-      `id, status, completed_sessions, qualified_for_hits,
+      `id, created_at, status, completed_sessions, qualified_for_hits,
        cohorts:cohort_id(id, name, status, start_date, end_date)`,
     )
     .eq("submission_id", submissionId)
     .neq("status", "dropped")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
 
-  const enrollment = enrollRaw as unknown as {
+  const enrollments = (enrollRaw ?? []) as unknown as {
     id: string;
+    created_at: string;
     status: string;
     completed_sessions: number;
     qualified_for_hits: boolean;
@@ -110,45 +117,63 @@ export async function getParticipantEligibility(
       start_date: string;
       end_date: string;
     } | null;
-  } | null;
+  }[];
 
+  const ever_qualified_for_hits = enrollments.some(
+    (e) => e.qualified_for_hits,
+  );
+
+  // Pick most-recent enrollment as the "current" one for UI state. If user
+  // has multiple, the newest wins (e.g., a re-enroll for review or a new
+  // cohort after graduating).
+  const current = enrollments[0];
   const enrolled_cohort =
-    enrollment && enrollment.cohorts
+    current && current.cohorts
       ? {
-          id: enrollment.cohorts.id,
-          name: enrollment.cohorts.name,
-          status: enrollment.cohorts.status,
-          start_date: enrollment.cohorts.start_date,
-          end_date: enrollment.cohorts.end_date,
-          completed_sessions: enrollment.completed_sessions,
-          qualified_for_hits: enrollment.qualified_for_hits,
-          enrollment_status: enrollment.status,
+          id: current.cohorts.id,
+          name: current.cohorts.name,
+          status: current.cohorts.status,
+          start_date: current.cohorts.start_date,
+          end_date: current.cohorts.end_date,
+          completed_sessions: current.completed_sessions,
+          qualified_for_hits: current.qualified_for_hits,
+          enrollment_status: current.status,
         }
       : null;
 
-  // Eligibility rules:
-  // Gate 2: attended assessment, no active enrollment yet, no prior "no" response
+  const gate2Response = responses.get("gate2_post_assessment") ?? null;
+  const gate3Response = responses.get("gate3_post_tahsin") ?? null;
+
+  // Gate 2 eligible iff:
+  //   - peserta attended assessment
+  //   - no active enrollment yet
+  //   - hasn't said 'no' OR 'later' (both treated as decided-not-yes;
+  //     UI gives a change-mind affordance for both)
   const gate2_eligible =
     !!assessmentAttendance &&
     !enrolled_cohort &&
-    responses.get("gate2_post_assessment") !== "no";
+    gate2Response !== "no" &&
+    gate2Response !== "later";
 
-  // Gate 3: enrolled in a cohort that qualifies for HITS (≥3 of 4 attended)
+  // Gate 3 eligible iff ever qualified for HITS and not declined.
+  // Note: uses ever_qualified, NOT current enrollment, so an alumnus
+  // who re-enrolled in cohort B doesn't lose Gate 3 from cohort A.
   const gate3_eligible =
-    !!enrolled_cohort &&
-    enrolled_cohort.qualified_for_hits &&
-    responses.get("gate3_post_tahsin") !== "no";
+    ever_qualified_for_hits &&
+    gate3Response !== "no" &&
+    gate3Response !== "later";
 
   return {
     submission_id: sub.id,
     nama: sub.nama,
     jenis_kelamin: sub.jenis_kelamin,
     gate2_eligible,
-    gate2_response: responses.get("gate2_post_assessment") ?? null,
+    gate2_response: gate2Response,
     attended_assessment_at: assessmentAttendance?.created_at ?? null,
     enrolled_cohort,
+    ever_qualified_for_hits,
     gate3_eligible,
-    gate3_response: responses.get("gate3_post_tahsin") ?? null,
+    gate3_response: gate3Response,
   };
 }
 

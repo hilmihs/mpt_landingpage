@@ -51,6 +51,10 @@ export async function sendMagicLink(
   const { error } = await sb.auth.signInWithOtp({
     email: lowerEmail,
     options: {
+      // We already verified admins row exists above; never create a fresh
+      // auth user from this endpoint (defense in depth against accidental
+      // signups via this code path).
+      shouldCreateUser: false,
       emailRedirectTo: `${origin}/auth/callback?next=/admin/overview`,
     },
   });

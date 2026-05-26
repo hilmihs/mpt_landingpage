@@ -13,6 +13,22 @@ const schema = z.object({
   cohort_id: z.string().uuid(),
 });
 
+const REASON_MESSAGES: Record<string, string> = {
+  cohort_not_found: "Cohort tidak ditemukan.",
+  cohort_closed: "Cohort ini sudah tidak menerima pendaftaran.",
+  gender_mismatch: "Cohort ini untuk gender yang berbeda.",
+  cohort_full: "Cohort ini sudah penuh.",
+  already_enrolled: "Anda sudah terdaftar di cohort ini.",
+};
+
+const REASON_STATUS: Record<string, number> = {
+  cohort_not_found: 404,
+  cohort_closed: 400,
+  gender_mismatch: 400,
+  cohort_full: 409,
+  already_enrolled: 409,
+};
+
 export async function POST(req: Request) {
   try {
     const rl = await enrollRatelimit().limit(getClientIp(req));
@@ -68,70 +84,38 @@ export async function POST(req: Request) {
     );
   }
 
+  // Atomic enroll via stored procedure — eliminates TOCTOU between
+  // capacity check and INSERT. See migration 0003.
   const sb = supabaseService();
-
-  // Atomic-ish check + insert. The DB has a UNIQUE(cohort_id, submission_id),
-  // so a concurrent double-enroll fails with 23505. We also pre-check capacity
-  // and gender for a friendlier error message.
-  const { data: cohortRaw } = await sb
-    .from("cohorts")
-    .select("id, status, capacity, enrolled_count, gender_target, name")
-    .eq("id", cohort_id)
-    .maybeSingle();
-  const cohort = cohortRaw as {
-    id: string;
-    status: string;
-    capacity: number;
-    enrolled_count: number;
-    gender_target: string;
-    name: string;
-  } | null;
-
-  if (!cohort) {
-    return NextResponse.json({ error: "cohort_not_found" }, { status: 404 });
-  }
-  if (cohort.status !== "open") {
-    return NextResponse.json(
-      { error: "cohort_closed", message: "Cohort ini sudah tidak menerima pendaftaran." },
-      { status: 400 },
-    );
-  }
-  if (cohort.gender_target !== eligibility.jenis_kelamin) {
-    return NextResponse.json(
-      {
-        error: "gender_mismatch",
-        message: "Cohort ini untuk gender yang berbeda.",
-      },
-      { status: 400 },
-    );
-  }
-  if (cohort.enrolled_count >= cohort.capacity) {
-    return NextResponse.json(
-      { error: "cohort_full", message: "Cohort ini sudah penuh." },
-      { status: 409 },
-    );
-  }
-
-  const { error: insertErr } = await sb.from("cohort_enrollments").insert({
-    cohort_id,
-    submission_id: eligibility.submission_id,
-    status: "enrolled",
+  const { data: rpcData, error: rpcErr } = await sb.rpc("enroll_in_cohort", {
+    p_cohort_id: cohort_id,
+    p_submission_id: eligibility.submission_id,
+    p_jenis_kelamin: eligibility.jenis_kelamin,
   });
 
-  if (insertErr) {
-    // 23505 = unique violation (race condition lost) → treat as already enrolled
-    if (insertErr.code === "23505") {
-      return NextResponse.json(
-        { ok: true, already_enrolled: true, cohort_id },
-      );
-    }
+  if (rpcErr) {
     return NextResponse.json(
-      { error: "db_error", message: insertErr.message },
+      { error: "db_error", message: rpcErr.message },
       { status: 500 },
     );
   }
 
-  // Auto-record gate2 interest as 'yes'
+  const result = rpcData as
+    | { ok: true; enrollment_id: string; cohort_name: string }
+    | { ok: false; reason: string };
+
+  if (!result.ok) {
+    const reason = result.reason;
+    return NextResponse.json(
+      {
+        error: reason,
+        message: REASON_MESSAGES[reason] ?? "Gagal mendaftar cohort.",
+      },
+      { status: REASON_STATUS[reason] ?? 400 },
+    );
+  }
+
+  // Record gate2='yes' so future eligibility checks see the explicit consent
   await sb
     .from("interest_responses")
     .upsert(
@@ -146,7 +130,7 @@ export async function POST(req: Request) {
   await trackEvent({
     event_name: FUNNEL_EVENTS.TAHSIN_ENROLLED,
     submission_id: eligibility.submission_id,
-    metadata: { cohort_id, cohort_name: cohort.name },
+    metadata: { cohort_id, cohort_name: result.cohort_name },
   });
 
   return NextResponse.json({ ok: true, cohort_id });

@@ -63,11 +63,17 @@ export async function teacherLogin(
     };
   }
 
-  // Touch last_login_at
-  await svc
-    .from("teachers")
-    .update({ last_login_at: new Date().toISOString() })
-    .eq("auth_user_id", data.user.id);
+  // Touch last_login_at — best-effort, never blocks login redirect.
+  // (If we await + the update errors, the server action throws and the
+  //  user sees a generic error UI even though they're actually logged in.)
+  try {
+    await svc
+      .from("teachers")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("auth_user_id", data.user.id);
+  } catch {
+    // ignore — telemetry only, not gating
+  }
 
   redirect("/portal-mpt-x7/dashboard");
 }

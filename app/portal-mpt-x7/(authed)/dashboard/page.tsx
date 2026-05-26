@@ -2,58 +2,46 @@ import { Calendar, Users, ClipboardCheck, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { supabaseService } from "@/lib/supabase";
+import { startOfJakartaDay, endOfJakartaDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
 interface Stats {
   upcomingSlots: number;
-  todayBookings: number;
   pendingAttendance: number;
   activeAvailabilityWindows: number;
 }
 
 async function fetchStats(teacherId: string): Promise<Stats> {
   const sb = supabaseService();
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setHours(23, 59, 59, 999);
 
   try {
-    const [slots, todayBookings, pendingAttendance, availability] =
-      await Promise.all([
-        sb
-          .from("slots")
-          .select("id", { count: "exact", head: true })
-          .eq("teacher_id", teacherId)
-          .gt("scheduled_at", new Date().toISOString())
-          .eq("status", "scheduled"),
-        sb
-          .from("slots")
-          .select("id, bookings(id)", { count: "exact", head: true })
-          .eq("teacher_id", teacherId)
-          .gte("scheduled_at", new Date(today.toDateString()).toISOString())
-          .lte("scheduled_at", tomorrow.toISOString()),
-        sb
-          .from("attendance")
-          .select("id", { count: "exact", head: true })
-          .eq("need_review", true),
-        sb
-          .from("teacher_availability")
-          .select("id", { count: "exact", head: true })
-          .eq("teacher_id", teacherId)
-          .eq("is_active", true),
-      ]);
+    const [slots, pendingAttendance, availability] = await Promise.all([
+      sb
+        .from("slots")
+        .select("id", { count: "exact", head: true })
+        .eq("teacher_id", teacherId)
+        .gt("scheduled_at", new Date().toISOString())
+        .eq("status", "scheduled"),
+      sb
+        .from("attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("need_review", true),
+      sb
+        .from("teacher_availability")
+        .select("id", { count: "exact", head: true })
+        .eq("teacher_id", teacherId)
+        .eq("is_active", true),
+    ]);
 
     return {
       upcomingSlots: slots.count ?? 0,
-      todayBookings: todayBookings.count ?? 0,
       pendingAttendance: pendingAttendance.count ?? 0,
       activeAvailabilityWindows: availability.count ?? 0,
     };
   } catch {
     return {
       upcomingSlots: 0,
-      todayBookings: 0,
       pendingAttendance: 0,
       activeAvailabilityWindows: 0,
     };
@@ -71,18 +59,16 @@ interface TodaySlot {
 
 async function fetchTodaySlots(teacherId: string): Promise<TodaySlot[]> {
   const sb = supabaseService();
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+  const startWIB = startOfJakartaDay();
+  const endWIB = endOfJakartaDay();
 
   try {
     const { data } = await sb
       .from("slots")
       .select("id, scheduled_at, duration_min, reserved_count, capacity, zoom_join_url")
       .eq("teacher_id", teacherId)
-      .gte("scheduled_at", startOfDay.toISOString())
-      .lte("scheduled_at", endOfDay.toISOString())
+      .gte("scheduled_at", startWIB.toISOString())
+      .lte("scheduled_at", endWIB.toISOString())
       .order("scheduled_at", { ascending: true });
     return (data ?? []) as TodaySlot[];
   } catch {

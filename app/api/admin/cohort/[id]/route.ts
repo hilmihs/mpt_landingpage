@@ -14,6 +14,8 @@ const patchSchema = z.object({
   capacity: z.number().int().min(1).max(12).optional(),
 });
 
+const idSchema = z.string().uuid();
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -24,6 +26,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  if (!idSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "invalid_id" }, { status: 400 });
+  }
 
   let body: unknown;
   try {
@@ -95,6 +100,9 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  if (!idSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "invalid_id" }, { status: 400 });
+  }
   const sb = supabaseService();
 
   // Soft-cancel: status='cancelled' so audit trail remains
