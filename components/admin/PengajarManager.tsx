@@ -103,8 +103,12 @@ export function PengajarManager({ initialTeachers }: Props) {
       }
       const r = data.results?.[0];
       const errs = r?.errors ?? [];
+      const zoomNote =
+        (r?.zoom_meetings_created ?? 0) > 0 || (r?.zoom_errors ?? 0) > 0
+          ? ` Zoom: ${r?.zoom_meetings_created ?? 0} dibuat${(r?.zoom_errors ?? 0) > 0 ? `, ${r?.zoom_errors} gagal` : ""}.`
+          : "";
       setInfo(
-        `${teacher.nama}: ${r?.slots_created ?? 0} slot baru dibuat, ${r?.slots_skipped ?? 0} sudah ada.` +
+        `${teacher.nama}: ${r?.slots_created ?? 0} slot baru dibuat, ${r?.slots_skipped ?? 0} sudah ada.${zoomNote}` +
           (errs.length ? ` ${errs.length} error.` : ""),
       );
       startTransition(() => router.refresh());

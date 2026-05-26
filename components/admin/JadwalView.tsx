@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Calendar, Clock, Users, Video } from "lucide-react";
+import { Sparkles, Calendar, Clock, Users, Video, Link2 } from "lucide-react";
 
 interface Slot {
   id: string;
@@ -35,6 +35,7 @@ export function JadwalView({ initialSlots }: Props) {
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [attachingZoom, setAttachingZoom] = useState(false);
 
   async function generateAll() {
     if (!confirm("Generate slot 4 minggu ke depan untuk SEMUA pengajar aktif?")) return;
@@ -53,12 +54,47 @@ export function JadwalView({ initialSlots }: Props) {
         return;
       }
       const s = data.summary;
+      const zoomNote =
+        s.zoom_created > 0 || s.zoom_errors > 0
+          ? ` Zoom: ${s.zoom_created} meeting dibuat${s.zoom_errors > 0 ? `, ${s.zoom_errors} gagal` : ""}.`
+          : "";
       setInfo(
-        `Selesai untuk ${s.teachers} pengajar: ${s.total_created} slot baru, ${s.total_skipped} sudah ada.`,
+        `Selesai untuk ${s.teachers} pengajar: ${s.total_created} slot baru, ${s.total_skipped} sudah ada.${zoomNote}`,
       );
       startTransition(() => router.refresh());
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function attachZoom() {
+    if (
+      !confirm(
+        "Attach Zoom meeting ke semua slot mendatang yang belum punya? Ini akan call Zoom API.",
+      )
+    )
+      return;
+    setError(null);
+    setInfo(null);
+    setAttachingZoom(true);
+    try {
+      const res = await fetch("/api/admin/slots/attach-zoom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message ?? "Gagal attach Zoom.");
+        return;
+      }
+      const s = data.summary;
+      setInfo(
+        `Attach selesai: ${s.created} dari ${s.total} slot mendapat Zoom meeting${s.failed > 0 ? `, ${s.failed} gagal` : ""}.`,
+      );
+      startTransition(() => router.refresh());
+    } finally {
+      setAttachingZoom(false);
     }
   }
 
@@ -76,22 +112,42 @@ export function JadwalView({ initialSlots }: Props) {
       >
         <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
           {initialSlots.length} slot terdaftar dalam 4 minggu ke depan
+          {" · "}
+          {initialSlots.filter((s) => s.zoom_join_url).length} dengan Zoom
         </div>
-        <button
-          type="button"
-          onClick={generateAll}
-          disabled={generating || pending}
-          className="btn-mpt btn-mpt-accent"
-          style={{
-            minHeight: 38,
-            fontSize: 12,
-            padding: "6px 14px",
-            opacity: generating || pending ? 0.6 : 1,
-          }}
-        >
-          <Sparkles size={13} strokeWidth={2.4} />
-          {generating ? "Generating..." : "Generate Slot Semua Pengajar"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={attachZoom}
+            disabled={attachingZoom || pending}
+            className="btn-mpt btn-mpt-outline"
+            style={{
+              minHeight: 38,
+              fontSize: 12,
+              padding: "6px 14px",
+              opacity: attachingZoom || pending ? 0.6 : 1,
+            }}
+            title="Buat Zoom meeting untuk slot yang belum punya"
+          >
+            <Link2 size={13} strokeWidth={2.4} />
+            {attachingZoom ? "Attaching..." : "Attach Zoom"}
+          </button>
+          <button
+            type="button"
+            onClick={generateAll}
+            disabled={generating || pending}
+            className="btn-mpt btn-mpt-accent"
+            style={{
+              minHeight: 38,
+              fontSize: 12,
+              padding: "6px 14px",
+              opacity: generating || pending ? 0.6 : 1,
+            }}
+          >
+            <Sparkles size={13} strokeWidth={2.4} />
+            {generating ? "Generating..." : "Generate Slot"}
+          </button>
+        </div>
       </div>
 
       {error && <Banner color="danger">{error}</Banner>}

@@ -1,4 +1,5 @@
 import { supabaseService } from "@/lib/supabase";
+import { createMeeting, isZoomConfigured } from "@/lib/zoom/client";
 
 /**
  * Slot duration is locked by business rule (see ARCHITECTURE_V2.md §3):
@@ -25,8 +26,10 @@ interface AvailabilityWindow {
 
 interface Teacher {
   id: string;
+  nama: string;
   jenis_kelamin: "ikhwan" | "akhwat";
   status: string;
+  email_zoom: string | null;
 }
 
 export interface SlotGenerationResult {
@@ -34,6 +37,8 @@ export interface SlotGenerationResult {
   windows_processed: number;
   slots_created: number;
   slots_skipped: number;
+  zoom_meetings_created: number;
+  zoom_errors: number;
   errors: string[];
 }
 
@@ -52,12 +57,14 @@ export async function generateSlotsForTeacher(
     windows_processed: 0,
     slots_created: 0,
     slots_skipped: 0,
+    zoom_meetings_created: 0,
+    zoom_errors: 0,
     errors: [],
   };
 
   const { data: teacherData, error: teacherErr } = await sb
     .from("teachers")
-    .select("id, jenis_kelamin, status")
+    .select("id, nama, jenis_kelamin, status, email_zoom")
     .eq("id", teacherId)
     .maybeSingle();
 
@@ -126,22 +133,59 @@ export async function generateSlotsForTeacher(
         continue;
       }
 
-      const { error: insertErr } = await sb.from("slots").insert({
-        teacher_id: teacherId,
-        kind: w.kind,
-        scheduled_at: scheduledAtISO,
-        duration_min: durationMin,
-        capacity: DEFAULT_CAPACITY,
-        gender_target: teacher.jenis_kelamin,
-        status: "scheduled",
-      });
+      const { data: insertedSlot, error: insertErr } = await sb
+        .from("slots")
+        .insert({
+          teacher_id: teacherId,
+          kind: w.kind,
+          scheduled_at: scheduledAtISO,
+          duration_min: durationMin,
+          capacity: DEFAULT_CAPACITY,
+          gender_target: teacher.jenis_kelamin,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
 
-      if (insertErr) {
+      if (insertErr || !insertedSlot) {
         result.errors.push(
-          `${scheduledAtISO}: ${insertErr.message.slice(0, 100)}`,
+          `${scheduledAtISO}: ${insertErr?.message.slice(0, 100) ?? "insert failed"}`,
         );
-      } else {
-        result.slots_created++;
+        continue;
+      }
+      result.slots_created++;
+
+      if (isZoomConfigured()) {
+        try {
+          const meeting = await createMeeting({
+            topic: `${w.kind === "assessment" ? "Assessment" : "Tahsin"} Al-Fatihah — ${teacher.nama}`,
+            start_time: scheduledAtISO,
+            duration_min: durationMin,
+            alternative_hosts: teacher.email_zoom ? [teacher.email_zoom] : [],
+            agenda:
+              w.kind === "assessment"
+                ? "Sesi assessment bacaan Al-Fatihah dengan pengajar Muhajir Project Tilawah."
+                : "Sesi Tahsin Al-Fatihah — perbaikan bacaan.",
+          });
+
+          await sb
+            .from("slots")
+            .update({
+              zoom_meeting_id: meeting.meeting_id,
+              zoom_join_url: meeting.join_url,
+              zoom_password: meeting.password,
+              zoom_host_email: meeting.host_email,
+            })
+            .eq("id", (insertedSlot as { id: string }).id);
+
+          result.zoom_meetings_created++;
+        } catch (zoomErr) {
+          result.zoom_errors++;
+          result.errors.push(
+            `Zoom (${scheduledAtISO}): ${zoomErr instanceof Error ? zoomErr.message.slice(0, 120) : "failed"}`,
+          );
+          // Slot persists without Zoom — admin can retry later
+        }
       }
     }
   }
