@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/portal-mpt-x7/bookings", label: "Booking Masuk", icon: Users },
   { href: "/portal-mpt-x7/cohorts", label: "Cohort Tahsin", icon: GraduationCap },
   { href: "/portal-mpt-x7/attendance", label: "Kehadiran", icon: ClipboardCheck },
+  { href: "/portal-mpt-x7/profil", label: "Profil", icon: User },
 ];
 
 interface Props {

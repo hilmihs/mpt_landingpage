@@ -1,29 +1,74 @@
-import { CalendarDays } from "lucide-react";
+import { supabaseService } from "@/lib/supabase";
+import { JadwalView } from "@/components/admin/JadwalView";
 
-export default function JadwalPage() {
-  return (
-    <PlaceholderPage
-      title="Semua Jadwal Slot"
-      eyebrow="Manajemen Jadwal"
-      icon={<CalendarDays size={24} strokeWidth={2.2} />}
-      body="Halaman untuk melihat semua slot Assessment & Tahsin lintas pengajar, override capacity, dan batalkan slot. Tersedia di Phase 2B."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+interface Slot {
+  id: string;
+  teacher_id: string;
+  teacher_nama: string;
+  kind: string;
+  scheduled_at: string;
+  duration_min: number;
+  capacity: number;
+  reserved_count: number;
+  gender_target: string;
+  status: string;
+  zoom_join_url: string | null;
 }
 
-function PlaceholderPage({
-  title,
-  eyebrow,
-  icon,
-  body,
-}: {
-  title: string;
-  eyebrow: string;
-  icon: React.ReactNode;
-  body: string;
-}) {
+async function fetchSlots(): Promise<Slot[]> {
+  const sb = supabaseService();
+  const horizon = new Date();
+  horizon.setDate(horizon.getDate() + 28);
+
+  try {
+    const { data } = await sb
+      .from("slots")
+      .select(
+        `id, teacher_id, kind, scheduled_at, duration_min, capacity, reserved_count, gender_target, status, zoom_join_url,
+         teachers:teacher_id(nama)`,
+      )
+      .lte("scheduled_at", horizon.toISOString())
+      .order("scheduled_at", { ascending: true });
+
+    const rows = (data ?? []) as unknown as {
+      id: string;
+      teacher_id: string;
+      kind: string;
+      scheduled_at: string;
+      duration_min: number;
+      capacity: number;
+      reserved_count: number;
+      gender_target: string;
+      status: string;
+      zoom_join_url: string | null;
+      teachers: { nama: string } | null;
+    }[];
+
+    return rows.map((r) => ({
+      id: r.id,
+      teacher_id: r.teacher_id,
+      teacher_nama: r.teachers?.nama ?? "—",
+      kind: r.kind,
+      scheduled_at: r.scheduled_at,
+      duration_min: r.duration_min,
+      capacity: r.capacity,
+      reserved_count: r.reserved_count,
+      gender_target: r.gender_target,
+      status: r.status,
+      zoom_join_url: r.zoom_join_url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export default async function JadwalPage() {
+  const slots = await fetchSlots();
+
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 1080 }}>
       <header style={{ marginBottom: 24 }}>
         <div
           style={{
@@ -35,7 +80,7 @@ function PlaceholderPage({
             marginBottom: 6,
           }}
         >
-          {eyebrow}
+          Manajemen Jadwal
         </div>
         <h1
           className="font-display"
@@ -46,39 +91,22 @@ function PlaceholderPage({
             letterSpacing: "-0.025em",
           }}
         >
-          {title}
+          Semua Slot
         </h1>
-      </header>
-      <div
-        className="card-mpt"
-        style={{ padding: "48px 28px", textAlign: "center" }}
-      >
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            margin: "0 auto 16px",
-            borderRadius: 14,
-            background: "color-mix(in oklab, var(--accent), transparent 85%)",
-            color: "var(--accent)",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          {icon}
-        </div>
         <p
           style={{
             fontSize: 14,
             color: "var(--ink-soft)",
-            lineHeight: 1.6,
-            maxWidth: 460,
-            margin: "0 auto",
+            margin: "6px 0 0",
+            maxWidth: 600,
           }}
         >
-          {body}
+          Slot konkret 4 minggu ke depan. Untuk men-generate slot dari window
+          ketersediaan pengajar, gunakan tombol di kanan atas.
         </p>
-      </div>
+      </header>
+
+      <JadwalView initialSlots={slots} />
     </div>
   );
 }
