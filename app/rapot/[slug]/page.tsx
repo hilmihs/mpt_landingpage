@@ -4,8 +4,9 @@ import { supabaseService } from "@/lib/supabase";
 import { ScoreCircle } from "@/components/assessment/ScoreCircle";
 import { AyatCard } from "@/components/rapot/AyatCard";
 import { IndikatorCard } from "@/components/rapot/IndikatorCard";
-import { InterestGate } from "@/components/rapot/InterestGate";
+import { NextStepsGate } from "@/components/rapot/NextStepsGate";
 import { AINarrative } from "@/components/rapot/AINarrative";
+import { getParticipantEligibility } from "@/lib/eligibility";
 import { ShareButtons } from "@/components/rapot/ShareButtons";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import { INDIKATOR_META } from "@/lib/scoring";
@@ -372,10 +373,11 @@ export default async function RapotPage({ params }: Props) {
       </div>
 
       {submission && (
-        <InterestGate
+        <NextStepsGate
           rapotSlug={slug}
           submissionId={submission.id}
           jenisKelamin={submission.jenis_kelamin}
+          eligibility={await getParticipantEligibility(submission.id)}
         />
       )}
 

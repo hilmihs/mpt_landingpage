@@ -14,9 +14,15 @@ export const FUNNEL_EVENTS = {
   BOOKING_CREATED: "booking_created",
   BOOKING_CANCELLED: "booking_cancelled",
   ATTENDED_ASSESSMENT: "attended_assessment",
+  GATE2_SHOWN: "gate2_shown",
+  GATE2_YES: "gate2_yes",
+  GATE2_NO: "gate2_no",
   TAHSIN_INVITED: "tahsin_invited",
   TAHSIN_ENROLLED: "tahsin_enrolled",
   TAHSIN_COMPLETED: "tahsin_completed",
+  GATE3_SHOWN: "gate3_shown",
+  GATE3_YES: "gate3_yes",
+  GATE3_NO: "gate3_no",
   HITS_CTA_CLICKED: "hits_cta_clicked",
 } as const;
 

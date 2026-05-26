@@ -67,6 +67,10 @@ export async function POST(req: Request) {
   const eventMap: Record<string, string> = {
     "gate1_post_rapot:yes": FUNNEL_EVENTS.GATE1_YES,
     "gate1_post_rapot:no": FUNNEL_EVENTS.GATE1_NO,
+    "gate2_post_assessment:yes": FUNNEL_EVENTS.GATE2_YES,
+    "gate2_post_assessment:no": FUNNEL_EVENTS.GATE2_NO,
+    "gate3_post_tahsin:yes": FUNNEL_EVENTS.GATE3_YES,
+    "gate3_post_tahsin:no": FUNNEL_EVENTS.GATE3_NO,
   };
   const eventName = eventMap[`${gate}:${response}`];
   if (eventName) {
