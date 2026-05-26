@@ -2,16 +2,20 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Calendar,
-  Clock,
   Users,
   Trophy,
   ArrowLeft,
-  Video,
   CheckCircle2,
   CircleHelp,
 } from "lucide-react";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { supabaseService } from "@/lib/supabase";
+import {
+  SessionAttendanceEditor,
+  type SessionRow,
+  type EnrolledPeserta,
+  type AttendanceMap,
+} from "@/components/portal/SessionAttendanceEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +30,6 @@ interface CohortDetail {
   teacher_id: string;
 }
 
-interface SessionRow {
-  id: string;
-  session_number: number;
-  slot_id: string;
-  scheduled_at: string;
-  duration_min: number;
-  status: string;
-  zoom_join_url: string | null;
-  attendance_count: number;
-}
-
 interface EnrollmentRow {
   id: string;
   status: string;
@@ -44,6 +37,7 @@ interface EnrollmentRow {
   qualified_for_hits: boolean;
   participant_nama: string;
   participant_wa: string;
+  submission_id: string;
 }
 
 async function fetchCohort(id: string): Promise<CohortDetail | null> {
@@ -56,14 +50,13 @@ async function fetchCohort(id: string): Promise<CohortDetail | null> {
   return (data as CohortDetail | null) ?? null;
 }
 
-async function fetchSessionsWithAttendance(cohortId: string): Promise<SessionRow[]> {
+async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
   const sb = supabaseService();
   const { data } = await sb
     .from("cohort_sessions")
     .select(
-      `id, session_number, slot_id,
-       slots:slot_id(scheduled_at, duration_min, status, zoom_join_url),
-       attendance(attended)`,
+      `id, session_number,
+       slots:slot_id(scheduled_at, duration_min, status, zoom_join_url)`,
     )
     .eq("cohort_id", cohortId)
     .order("session_number", { ascending: true });
@@ -71,14 +64,12 @@ async function fetchSessionsWithAttendance(cohortId: string): Promise<SessionRow
   const rows = (data ?? []) as unknown as {
     id: string;
     session_number: number;
-    slot_id: string;
     slots: {
       scheduled_at: string;
       duration_min: number;
       status: string;
       zoom_join_url: string | null;
     } | null;
-    attendance: { attended: boolean }[] | null;
   }[];
 
   return rows
@@ -86,12 +77,10 @@ async function fetchSessionsWithAttendance(cohortId: string): Promise<SessionRow
     .map((r) => ({
       id: r.id,
       session_number: r.session_number,
-      slot_id: r.slot_id,
       scheduled_at: r.slots!.scheduled_at,
       duration_min: r.slots!.duration_min,
       status: r.slots!.status,
       zoom_join_url: r.slots!.zoom_join_url,
-      attendance_count: (r.attendance ?? []).filter((a) => a.attended).length,
     }));
 }
 
@@ -100,7 +89,7 @@ async function fetchEnrollments(cohortId: string): Promise<EnrollmentRow[]> {
   const { data } = await sb
     .from("cohort_enrollments")
     .select(
-      `id, status, completed_sessions, qualified_for_hits,
+      `id, status, completed_sessions, qualified_for_hits, submission_id,
        submissions:submission_id(nama, nomor_wa)`,
     )
     .eq("cohort_id", cohortId);
@@ -110,6 +99,7 @@ async function fetchEnrollments(cohortId: string): Promise<EnrollmentRow[]> {
     status: string;
     completed_sessions: number;
     qualified_for_hits: boolean;
+    submission_id: string;
     submissions: { nama: string; nomor_wa: string } | null;
   }[];
 
@@ -120,10 +110,34 @@ async function fetchEnrollments(cohortId: string): Promise<EnrollmentRow[]> {
       status: r.status,
       completed_sessions: r.completed_sessions,
       qualified_for_hits: r.qualified_for_hits,
+      submission_id: r.submission_id,
       participant_nama: r.submissions!.nama,
       participant_wa: r.submissions!.nomor_wa,
     }))
     .sort((a, b) => a.participant_nama.localeCompare(b.participant_nama));
+}
+
+async function fetchAttendanceMap(
+  sessionIds: string[],
+  submissionIds: string[],
+): Promise<AttendanceMap> {
+  if (sessionIds.length === 0 || submissionIds.length === 0) return {};
+  const sb = supabaseService();
+  const { data } = await sb
+    .from("attendance")
+    .select("cohort_session_id, submission_id, attended")
+    .in("cohort_session_id", sessionIds)
+    .in("submission_id", submissionIds);
+
+  const map: AttendanceMap = {};
+  for (const row of (data ?? []) as {
+    cohort_session_id: string;
+    submission_id: string;
+    attended: boolean;
+  }[]) {
+    map[`${row.cohort_session_id}:${row.submission_id}`] = row.attended;
+  }
+  return map;
 }
 
 export default async function TeacherCohortDetailPage({
@@ -144,13 +158,24 @@ export default async function TeacherCohortDetailPage({
   }
 
   const [sessions, enrollments] = await Promise.all([
-    fetchSessionsWithAttendance(id),
+    fetchSessions(id),
     fetchEnrollments(id),
   ]);
 
+  const peserta: EnrolledPeserta[] = enrollments
+    .filter((e) => e.status !== "dropped")
+    .map((e) => ({
+      submission_id: e.submission_id,
+      nama: e.participant_nama,
+      nomor_wa: e.participant_wa,
+    }));
+
+  const attendance = await fetchAttendanceMap(
+    sessions.map((s) => s.id),
+    peserta.map((p) => p.submission_id),
+  );
+
   const qualifiedCount = enrollments.filter((e) => e.qualified_for_hits).length;
-  // Server component renders once per request — Date.now() here is intentional
-  // and stable for this render.
   // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
 
@@ -222,27 +247,29 @@ export default async function TeacherCohortDetailPage({
       </header>
 
       <section style={{ marginBottom: 32 }}>
-        <h2
-          className="font-display"
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            margin: "0 0 12px",
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Jadwal 4 Sesi
-        </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {sessions.map((s) => (
-            <SessionRow
-              key={s.id}
-              session={s}
-              enrolledCount={cohort.enrolled_count}
-              nowMs={nowMs}
-            />
-          ))}
+        <div style={{ marginBottom: 12 }}>
+          <h2
+            className="font-display"
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              margin: 0,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Jadwal & Kehadiran
+          </h2>
+          <p style={{ fontSize: 12, color: "var(--ink-soft)", margin: "4px 0 0" }}>
+            Klik sesi yang sudah lewat untuk review/override kehadiran peserta.
+            Otomatis ter-record via Zoom webhook setelah meeting selesai.
+          </p>
         </div>
+        <SessionAttendanceEditor
+          sessions={sessions}
+          peserta={peserta}
+          attendance={attendance}
+          nowMs={nowMs}
+        />
       </section>
 
       <section>
@@ -310,93 +337,6 @@ export default async function TeacherCohortDetailPage({
           </div>
         )}
       </section>
-    </div>
-  );
-}
-
-function SessionRow({
-  session,
-  enrolledCount,
-  nowMs,
-}: {
-  session: SessionRow;
-  enrolledCount: number;
-  nowMs: number;
-}) {
-  const d = new Date(session.scheduled_at);
-  const dateStr = d.toLocaleDateString("id-ID", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-  const start = `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
-
-  const isPast = d.getTime() < nowMs;
-  const showAttendance = isPast || session.status === "completed" || session.status === "in_progress";
-
-  return (
-    <div
-      className="card-mpt"
-      style={{
-        padding: "14px 18px",
-        display: "grid",
-        gridTemplateColumns: "auto 1fr auto",
-        gap: 14,
-        alignItems: "center",
-      }}
-    >
-      <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
-          background: "color-mix(in oklab, var(--accent), transparent 85%)",
-          color: "var(--accent)",
-          display: "grid",
-          placeItems: "center",
-          fontSize: 14,
-          fontWeight: 800,
-        }}
-      >
-        {session.session_number}
-      </div>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>{dateStr}</div>
-        <div
-          style={{
-            fontSize: 12,
-            color: "var(--ink-soft)",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            marginTop: 2,
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <Clock size={11} strokeWidth={2.2} />
-            {start}
-          </span>
-          <span>{session.duration_min}m</span>
-          {showAttendance && (
-            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
-              {session.attendance_count}/{enrolledCount} hadir
-            </span>
-          )}
-        </div>
-      </div>
-      {session.zoom_join_url && (
-        <a
-          href={session.zoom_join_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-mpt btn-mpt-accent"
-          style={{ minHeight: 32, fontSize: 11, padding: "4px 10px" }}
-        >
-          <Video size={12} strokeWidth={2.4} />
-          Zoom
-        </a>
-      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { supabaseService } from "@/lib/supabase";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
+import { hitsClickRatelimit, getClientIp } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,17 @@ export async function POST(req: Request) {
 
   if (!slug) {
     return NextResponse.redirect(`${origin}/`, { status: 303 });
+  }
+
+  try {
+    const rl = await hitsClickRatelimit().limit(getClientIp(req));
+    if (!rl.success) {
+      return NextResponse.redirect(`${origin}/rapot/${slug}?rate_limited=1`, {
+        status: 303,
+      });
+    }
+  } catch {
+    // fail-open
   }
 
   const eligibility = await getParticipantEligibilityBySlug(slug);

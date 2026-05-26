@@ -58,7 +58,13 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 }
 
 export interface Candidate {
-  booking_id: string;
+  /**
+   * Unique key per attendance target. For assessment slots this is `booking_id`;
+   * for Tahsin cohort sessions it is `submission_id` (since attendance is
+   * keyed on (cohort_session_id, submission_id) and cohort_session_id is the
+   * same for every candidate in the slot).
+   */
+  key: string;
   submission_id: string;
   nama: string;
 }
@@ -73,7 +79,7 @@ export interface ZoomParticipantInput {
 }
 
 export interface MatchResult {
-  booking_id: string;
+  key: string;
   submission_id: string;
   confidence: number;
   reasoning: string;
@@ -81,16 +87,16 @@ export interface MatchResult {
 }
 
 /**
- * Greedy 1-to-1 matching. Each booking gets at most one Zoom participant
+ * Greedy 1-to-1 matching. Each candidate gets at most one Zoom participant
  * (the highest-confidence one).
  */
 export function matchParticipants(
   participants: ZoomParticipantInput[],
   candidates: Candidate[],
-  peserta_emails: Map<string, string> = new Map(), // booking_id -> email (if known)
-): { matched: MatchResult[]; unmatched_bookings: Candidate[] } {
+  peserta_emails: Map<string, string> = new Map(), // candidate.key -> email (if known)
+): { matched: MatchResult[]; unmatched: Candidate[] } {
   const matched: MatchResult[] = [];
-  const claimedBookings = new Set<string>();
+  const claimedKeys = new Set<string>();
 
   type Pair = {
     p: ZoomParticipantInput;
@@ -115,7 +121,7 @@ export function matchParticipants(
 
     for (const c of candidates) {
       // Email match wins
-      const candidateEmail = peserta_emails.get(c.booking_id)?.toLowerCase();
+      const candidateEmail = peserta_emails.get(c.key)?.toLowerCase();
       if (
         candidateEmail &&
         p.user_email &&
@@ -150,12 +156,12 @@ export function matchParticipants(
   const claimedParticipants = new Set<string>();
   for (const pair of pairs) {
     const pKey = pair.p.zoom_participant_id ?? pair.p.name + (pair.p.join_time ?? "");
-    if (claimedBookings.has(pair.c.booking_id)) continue;
+    if (claimedKeys.has(pair.c.key)) continue;
     if (claimedParticipants.has(pKey)) continue;
-    claimedBookings.add(pair.c.booking_id);
+    claimedKeys.add(pair.c.key);
     claimedParticipants.add(pKey);
     matched.push({
-      booking_id: pair.c.booking_id,
+      key: pair.c.key,
       submission_id: pair.c.submission_id,
       confidence: pair.confidence,
       reasoning: pair.reasoning,
@@ -163,11 +169,9 @@ export function matchParticipants(
     });
   }
 
-  const unmatched_bookings = candidates.filter(
-    (c) => !claimedBookings.has(c.booking_id),
-  );
+  const unmatched = candidates.filter((c) => !claimedKeys.has(c.key));
 
-  return { matched, unmatched_bookings };
+  return { matched, unmatched };
 }
 
 /**

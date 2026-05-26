@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseService } from "@/lib/supabase";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
+import { enrollRatelimit, getClientIp } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,18 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
+  try {
+    const rl = await enrollRatelimit().limit(getClientIp(req));
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "rate_limited", message: "Terlalu banyak request. Coba lagi sebentar." },
+        { status: 429 },
+      );
+    }
+  } catch {
+    // fail-open
+  }
+
   let body: unknown;
   try {
     body = await req.json();

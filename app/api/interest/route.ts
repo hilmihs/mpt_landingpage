@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseService } from "@/lib/supabase";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
+import { interestRatelimit, getClientIp } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,20 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
+  // Rate limit: anyone with a rapot_slug can hit this endpoint, so protect
+  // against response-flipping abuse / scraping at the IP level.
+  try {
+    const rl = await interestRatelimit().limit(getClientIp(req));
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "rate_limited", message: "Terlalu banyak request. Coba lagi sebentar." },
+        { status: 429 },
+      );
+    }
+  } catch {
+    // fail-open if Redis is down — don't block legitimate users
+  }
+
   let body: unknown;
   try {
     body = await req.json();

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Heart, Link as LinkIcon } from "lucide-react";
+import { ArrowRight, Heart, CheckCircle2 } from "lucide-react";
 
 interface Props {
   rapotSlug: string;
@@ -10,18 +10,13 @@ interface Props {
   jenisKelamin: "ikhwan" | "akhwat";
 }
 
-const LINKTREE =
-  process.env.NEXT_PUBLIC_LINKTREE_URL ??
-  "https://linktr.ee/muhajirprojecttilawah";
-
 export function InterestGate({ rapotSlug }: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState<"yes" | "no" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [declined, setDeclined] = useState(false);
 
   async function record(response: "yes" | "no") {
     setSubmitting(response);
-    setError(null);
     try {
       await fetch("/api/interest", {
         method: "POST",
@@ -33,14 +28,87 @@ export function InterestGate({ rapotSlug }: Props) {
         }),
       });
     } catch {
-      // best-effort; don't block navigation
+      // best-effort; don't block UI transition
     }
 
     if (response === "yes") {
       router.push(`/booking/assessment/${rapotSlug}`);
     } else {
-      window.location.href = LINKTREE;
+      // V2 invariant: HITS Linktree hanya muncul setelah lulus Tahsin
+      // Sebelumnya redirect ke linktr.ee — bypass funnel. Sekarang tampilkan
+      // thank-you state dengan opsi change-mind.
+      setDeclined(true);
+      setSubmitting(null);
     }
+  }
+
+  if (declined) {
+    return (
+      <div
+        style={{
+          padding: "32px 28px",
+          borderRadius: 24,
+          background: "var(--surface)",
+          border: "1px solid var(--line)",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            margin: "0 auto 16px",
+            borderRadius: 14,
+            background:
+              "color-mix(in oklab, var(--success), transparent 85%)",
+            color: "var(--success)",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <CheckCircle2 size={24} strokeWidth={2.2} />
+        </div>
+        <h3
+          className="font-display"
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            margin: "0 0 10px",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Terima kasih atas masukannya
+        </h3>
+        <p
+          style={{
+            fontSize: 14,
+            color: "var(--ink-soft)",
+            lineHeight: 1.65,
+            margin: "0 0 22px",
+            maxWidth: 460,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          Anda bisa kembali kapan saja kalau berubah pikiran. Rapot ini tersimpan
+          dan link-nya bisa dibuka ulang.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setDeclined(false);
+          }}
+          className="btn-mpt btn-mpt-outline"
+          style={{
+            minHeight: 44,
+            fontSize: 13,
+            padding: "8px 18px",
+          }}
+        >
+          Berubah pikiran — daftar sesi pengajar
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -144,22 +212,9 @@ export function InterestGate({ rapotSlug }: Props) {
               opacity: submitting !== null && submitting !== "no" ? 0.5 : 1,
             }}
           >
-            <LinkIcon size={16} strokeWidth={2.2} />
-            {submitting === "no" ? "Mengarahkan..." : "Lihat program lain"}
+            {submitting === "no" ? "Memproses..." : "Nanti dulu"}
           </button>
         </div>
-
-        {error && (
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 13,
-              color: "var(--danger)",
-            }}
-          >
-            {error}
-          </div>
-        )}
 
         <div
           style={{

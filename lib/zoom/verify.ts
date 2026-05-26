@@ -19,10 +19,14 @@ export function verifyZoomSignature(
 ): boolean {
   if (!timestamp || !signature || !signature.startsWith("v0=")) return false;
 
-  // Reject timestamps older than 5 minutes (replay protection)
-  const ts = Number(timestamp);
-  if (!Number.isFinite(ts)) return false;
-  const drift = Math.abs(Date.now() - ts * 1000);
+  // Reject timestamps older than 5 minutes (replay protection).
+  // Zoom currently sends `x-zm-request-timestamp` in MILLISECONDS, but older
+  // docs/samples sometimes assume seconds. Auto-detect by magnitude: a UNIX
+  // timestamp in seconds is ~1.7e9 in 2024+; in milliseconds, ~1.7e12.
+  const tsRaw = Number(timestamp);
+  if (!Number.isFinite(tsRaw)) return false;
+  const tsMs = tsRaw > 1e12 ? tsRaw : tsRaw * 1000;
+  const drift = Math.abs(Date.now() - tsMs);
   if (drift > 5 * 60_000) return false;
 
   const message = `v0:${timestamp}:${rawBody}`;
