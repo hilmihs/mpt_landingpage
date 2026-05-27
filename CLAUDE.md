@@ -187,6 +187,38 @@ export function mockMLPredict(input): MLPredictResult {
 }
 ```
 
+## V2 — Revisi Funnel Bertahap (Update Mei 2026)
+
+Berdasarkan rapat HITS Juni 2026 (sumber: `docs/ARCHITECTURE_V2.md`), funnel direvisi dari direct linktree menjadi step-by-step:
+
+```
+Rapot → Gate 1 ("Tertarik laporan lebih dalam?") → Booking Assessment dengan pengajar
+      → Meeting (60 menit, 12 peserta) → Gate 2 → Tahsin Cohort (4 sesi × 90 menit)
+      → Gate 3 → HITS Linktree (qualified lead saja)
+```
+
+**Tambahan tabel di migration `0002_booking_v2.sql`:**
+- `teachers`, `teacher_availability`, `slots`, `bookings`
+- `cohorts`, `cohort_sessions`, `cohort_enrollments`
+- `attendance` (sumber: `zoom_webhook` / `ai_match` / `manual`)
+- `interest_responses` (track Gate 1/2/3)
+- `analytics_events` (funnel metric)
+- `admins`, `audit_logs`
+- View: `v_funnel_metrics`, `v_slots_availability`
+
+**Auth strategy (3 role):**
+- Peserta: anonymous + slug-based (unchanged)
+- Pengajar: Supabase Auth phone+password, di route obscure `/portal-mpt-x7` (noindex, robots block)
+- Admin: Supabase Auth email magic link, di `/admin` (noindex, robots block)
+
+**Konstrain V2 (locked):**
+- Assessment: 60 menit, kapasitas 12 peserta, gender-matched strict (ikhwan-ikhwan, akhwat-akhwat)
+- Tahsin Al-Fatihah: 90 menit × 4 sesi (2x/minggu × 2 minggu), cohort-based, kapasitas 12, gender-matched
+- Booking model: user pilih slot, sistem auto-assign pengajar (filter gender)
+- Attendance: Zoom Webhook primary, AI fuzzy match fallback (≥0.8 confidence), manual override pengajar
+- AI Phase 1 only: penjelasan rapot personalized + AI fuzzy match attendance
+- HITS Linktree hanya muncul setelah lulus Tahsin Al-Fatihah (≥3 dari 4 sesi attended)
+
 ## Implementation Phases
 
 ### Phase 1: Foundation (Hari 1-3)
