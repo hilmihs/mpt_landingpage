@@ -9,7 +9,11 @@ export function Header() {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const isFlow =
-    pathname.startsWith("/assessment") || pathname.startsWith("/rapot");
+    pathname.startsWith("/assessment") ||
+    pathname.startsWith("/rapot") ||
+    pathname.startsWith("/booking") ||
+    pathname.startsWith("/portal-mpt-x7") ||
+    pathname.startsWith("/admin");
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

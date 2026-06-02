@@ -3,6 +3,7 @@ import { supabaseService, STORAGE_BUCKET } from "@/lib/supabase";
 import { drainJobs, type MLJob } from "@/lib/queue";
 import { mockMLPredict } from "@/lib/mock-ml";
 import { computeScore } from "@/lib/scoring";
+import { generateRapotNarrative } from "@/lib/ai/explain-rapot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,20 @@ async function processJob(job: MLJob): Promise<{
 
     const score = computeScore(result);
 
+    // Generate AI narrative (Phase 1 — optional, only if ANTHROPIC_API_KEY set)
+    const narrative = await generateRapotNarrative({
+      skor: score.skor,
+      status_label: score.status_label,
+      total_errors_major: score.total_errors_major,
+      total_errors_minor: score.total_errors_minor,
+      errors: {
+        harakat: result.errors_harakat,
+        huruf: result.errors_huruf,
+        panjang_pendek: result.errors_panjang_pendek,
+        syaddah: result.errors_syaddah,
+      },
+    });
+
     const { error: rapotErr } = await sb.from("rapot").insert({
       slug: job.rapot_slug,
       submission_id: job.submission_id,
@@ -60,12 +75,18 @@ async function processJob(job: MLJob): Promise<{
       ml_model_version: result.ml_model_version,
       ml_confidence: result.ml_confidence,
       ml_raw_output: result.ml_raw_output ?? null,
+      ai_narrative: narrative?.narrative ?? null,
+      ai_narrative_model: narrative?.model ?? null,
     });
     if (rapotErr) throw new Error(`rapot insert: ${rapotErr.message}`);
 
     await sb
       .from("submissions")
-      .update({ status: "completed", processed_at: new Date().toISOString() })
+      .update({
+        status: "completed",
+        processed_at: new Date().toISOString(),
+        ai_narrative_generated_at: narrative ? new Date().toISOString() : null,
+      })
       .eq("id", job.submission_id);
 
     return { ok: true };
