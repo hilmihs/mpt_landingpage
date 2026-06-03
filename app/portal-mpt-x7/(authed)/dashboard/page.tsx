@@ -54,7 +54,7 @@ interface TodaySlot {
   duration_min: number;
   reserved_count: number;
   capacity: number;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
 }
 
 async function fetchTodaySlots(teacherId: string): Promise<TodaySlot[]> {
@@ -65,7 +65,7 @@ async function fetchTodaySlots(teacherId: string): Promise<TodaySlot[]> {
   try {
     const { data } = await sb
       .from("slots")
-      .select("id, scheduled_at, duration_min, reserved_count, capacity, zoom_join_url")
+      .select("id, scheduled_at, duration_min, reserved_count, capacity, meet_join_url")
       .eq("teacher_id", teacherId)
       .gte("scheduled_at", startWIB.toISOString())
       .lte("scheduled_at", endWIB.toISOString())
@@ -350,15 +350,15 @@ function SlotRow({ slot }: { slot: TodaySlot }) {
           {slot.reserved_count} dari {slot.capacity} peserta
         </div>
       </div>
-      {slot.zoom_join_url && (
+      {slot.meet_join_url && (
         <a
-          href={slot.zoom_join_url}
+          href={slot.meet_join_url}
           target="_blank"
           rel="noopener noreferrer"
           className="btn-mpt btn-mpt-accent"
           style={{ minHeight: 36, fontSize: 12, padding: "6px 12px" }}
         >
-          Buka Zoom
+          Buka Google Meet
         </a>
       )}
     </div>

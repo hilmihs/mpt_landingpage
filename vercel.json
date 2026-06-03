@@ -2,11 +2,15 @@
   "crons": [
     {
       "path": "/api/worker",
-      "schedule": "* * * * *"
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cleanup",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/meet/reconcile",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

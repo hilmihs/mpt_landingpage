@@ -11,7 +11,7 @@ const createSchema = z.object({
   jenis_kelamin: z.enum(["ikhwan", "akhwat"]),
   nomor_wa: z.string().min(8).max(20),
   password: z.string().min(8).max(72),
-  email_zoom: z.string().email().optional().or(z.literal("")),
+  email_meet: z.string().email().optional().or(z.literal("")),
   bio: z.string().max(500).optional(),
 });
 
@@ -111,7 +111,7 @@ export async function POST(req: Request) {
       nama: parsed.data.nama,
       jenis_kelamin: parsed.data.jenis_kelamin,
       nomor_wa: phoneDB,
-      email_zoom: parsed.data.email_zoom || null,
+      email_meet: parsed.data.email_meet || null,
       bio: parsed.data.bio || null,
       status: "active",
       activated_at: new Date().toISOString(),

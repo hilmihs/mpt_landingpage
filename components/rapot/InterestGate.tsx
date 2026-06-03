@@ -172,7 +172,7 @@ export function InterestGate({ rapotSlug, submissionId }: Props) {
             lineHeight: 1.65,
           }}
         >
-          Anda bisa mendaftar sesi pendampingan 60 menit via Zoom. Pengajar akan
+          Anda bisa mendaftar sesi pendampingan 60 menit via Google Meet. Pengajar akan
           menjelaskan rapot ini lebih dalam, langsung praktek perbaikan, dan
           memberi catatan personal — bersama maksimal 12 peserta lain dengan
           gender yang sama.

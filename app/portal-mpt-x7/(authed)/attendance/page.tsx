@@ -118,7 +118,7 @@ export default async function AttendancePage() {
           }}
         >
           Booking dari sesi 30 hari terakhir. Yang ditandai &quot;Perlu Review&quot;
-          adalah kasus di mana Zoom webhook tidak yakin (nama tidak match).
+          adalah kasus di mana Google Meet tidak yakin (nama tidak match).
           Tandai hadir / tidak hadir untuk override manual.
         </p>
       </header>

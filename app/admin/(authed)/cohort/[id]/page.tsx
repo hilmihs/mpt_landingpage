@@ -36,7 +36,7 @@ interface SessionRow {
   scheduled_at: string;
   duration_min: number;
   status: string;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
   reserved_count: number;
 }
 
@@ -89,7 +89,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
     .from("cohort_sessions")
     .select(
       `id, session_number, slot_id,
-       slots:slot_id(scheduled_at, duration_min, status, zoom_join_url, reserved_count)`,
+       slots:slot_id(scheduled_at, duration_min, status, meet_join_url, reserved_count)`,
     )
     .eq("cohort_id", cohortId)
     .order("session_number", { ascending: true });
@@ -102,7 +102,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
       scheduled_at: string;
       duration_min: number;
       status: string;
-      zoom_join_url: string | null;
+      meet_join_url: string | null;
       reserved_count: number;
     } | null;
   }[];
@@ -116,7 +116,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
       scheduled_at: r.slots!.scheduled_at,
       duration_min: r.slots!.duration_min,
       status: r.slots!.status,
-      zoom_join_url: r.slots!.zoom_join_url,
+      meet_join_url: r.slots!.meet_join_url,
       reserved_count: r.slots!.reserved_count,
     }));
 }
@@ -541,12 +541,12 @@ function SessionRow({ session }: { session: SessionRow }) {
           <span>{session.duration_min} menit</span>
         </div>
       </div>
-      {session.zoom_join_url ? (
+      {session.meet_join_url ? (
         <a
-          href={session.zoom_join_url}
+          href={session.meet_join_url}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Zoom"
+          aria-label="Google Meet"
           style={{
             width: 32,
             height: 32,

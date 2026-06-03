@@ -20,7 +20,7 @@ interface Props {
 
 export const metadata: Metadata = {
   title: "Booking Dikonfirmasi — Muhajir Project Tilawah",
-  description: "Detail jadwal pendampingan Anda + link Zoom.",
+  description: "Detail jadwal pendampingan Anda + link Google Meet.",
   robots: { index: false, follow: false },
 };
 
@@ -31,7 +31,7 @@ interface BookingDetail {
   slot: {
     scheduled_at: string;
     duration_min: number;
-    zoom_join_url: string | null;
+    meet_join_url: string | null;
     teacher_nama: string;
     gender_target: string;
   };
@@ -49,7 +49,7 @@ async function fetchBooking(id: string): Promise<BookingDetail | null> {
     .from("bookings")
     .select(
       `id, status, notes_from_user,
-       slots:slot_id(scheduled_at, duration_min, zoom_join_url, gender_target, teachers:teacher_id(nama)),
+       slots:slot_id(scheduled_at, duration_min, meet_join_url, gender_target, teachers:teacher_id(nama)),
        submissions:submission_id(nama, jenis_kelamin, nomor_wa, rapot_slug)`,
     )
     .eq("id", id)
@@ -64,7 +64,7 @@ async function fetchBooking(id: string): Promise<BookingDetail | null> {
     slots: {
       scheduled_at: string;
       duration_min: number;
-      zoom_join_url: string | null;
+      meet_join_url: string | null;
       gender_target: string;
       teachers: { nama: string } | null;
     } | null;
@@ -85,7 +85,7 @@ async function fetchBooking(id: string): Promise<BookingDetail | null> {
     slot: {
       scheduled_at: row.slots.scheduled_at,
       duration_min: row.slots.duration_min,
-      zoom_join_url: row.slots.zoom_join_url,
+      meet_join_url: row.slots.meet_join_url,
       gender_target: row.slots.gender_target,
       teacher_nama: row.slots.teachers?.nama ?? "Pengajar MPT",
     },
@@ -190,7 +190,7 @@ export default async function BookingConfirmPage({ params }: Props) {
             lineHeight: 1.6,
           }}
         >
-          Detail jadwal + link Zoom kami kirimkan juga ke nomor WhatsApp{" "}
+          Detail jadwal + link Google Meet kami kirimkan juga ke nomor WhatsApp{" "}
           <strong>{submission.nomor_wa}</strong>.
         </p>
       </div>
@@ -227,10 +227,10 @@ export default async function BookingConfirmPage({ params }: Props) {
           value={`${slot.teacher_nama} (${slot.gender_target})`}
         />
 
-        {slot.zoom_join_url ? (
+        {slot.meet_join_url ? (
           <div style={{ marginTop: 18 }}>
             <a
-              href={slot.zoom_join_url}
+              href={slot.meet_join_url}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-mpt btn-mpt-accent"
@@ -242,7 +242,7 @@ export default async function BookingConfirmPage({ params }: Props) {
               }}
             >
               <Video size={18} strokeWidth={2.4} />
-              Buka Link Zoom
+              Buka Google Meet
             </a>
             <div
               style={{
@@ -268,7 +268,7 @@ export default async function BookingConfirmPage({ params }: Props) {
               lineHeight: 1.55,
             }}
           >
-            Link Zoom akan dikirimkan H-1 lewat WhatsApp. Pastikan nomor{" "}
+            Link Google Meet akan dikirimkan H-1 lewat WhatsApp. Pastikan nomor{" "}
             <strong>{submission.nomor_wa}</strong> aktif.
           </div>
         )}
@@ -308,9 +308,9 @@ export default async function BookingConfirmPage({ params }: Props) {
           <li>Buka rapot Anda sebagai bahan diskusi dengan pengajar.</li>
           <li>Siapkan Mushaf atau aplikasi Quran di HP/laptop.</li>
           <li>Pakai earphone/headset supaya audio jelas dua arah.</li>
-          <li>Cari tempat tenang, masuk Zoom 5 menit lebih awal.</li>
+          <li>Cari tempat tenang, masuk Google Meet 5 menit lebih awal.</li>
           <li>
-            <strong>Pastikan nama Anda di Zoom = nama saat daftar</strong>{" "}
+            <strong>Pastikan nama Anda di Google Meet = nama saat daftar</strong>{" "}
             (lihat catatan di atas).
           </li>
         </ol>
@@ -327,7 +327,7 @@ export default async function BookingConfirmPage({ params }: Props) {
       >
         <a
           href={`https://wa.me/?text=${encodeURIComponent(
-            `Booking pendampingan MPT saya:\n📅 ${dateText}\n👤 ${slot.teacher_nama}\n${slot.zoom_join_url ?? ""}`,
+            `Booking pendampingan MPT saya:\n📅 ${dateText}\n👤 ${slot.teacher_nama}\n${slot.meet_join_url ?? ""}`,
           )}`}
           target="_blank"
           rel="noopener noreferrer"

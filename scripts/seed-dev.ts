@@ -35,7 +35,7 @@ interface TeacherSeed {
   jenis_kelamin: "ikhwan" | "akhwat";
   phone_e164: string; // for Supabase Auth
   phone_db: string; // for teachers.nomor_wa (Indonesian format, matches CHECK)
-  email_zoom: string;
+  email_meet: string;
   bio: string;
   windows: AvailabilityWindow[];
 }
@@ -53,7 +53,7 @@ const TEACHERS: TeacherSeed[] = [
     jenis_kelamin: "ikhwan",
     phone_e164: "+6281200000001",
     phone_db: "081200000001",
-    email_zoom: "ahmad.hidayat.mpt.test@gmail.com",
+    email_meet: "ahmad.hidayat.mpt.test@gmail.com",
     bio: "Pengajar tahsin dengan latar belakang Mahad Aly. Spesialisasi tartil dan ahkamul tilawah.",
     windows: [
       { day_of_week: 1, start_time: "19:30", end_time: "21:30", kind: "assessment" }, // Senin malam
@@ -65,7 +65,7 @@ const TEACHERS: TeacherSeed[] = [
     jenis_kelamin: "ikhwan",
     phone_e164: "+6281200000002",
     phone_db: "081200000002",
-    email_zoom: "yusuf.mahmud.mpt.test@gmail.com",
+    email_meet: "yusuf.mahmud.mpt.test@gmail.com",
     bio: "Hafidz 30 juz. Fokus mengajarkan makhraj dan sifat huruf untuk pemula.",
     windows: [
       { day_of_week: 2, start_time: "20:00", end_time: "22:00", kind: "assessment" }, // Selasa malam
@@ -77,7 +77,7 @@ const TEACHERS: TeacherSeed[] = [
     jenis_kelamin: "akhwat",
     phone_e164: "+6281200000003",
     phone_db: "081200000003",
-    email_zoom: "aisyah.rahmawati.mpt.test@gmail.com",
+    email_meet: "aisyah.rahmawati.mpt.test@gmail.com",
     bio: "Pengajar muslimah berpengalaman 8 tahun. Sabar dan detail dalam koreksi panjang-pendek.",
     windows: [
       { day_of_week: 1, start_time: "16:00", end_time: "18:00", kind: "assessment" }, // Senin sore
@@ -90,7 +90,7 @@ const TEACHERS: TeacherSeed[] = [
     jenis_kelamin: "akhwat",
     phone_e164: "+6281200000004",
     phone_db: "081200000004",
-    email_zoom: "fatimah.azzahra.mpt.test@gmail.com",
+    email_meet: "fatimah.azzahra.mpt.test@gmail.com",
     bio: "Lulusan LIPIA. Fokus tahsin Al-Fatihah untuk muslimah pemula.",
     windows: [
       { day_of_week: 4, start_time: "16:00", end_time: "18:00", kind: "tahsin" }, // Kamis sore
@@ -256,7 +256,7 @@ async function seedTeacher(t: TeacherSeed) {
         nama: t.nama,
         jenis_kelamin: t.jenis_kelamin,
         nomor_wa: t.phone_db,
-        email_zoom: t.email_zoom,
+        email_meet: t.email_meet,
         bio: t.bio,
         status: "active",
         activated_at: new Date().toISOString(),

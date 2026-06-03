@@ -11,7 +11,7 @@ interface Teacher {
   nomor_wa: string;
   status: string;
   bio: string | null;
-  email_zoom: string | null;
+  email_meet: string | null;
   created_at: string;
 }
 
@@ -49,7 +49,7 @@ export function PengajarManager({ initialTeachers }: Props) {
       jenis_kelamin: String(form.get("jenis_kelamin") ?? ""),
       nomor_wa: String(form.get("nomor_wa") ?? "").trim(),
       password: String(form.get("password") ?? ""),
-      email_zoom: String(form.get("email_zoom") ?? "").trim(),
+      email_meet: String(form.get("email_meet") ?? "").trim(),
       bio: String(form.get("bio") ?? "").trim(),
     };
     const res = await fetch("/api/admin/pengajar", {
@@ -103,12 +103,12 @@ export function PengajarManager({ initialTeachers }: Props) {
       }
       const r = data.results?.[0];
       const errs = r?.errors ?? [];
-      const zoomNote =
-        (r?.zoom_meetings_created ?? 0) > 0 || (r?.zoom_errors ?? 0) > 0
-          ? ` Zoom: ${r?.zoom_meetings_created ?? 0} dibuat${(r?.zoom_errors ?? 0) > 0 ? `, ${r?.zoom_errors} gagal` : ""}.`
+      const meetNote =
+        (r?.meet_meetings_created ?? 0) > 0 || (r?.meet_errors ?? 0) > 0
+          ? ` Meet: ${r?.meet_meetings_created ?? 0} dibuat${(r?.meet_errors ?? 0) > 0 ? `, ${r?.meet_errors} gagal` : ""}.`
           : "";
       setInfo(
-        `${teacher.nama}: ${r?.slots_created ?? 0} slot baru dibuat, ${r?.slots_skipped ?? 0} sudah ada.${zoomNote}` +
+        `${teacher.nama}: ${r?.slots_created ?? 0} slot baru dibuat, ${r?.slots_skipped ?? 0} sudah ada.${meetNote}` +
           (errs.length ? ` ${errs.length} error.` : ""),
       );
       startTransition(() => router.refresh());
@@ -173,9 +173,9 @@ export function PengajarManager({ initialTeachers }: Props) {
                   <tr key={t.id} style={{ borderTop: "1px solid var(--line)" }}>
                     <Td bold>
                       {t.nama}
-                      {t.email_zoom && (
+                      {t.email_meet && (
                         <div style={{ fontSize: 11, color: "var(--ink-mute)", fontWeight: 400, marginTop: 2 }}>
-                          {t.email_zoom}
+                          {t.email_meet}
                         </div>
                       )}
                     </Td>
@@ -342,11 +342,11 @@ function InviteModal({
             hint="Berikan ke pengajar via WA. Pengajar bisa minta admin reset jika lupa."
           />
           <FormField
-            label="Email Zoom"
-            name="email_zoom"
+            label="Email Google Meet"
+            name="email_meet"
             type="email"
             placeholder="opsional"
-            hint="Email yang dipakai pengajar saat login ke Zoom (untuk match host)"
+            hint="Email yang dipakai pengajar saat login ke Google (untuk match host)"
           />
           <FormField
             label="Bio Singkat"

@@ -56,7 +56,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
     .from("cohort_sessions")
     .select(
       `id, session_number,
-       slots:slot_id(scheduled_at, duration_min, status, zoom_join_url)`,
+       slots:slot_id(scheduled_at, duration_min, status, meet_join_url)`,
     )
     .eq("cohort_id", cohortId)
     .order("session_number", { ascending: true });
@@ -68,7 +68,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
       scheduled_at: string;
       duration_min: number;
       status: string;
-      zoom_join_url: string | null;
+      meet_join_url: string | null;
     } | null;
   }[];
 
@@ -80,7 +80,7 @@ async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
       scheduled_at: r.slots!.scheduled_at,
       duration_min: r.slots!.duration_min,
       status: r.slots!.status,
-      zoom_join_url: r.slots!.zoom_join_url,
+      meet_join_url: r.slots!.meet_join_url,
     }));
 }
 
@@ -261,7 +261,7 @@ export default async function TeacherCohortDetailPage({
           </h2>
           <p style={{ fontSize: 12, color: "var(--ink-soft)", margin: "4px 0 0" }}>
             Klik sesi yang sudah lewat untuk review/override kehadiran peserta.
-            Otomatis ter-record via Zoom webhook setelah meeting selesai.
+            Otomatis ter-record via Google Meet setelah meeting selesai.
           </p>
         </div>
         <SessionAttendanceEditor

@@ -34,12 +34,9 @@ export async function sendMagicLink(
     .eq("email", lowerEmail)
     .maybeSingle();
 
-  if (!admin) {
-    // Don't disclose whether the email is registered — return generic OK
+  if (!admin || !admin.is_active) {
+    // Don't disclose whether the email is registered or inactive — return generic OK
     return { sent: true };
-  }
-  if (!admin.is_active) {
-    return { error: "Akun admin dinonaktifkan. Hubungi super admin." };
   }
 
   const h = await headers();

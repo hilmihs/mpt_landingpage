@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseService } from "@/lib/supabase";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
+import { todayJakartaISO } from "@/lib/time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
   }
 
   const sb = supabaseService();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayJakartaISO();
 
   const { data, error } = await sb
     .from("cohorts")

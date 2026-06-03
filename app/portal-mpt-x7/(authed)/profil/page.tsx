@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 interface Profile {
   nama: string;
   bio: string | null;
-  email_zoom: string | null;
+  email_meet: string | null;
   foto_url: string | null;
   nomor_wa: string;
   jenis_kelamin: string;
@@ -17,7 +17,7 @@ async function fetchProfile(teacherId: string): Promise<Profile | null> {
   const sb = supabaseService();
   const { data } = await sb
     .from("teachers")
-    .select("nama, bio, email_zoom, foto_url, nomor_wa, jenis_kelamin")
+    .select("nama, bio, email_meet, foto_url, nomor_wa, jenis_kelamin")
     .eq("id", teacherId)
     .maybeSingle();
   return (data as Profile | null) ?? null;
@@ -79,7 +79,7 @@ export default async function ProfilPage() {
         initial={{
           nama: profile.nama,
           bio: profile.bio,
-          email_zoom: profile.email_zoom,
+          email_meet: profile.email_meet,
           foto_url: profile.foto_url,
         }}
       />

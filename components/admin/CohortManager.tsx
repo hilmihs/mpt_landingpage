@@ -44,7 +44,7 @@ interface EligibleSlot {
   scheduled_at: string;
   duration_min: number;
   gender_target: string;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -727,7 +727,7 @@ function SlotRow({
         </div>
         <div style={{ fontSize: 11, color: "var(--ink-mute)" }}>
           {slot.duration_min} menit · {slot.gender_target}
-          {slot.zoom_join_url && " · Zoom ready"}
+          {slot.meet_join_url && " · Meet ready"}
         </div>
       </div>
     </button>

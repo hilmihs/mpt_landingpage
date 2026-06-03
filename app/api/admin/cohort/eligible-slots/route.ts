@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   // 2. Fetch eligible slots
   const { data: slots } = await sb
     .from("slots")
-    .select("id, scheduled_at, duration_min, gender_target, zoom_join_url")
+    .select("id, scheduled_at, duration_min, gender_target, meet_join_url")
     .eq("teacher_id", teacherId)
     .eq("kind", "tahsin")
     .eq("status", "scheduled")

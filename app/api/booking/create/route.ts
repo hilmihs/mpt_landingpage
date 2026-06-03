@@ -48,98 +48,57 @@ export async function POST(req: Request) {
 
   const submission_id = rapot.submission_id;
   const userGender = rapot.submissions?.jenis_kelamin;
+  if (!userGender) {
+    return NextResponse.json({ error: "missing_gender" }, { status: 400 });
+  }
 
-  // Validate slot exists, has capacity, and matches gender
-  const { data: slot, error: slotErr } = await sb
-    .from("slots")
-    .select("id, kind, scheduled_at, gender_target, capacity, reserved_count, status")
-    .eq("id", slot_id)
-    .maybeSingle();
+  // Atomic booking via RPC — holds row lock on slot, checks capacity,
+  // enforces one active booking per submission per slot kind.
+  const { data: result, error: rpcErr } = await sb.rpc("create_booking", {
+    p_slot_id: slot_id,
+    p_submission_id: submission_id,
+    p_jenis_kelamin: userGender,
+    p_notes: notes_from_user ?? null,
+  });
 
-  if (slotErr || !slot) {
-    return NextResponse.json({ error: "slot_not_found" }, { status: 404 });
-  }
-  if (slot.status !== "scheduled") {
+  if (rpcErr) {
     return NextResponse.json(
-      { error: "slot_unavailable", message: "Slot tidak tersedia" },
-      { status: 409 },
-    );
-  }
-  if (slot.gender_target !== userGender) {
-    return NextResponse.json(
-      { error: "gender_mismatch", message: "Slot tidak cocok dengan gender peserta" },
-      { status: 409 },
-    );
-  }
-  if (slot.reserved_count >= slot.capacity) {
-    return NextResponse.json(
-      { error: "slot_full", message: "Slot sudah penuh, silakan pilih waktu lain" },
-      { status: 409 },
+      { error: "db_error", message: rpcErr.message },
+      { status: 500 },
     );
   }
 
-  // Check existing booking (idempotent for same submission + slot).
-  // Schema has UNIQUE(slot_id, submission_id) so a cancelled row still
-  // occupies the slot — INSERT would 23505. Resurrect it via UPDATE
-  // instead of INSERT for the rebook-after-cancel case.
-  const { data: existing } = await sb
-    .from("bookings")
-    .select("id, status")
-    .eq("submission_id", submission_id)
-    .eq("slot_id", slot_id)
-    .maybeSingle();
+  const rpcResult = result as {
+    ok: boolean;
+    reason?: string;
+    booking_id?: string;
+    reused?: boolean;
+    existing_booking_id?: string;
+  };
 
-  if (existing && existing.status !== "cancelled") {
-    return NextResponse.json({ booking_id: existing.id, reused: true });
-  }
-
-  let booking: { id: string };
-  if (existing && existing.status === "cancelled") {
-    // Resurrect: move back to reserved, clear cancellation metadata.
-    const { data: updated, error: updateErr } = await sb
-      .from("bookings")
-      .update({
-        status: "reserved",
-        reserved_until: new Date(Date.now() + 15 * 60_000).toISOString(),
-        notes_from_user: notes_from_user ?? null,
-        cancelled_at: null,
-        cancellation_reason: null,
-      })
-      .eq("id", existing.id)
-      .select("id")
-      .single();
-    if (updateErr || !updated) {
-      return NextResponse.json(
-        { error: "db_error", message: updateErr?.message ?? "rebook failed" },
-        { status: 500 },
-      );
-    }
-    booking = updated;
-  } else {
-    const { data: inserted, error: insertErr } = await sb
-      .from("bookings")
-      .insert({
-        slot_id,
-        submission_id,
-        status: "reserved",
-        notes_from_user: notes_from_user ?? null,
-      })
-      .select("id")
-      .single();
-    if (insertErr || !inserted) {
-      return NextResponse.json(
-        { error: "db_error", message: insertErr?.message ?? "insert failed" },
-        { status: 500 },
-      );
-    }
-    booking = inserted;
+  if (!rpcResult.ok) {
+    const statusMap: Record<string, { status: number; message: string }> = {
+      slot_not_found: { status: 404, message: "Slot tidak ditemukan" },
+      slot_unavailable: { status: 409, message: "Slot tidak tersedia" },
+      gender_mismatch: { status: 409, message: "Slot tidak cocok dengan gender peserta" },
+      slot_full: { status: 409, message: "Slot sudah penuh, silakan pilih waktu lain" },
+      already_has_booking: { status: 409, message: "Anda sudah memiliki booking aktif di slot lain" },
+    };
+    const mapped = statusMap[rpcResult.reason ?? ""] ?? { status: 400, message: rpcResult.reason };
+    return NextResponse.json(
+      { error: rpcResult.reason, message: mapped.message },
+      { status: mapped.status },
+    );
   }
 
   await trackEvent({
     event_name: FUNNEL_EVENTS.BOOKING_CREATED,
     submission_id,
-    metadata: { slot_id, kind: slot.kind, rapot_slug },
+    metadata: { slot_id, rapot_slug },
   });
 
-  return NextResponse.json({ booking_id: booking.id, reused: false });
+  return NextResponse.json({
+    booking_id: rpcResult.booking_id,
+    reused: rpcResult.reused ?? false,
+  });
 }

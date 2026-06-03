@@ -10,7 +10,7 @@ interface Teacher {
   nomor_wa: string;
   status: string;
   bio: string | null;
-  email_zoom: string | null;
+  email_meet: string | null;
   created_at: string;
 }
 
@@ -20,7 +20,7 @@ async function fetchTeachers(): Promise<Teacher[]> {
     const { data } = await sb
       .from("teachers")
       .select(
-        "id, nama, jenis_kelamin, nomor_wa, status, bio, email_zoom, created_at",
+        "id, nama, jenis_kelamin, nomor_wa, status, bio, email_meet, created_at",
       )
       .order("created_at", { ascending: false });
     return (data ?? []) as Teacher[];

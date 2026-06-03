@@ -10,7 +10,7 @@ const patchSchema = z.object({
   status: z.enum(["active", "inactive", "suspended"]).optional(),
   nama: z.string().min(2).max(120).optional(),
   bio: z.string().max(500).optional(),
-  email_zoom: z.string().email().optional().or(z.literal("")),
+  email_meet: z.string().email().optional().or(z.literal("")),
 });
 
 const idSchema = z.string().uuid();
@@ -48,8 +48,8 @@ export async function PATCH(
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.nama !== undefined) updates.nama = parsed.data.nama;
   if (parsed.data.bio !== undefined) updates.bio = parsed.data.bio || null;
-  if (parsed.data.email_zoom !== undefined)
-    updates.email_zoom = parsed.data.email_zoom || null;
+  if (parsed.data.email_meet !== undefined)
+    updates.email_meet = parsed.data.email_meet || null;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });

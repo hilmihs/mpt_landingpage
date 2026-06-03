@@ -92,7 +92,7 @@ export interface SlotRow {
   capacity: number;
   reserved_count: number;
   gender_target: Gender;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
   status: SlotStatus;
 }
 

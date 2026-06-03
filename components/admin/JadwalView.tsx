@@ -15,7 +15,7 @@ interface Slot {
   reserved_count: number;
   gender_target: string;
   status: string;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
 }
 
 interface Props {
@@ -35,7 +35,7 @@ export function JadwalView({ initialSlots }: Props) {
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [attachingZoom, setAttachingZoom] = useState(false);
+  const [attachingMeet, setAttachingMeet] = useState(false);
 
   async function generateAll() {
     if (!confirm("Generate slot 4 minggu ke depan untuk SEMUA pengajar aktif?")) return;
@@ -54,12 +54,12 @@ export function JadwalView({ initialSlots }: Props) {
         return;
       }
       const s = data.summary;
-      const zoomNote =
-        s.zoom_created > 0 || s.zoom_errors > 0
-          ? ` Zoom: ${s.zoom_created} meeting dibuat${s.zoom_errors > 0 ? `, ${s.zoom_errors} gagal` : ""}.`
+      const meetNote =
+        s.meet_created > 0 || s.meet_errors > 0
+          ? ` Meet: ${s.meet_created} meeting dibuat${s.meet_errors > 0 ? `, ${s.meet_errors} gagal` : ""}.`
           : "";
       setInfo(
-        `Selesai untuk ${s.teachers} pengajar: ${s.total_created} slot baru, ${s.total_skipped} sudah ada.${zoomNote}`,
+        `Selesai untuk ${s.teachers} pengajar: ${s.total_created} slot baru, ${s.total_skipped} sudah ada.${meetNote}`,
       );
       startTransition(() => router.refresh());
     } finally {
@@ -67,34 +67,34 @@ export function JadwalView({ initialSlots }: Props) {
     }
   }
 
-  async function attachZoom() {
+  async function attachMeet() {
     if (
       !confirm(
-        "Attach Zoom meeting ke semua slot mendatang yang belum punya? Ini akan call Zoom API.",
+        "Attach Meet meeting ke semua slot mendatang yang belum punya? Ini akan call Google Calendar API.",
       )
     )
       return;
     setError(null);
     setInfo(null);
-    setAttachingZoom(true);
+    setAttachingMeet(true);
     try {
-      const res = await fetch("/api/admin/slots/attach-zoom", {
+      const res = await fetch("/api/admin/slots/attach-meet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.message ?? "Gagal attach Zoom.");
+        setError(data.message ?? "Gagal attach Google Meet.");
         return;
       }
       const s = data.summary;
       setInfo(
-        `Attach selesai: ${s.created} dari ${s.total} slot mendapat Zoom meeting${s.failed > 0 ? `, ${s.failed} gagal` : ""}.`,
+        `Attach selesai: ${s.created} dari ${s.total} slot mendapat Google Meet${s.failed > 0 ? `, ${s.failed} gagal` : ""}.`,
       );
       startTransition(() => router.refresh());
     } finally {
-      setAttachingZoom(false);
+      setAttachingMeet(false);
     }
   }
 
@@ -113,24 +113,24 @@ export function JadwalView({ initialSlots }: Props) {
         <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
           {initialSlots.length} slot terdaftar dalam 4 minggu ke depan
           {" · "}
-          {initialSlots.filter((s) => s.zoom_join_url).length} dengan Zoom
+          {initialSlots.filter((s) => s.meet_join_url).length} dengan Google Meet
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={attachZoom}
-            disabled={attachingZoom || pending}
+            onClick={attachMeet}
+            disabled={attachingMeet || pending}
             className="btn-mpt btn-mpt-outline"
             style={{
               minHeight: 38,
               fontSize: 12,
               padding: "6px 14px",
-              opacity: attachingZoom || pending ? 0.6 : 1,
+              opacity: attachingMeet || pending ? 0.6 : 1,
             }}
-            title="Buat Zoom meeting untuk slot yang belum punya"
+            title="Buat Google Meet untuk slot yang belum punya"
           >
             <Link2 size={13} strokeWidth={2.4} />
-            {attachingZoom ? "Attaching..." : "Attach Zoom"}
+            {attachingMeet ? "Attaching..." : "Attach Meet"}
           </button>
           <button
             type="button"
@@ -313,12 +313,12 @@ function SlotRow({ slot }: { slot: Slot }) {
           </span>
         </div>
       </div>
-      {slot.zoom_join_url && (
+      {slot.meet_join_url && (
         <a
-          href={slot.zoom_join_url}
+          href={slot.meet_join_url}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Zoom"
+          aria-label="Google Meet"
           style={{
             width: 32,
             height: 32,

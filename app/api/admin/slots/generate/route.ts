@@ -51,8 +51,8 @@ export async function POST(req: Request) {
       teachers: results.length,
       total_created: results.reduce((s, r) => s + r.slots_created, 0),
       total_skipped: results.reduce((s, r) => s + r.slots_skipped, 0),
-      zoom_created: results.reduce((s, r) => s + r.zoom_meetings_created, 0),
-      zoom_errors: results.reduce((s, r) => s + r.zoom_errors, 0),
+      meet_created: results.reduce((s, r) => s + r.meet_meetings_created, 0),
+      meet_errors: results.reduce((s, r) => s + r.meet_errors, 0),
     },
   });
 }

@@ -53,7 +53,7 @@ export function ZoomNameReminder({ nama, variant = "info" }: Props) {
             letterSpacing: "-0.01em",
           }}
         >
-          Penting: nama di Zoom = nama saat daftar
+          Penting: nama di Google Meet = nama saat daftar
         </div>
         <div
           style={{
@@ -62,10 +62,10 @@ export function ZoomNameReminder({ nama, variant = "info" }: Props) {
             lineHeight: 1.55,
           }}
         >
-          Saat join meeting, pastikan nama Anda <strong>“{nama}”</strong>{" "}
+          Saat join meeting, pastikan nama Anda <strong>&quot;{nama}&quot;</strong>{" "}
           (sama persis seperti saat daftar). Ini penting supaya kehadiran Anda
-          ter-record otomatis. Cara ubah: di Zoom klik tombol{" "}
-          <strong>Participants → More → Rename</strong>.
+          ter-record otomatis. Jika login dengan akun Google, pastikan nama
+          profil Google Anda sesuai.
         </div>
       </div>
     </div>

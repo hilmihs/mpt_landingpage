@@ -30,8 +30,9 @@ export async function POST(req: Request) {
 
   const eligibility = await getParticipantEligibilityBySlug(slug);
 
-  // Hard gate. If somehow ineligible, bounce to rapot.
-  if (!eligibility?.enrolled_cohort?.qualified_for_hits) {
+  // Hard gate — uses ever_qualified (not current enrollment) so a graduate
+  // who re-enrolled in a review cohort keeps HITS access.
+  if (!eligibility?.ever_qualified_for_hits) {
     return NextResponse.redirect(`${origin}/rapot/${slug}?hits_locked=1`, {
       status: 303,
     });
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   await trackEvent({
     event_name: FUNNEL_EVENTS.HITS_CTA_CLICKED,
     submission_id: eligibility.submission_id,
-    metadata: { cohort_id: eligibility.enrolled_cohort.id },
+    metadata: { cohort_id: eligibility.enrolled_cohort?.id ?? null },
   });
 
   return NextResponse.redirect(HITS_URL, { status: 303 });

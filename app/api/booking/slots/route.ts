@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   const { data, error } = await sb
     .from("v_slots_availability")
     .select(
-      "id, kind, scheduled_at, duration_min, gender_target, capacity, reserved_count, available_capacity, status, zoom_join_url, teacher_id, teacher_nama",
+      "id, kind, scheduled_at, duration_min, gender_target, capacity, reserved_count, available_capacity, status, meet_join_url, teacher_id, teacher_nama",
     )
     .eq("kind", kind)
     .eq("gender_target", gender)

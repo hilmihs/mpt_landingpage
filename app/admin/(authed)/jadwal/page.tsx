@@ -14,7 +14,7 @@ interface Slot {
   reserved_count: number;
   gender_target: string;
   status: string;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
 }
 
 async function fetchSlots(): Promise<Slot[]> {
@@ -30,7 +30,7 @@ async function fetchSlots(): Promise<Slot[]> {
     const { data } = await sb
       .from("slots")
       .select(
-        `id, teacher_id, kind, scheduled_at, duration_min, capacity, reserved_count, gender_target, status, zoom_join_url,
+        `id, teacher_id, kind, scheduled_at, duration_min, capacity, reserved_count, gender_target, status, meet_join_url,
          teachers:teacher_id(nama)`,
       )
       .gte("scheduled_at", earliest.toISOString())
@@ -48,7 +48,7 @@ async function fetchSlots(): Promise<Slot[]> {
       reserved_count: number;
       gender_target: string;
       status: string;
-      zoom_join_url: string | null;
+      meet_join_url: string | null;
       teachers: { nama: string } | null;
     }[];
 
@@ -63,7 +63,7 @@ async function fetchSlots(): Promise<Slot[]> {
       reserved_count: r.reserved_count,
       gender_target: r.gender_target,
       status: r.status,
-      zoom_join_url: r.zoom_join_url,
+      meet_join_url: r.meet_join_url,
     }));
   } catch {
     return [];

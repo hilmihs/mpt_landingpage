@@ -416,7 +416,7 @@ function EnrolledSection({
           }}
         >
           {c.completed_sessions === 0 ? (
-            <>Sesi pertama akan dimulai pada {startStr}. Tunggu link Zoom dari pengajar Anda.</>
+            <>Sesi pertama akan dimulai pada {startStr}. Tunggu link Google Meet dari pengajar Anda.</>
           ) : c.completed_sessions < 3 ? (
             <>
               Hadiri minimal <strong>{3 - c.completed_sessions} sesi lagi</strong>{" "}

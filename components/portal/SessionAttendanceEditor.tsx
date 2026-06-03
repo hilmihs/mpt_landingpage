@@ -19,7 +19,7 @@ export interface SessionRow {
   scheduled_at: string;
   duration_min: number;
   status: string;
-  zoom_join_url: string | null;
+  meet_join_url: string | null;
 }
 
 export interface EnrolledPeserta {
@@ -220,13 +220,13 @@ export function SessionAttendanceEditor({
                     )}
                   </div>
                 </div>
-                {s.zoom_join_url && (
+                {s.meet_join_url && (
                   <a
-                    href={s.zoom_join_url}
+                    href={s.meet_join_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    aria-label="Zoom"
+                    aria-label="Google Meet"
                     style={{
                       width: 32,
                       height: 32,

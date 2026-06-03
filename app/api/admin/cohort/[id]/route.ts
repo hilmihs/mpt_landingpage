@@ -57,26 +57,31 @@ export async function PATCH(
 
   const sb = supabaseService();
 
-  // Capacity tightening: ensure capacity >= enrolled_count
+  // Capacity tightening: atomic check via conditional UPDATE
   if (updates.capacity !== undefined) {
-    const { data: c } = await sb
+    const { data: rows, error: capErr } = await sb
       .from("cohorts")
-      .select("enrolled_count")
+      .update(updates)
       .eq("id", id)
-      .maybeSingle();
-    if (
-      c &&
-      typeof (c as { enrolled_count: number }).enrolled_count === "number" &&
-      (updates.capacity as number) < (c as { enrolled_count: number }).enrolled_count
-    ) {
+      .lte("enrolled_count", updates.capacity as number)
+      .select("id");
+
+    if (capErr) {
+      return NextResponse.json(
+        { error: "db_error", message: capErr.message },
+        { status: 500 },
+      );
+    }
+    if (!rows || rows.length === 0) {
       return NextResponse.json(
         {
           error: "capacity_too_low",
-          message: `Capacity tidak boleh < jumlah peserta sudah enroll (${(c as { enrolled_count: number }).enrolled_count}).`,
+          message: "Capacity tidak boleh < jumlah peserta sudah enroll.",
         },
         { status: 400 },
       );
     }
+    return NextResponse.json({ ok: true });
   }
 
   const { error } = await sb.from("cohorts").update(updates).eq("id", id);

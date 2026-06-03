@@ -15,7 +15,7 @@ interface Props {
 export const metadata: Metadata = {
   title: "Pilih Jadwal Pendampingan — Muhajir Project Tilawah",
   description:
-    "Booking sesi pendampingan 60 menit dengan pengajar MPT, gender-matched, via Zoom.",
+    "Booking sesi pendampingan 60 menit dengan pengajar MPT, gender-matched, via Google Meet.",
   robots: { index: false, follow: false },
 };
 
@@ -143,7 +143,7 @@ export default async function BookingAssessmentPage({ params }: Props) {
           }}
         >
           Halo <strong>{submission.nama}</strong>, sesi pendampingan 60 menit
-          via Zoom, maksimal 12 peserta per slot, bersama pengajar{" "}
+          via Google Meet, maksimal 12 peserta per slot, bersama pengajar{" "}
           {submission.jenis_kelamin === "ikhwan" ? "ikhwan" : "akhwat"}.
           Pengajar akan menjelaskan rapot Anda lebih dalam dan langsung praktek
           perbaikan.

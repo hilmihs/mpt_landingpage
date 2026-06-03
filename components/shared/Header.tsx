@@ -12,6 +12,8 @@ export function Header() {
     pathname.startsWith("/assessment") ||
     pathname.startsWith("/rapot") ||
     pathname.startsWith("/booking") ||
+    pathname.startsWith("/tahsin") ||
+    pathname.startsWith("/hits") ||
     pathname.startsWith("/portal-mpt-x7") ||
     pathname.startsWith("/admin");
   const [scrolled, setScrolled] = useState(false);

@@ -7,7 +7,7 @@ import { Save } from "lucide-react";
 interface Profile {
   nama: string;
   bio: string | null;
-  email_zoom: string | null;
+  email_meet: string | null;
   foto_url: string | null;
 }
 
@@ -30,7 +30,7 @@ export function ProfileForm({ initial }: Props) {
       const payload = {
         nama: String(form.get("nama") ?? "").trim(),
         bio: String(form.get("bio") ?? "").trim(),
-        email_zoom: String(form.get("email_zoom") ?? "").trim(),
+        email_meet: String(form.get("email_meet") ?? "").trim(),
         foto_url: String(form.get("foto_url") ?? "").trim(),
       };
       const res = await fetch("/api/portal/profile", {
@@ -72,11 +72,11 @@ export function ProfileForm({ initial }: Props) {
         required
       />
       <Field
-        label="Email Zoom"
-        name="email_zoom"
+        label="Email Google Meet"
+        name="email_meet"
         type="email"
-        defaultValue={initial.email_zoom ?? ""}
-        hint="Email yang dipakai saat login ke Zoom. Penting untuk auto-attendance via webhook."
+        defaultValue={initial.email_meet ?? ""}
+        hint="Email yang dipakai saat login ke Google. Penting untuk auto-attendance via Google Meet."
       />
       <Field
         label="URL Foto"
