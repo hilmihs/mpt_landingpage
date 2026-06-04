@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/meet/reconcile",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }

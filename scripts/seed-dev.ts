@@ -1,8 +1,9 @@
 /**
  * Seed script for development / staging environments.
  *
- * Creates dummy admin + pengajar accounts so the V2 funnel can be smoke-tested
- * end-to-end without touching production data. Idempotent — safe to re-run.
+ * Creates dummy admin + pengajar + full funnel demo data so the V2 flow
+ * can be demo'd end-to-end without touching production data.
+ * Idempotent — safe to re-run.
  *
  * Usage:
  *   pnpm seed:dev          # create or skip if exists
@@ -10,18 +11,14 @@
  *
  * Prerequisites:
  *   1. .env.local set with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
- *   2. Migration 0002_booking_v2.sql applied to the target Supabase project
+ *   2. All migrations (0001–0005) applied to the target Supabase project
  *   3. Supabase Auth phone provider enabled (for pengajar phone login)
- *      — otherwise pengajar seed will fail with "Phone provider disabled"
  */
 
 import { createClient } from "@supabase/supabase-js";
 
 // ============================================================
-// Dummy data — edit these to suit your testing needs.
-// All emails/phones below are clearly fake to avoid collision
-// with real users. Change ADMIN_EMAIL to your own email if you
-// want to actually log in to the admin console.
+// 1. Admin & Teacher data
 // ============================================================
 
 const ADMIN_EMAIL = "hilmisobandi@gmail.com";
@@ -33,16 +30,16 @@ const DUMMY_PASSWORD = "MPTtest2026!";
 interface TeacherSeed {
   nama: string;
   jenis_kelamin: "ikhwan" | "akhwat";
-  phone_e164: string; // for Supabase Auth
-  phone_db: string; // for teachers.nomor_wa (Indonesian format, matches CHECK)
+  phone_e164: string;
+  phone_db: string;
   email_meet: string;
   bio: string;
   windows: AvailabilityWindow[];
 }
 
 interface AvailabilityWindow {
-  day_of_week: number; // 0=Min .. 6=Sab
-  start_time: string; // HH:MM
+  day_of_week: number;
+  start_time: string;
   end_time: string;
   kind: "assessment" | "tahsin";
 }
@@ -56,8 +53,8 @@ const TEACHERS: TeacherSeed[] = [
     email_meet: "ahmad.hidayat.mpt.test@gmail.com",
     bio: "Pengajar tahsin dengan latar belakang Mahad Aly. Spesialisasi tartil dan ahkamul tilawah.",
     windows: [
-      { day_of_week: 1, start_time: "19:30", end_time: "21:30", kind: "assessment" }, // Senin malam
-      { day_of_week: 4, start_time: "19:30", end_time: "21:30", kind: "tahsin" }, // Kamis malam
+      { day_of_week: 1, start_time: "19:30", end_time: "21:30", kind: "assessment" },
+      { day_of_week: 4, start_time: "19:30", end_time: "21:30", kind: "tahsin" },
     ],
   },
   {
@@ -68,8 +65,8 @@ const TEACHERS: TeacherSeed[] = [
     email_meet: "yusuf.mahmud.mpt.test@gmail.com",
     bio: "Hafidz 30 juz. Fokus mengajarkan makhraj dan sifat huruf untuk pemula.",
     windows: [
-      { day_of_week: 2, start_time: "20:00", end_time: "22:00", kind: "assessment" }, // Selasa malam
-      { day_of_week: 6, start_time: "08:00", end_time: "10:00", kind: "tahsin" }, // Sabtu pagi
+      { day_of_week: 2, start_time: "20:00", end_time: "22:00", kind: "assessment" },
+      { day_of_week: 6, start_time: "08:00", end_time: "10:00", kind: "tahsin" },
     ],
   },
   {
@@ -80,9 +77,9 @@ const TEACHERS: TeacherSeed[] = [
     email_meet: "aisyah.rahmawati.mpt.test@gmail.com",
     bio: "Pengajar muslimah berpengalaman 8 tahun. Sabar dan detail dalam koreksi panjang-pendek.",
     windows: [
-      { day_of_week: 1, start_time: "16:00", end_time: "18:00", kind: "assessment" }, // Senin sore
-      { day_of_week: 3, start_time: "16:00", end_time: "18:00", kind: "tahsin" }, // Rabu sore
-      { day_of_week: 6, start_time: "09:00", end_time: "11:00", kind: "tahsin" }, // Sabtu pagi
+      { day_of_week: 1, start_time: "16:00", end_time: "18:00", kind: "assessment" },
+      { day_of_week: 3, start_time: "16:00", end_time: "18:00", kind: "tahsin" },
+      { day_of_week: 6, start_time: "09:00", end_time: "11:00", kind: "tahsin" },
     ],
   },
   {
@@ -93,14 +90,288 @@ const TEACHERS: TeacherSeed[] = [
     email_meet: "fatimah.azzahra.mpt.test@gmail.com",
     bio: "Lulusan LIPIA. Fokus tahsin Al-Fatihah untuk muslimah pemula.",
     windows: [
-      { day_of_week: 4, start_time: "16:00", end_time: "18:00", kind: "tahsin" }, // Kamis sore
-      { day_of_week: 6, start_time: "16:00", end_time: "18:00", kind: "tahsin" }, // Sabtu sore
+      { day_of_week: 4, start_time: "16:00", end_time: "18:00", kind: "tahsin" },
+      { day_of_week: 6, start_time: "16:00", end_time: "18:00", kind: "tahsin" },
     ],
   },
 ];
 
 // ============================================================
-// Setup
+// 2. Funnel demo data
+// ============================================================
+
+type Gender = "ikhwan" | "akhwat";
+
+function demoId(prefix: string, n: number): string {
+  const hex = n.toString(16).padStart(4, "0");
+  return `${prefix}-${hex}-4000-8000-000000000000`;
+}
+
+const D = {
+  slots: {
+    assess_ikh_past: demoId("aaaaaaaa", 1),
+    assess_akh_past: demoId("aaaaaaaa", 2),
+    assess_ikh_fut: demoId("aaaaaaaa", 3),
+    assess_akh_fut: demoId("aaaaaaaa", 4),
+    tahsin_ikh_past: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 10 + i)),
+    tahsin_akh_past: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 20 + i)),
+    tahsin_ikh_fut: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 30 + i)),
+    tahsin_akh_fut: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 40 + i)),
+  },
+  cohorts: {
+    ikh_past: demoId("cccccccc", 1),
+    akh_past: demoId("cccccccc", 2),
+    ikh_fut: demoId("cccccccc", 3),
+    akh_fut: demoId("cccccccc", 4),
+  },
+  cs: {
+    ikh_past: [1, 2, 3, 4].map((i) => demoId("eeeeeeee", 10 + i)),
+    akh_past: [1, 2, 3, 4].map((i) => demoId("eeeeeeee", 20 + i)),
+    ikh_fut: [1, 2, 3, 4].map((i) => demoId("eeeeeeee", 30 + i)),
+    akh_fut: [1, 2, 3, 4].map((i) => demoId("eeeeeeee", 40 + i)),
+  },
+};
+
+interface ErrorItem {
+  ayat: number;
+  kata_idx: number;
+  expected: string;
+  actual: string;
+  severity: "major" | "minor";
+  note?: string;
+}
+
+interface ErrorSet {
+  errors_harakat: ErrorItem[];
+  errors_huruf: ErrorItem[];
+  errors_panjang_pendek: ErrorItem[];
+  errors_syaddah: ErrorItem[];
+}
+
+const ERRORS_SKOR_4: ErrorSet = {
+  errors_harakat: [
+    { ayat: 3, kata_idx: 1, expected: "ٱلرَّحِيمِ", actual: "ٱلرَّحِيمْ", severity: "minor", note: "Kasrah akhir terdengar samar" },
+  ],
+  errors_huruf: [],
+  errors_panjang_pendek: [
+    { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَانِ", severity: "minor", note: "Mad sedikit kurang panjang" },
+  ],
+  errors_syaddah: [],
+};
+
+const ERRORS_SKOR_3: ErrorSet = {
+  errors_harakat: [
+    { ayat: 2, kata_idx: 0, expected: "ٱلْحَمْدُ", actual: "ٱلْحَمْدِ", severity: "major", note: "Dhammah dibaca kasrah" },
+  ],
+  errors_huruf: [
+    { ayat: 6, kata_idx: 1, expected: "ٱلصِّرَٰطَ", actual: "ٱلسِّرَاطَ", severity: "major", note: "Shad dibaca sin" },
+  ],
+  errors_panjang_pendek: [
+    { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "major", note: "Mad wajib muttashil kurang panjang" },
+  ],
+  errors_syaddah: [
+    { ayat: 5, kata_idx: 0, expected: "إِيَّاكَ", actual: "إِيَاكَ", severity: "minor", note: "Tasydid ya kurang tegas" },
+  ],
+};
+
+const ERRORS_SKOR_2: ErrorSet = {
+  errors_harakat: [
+    { ayat: 1, kata_idx: 0, expected: "بِسْمِ", actual: "بَسْمِ", severity: "major", note: "Kasrah dibaca fathah" },
+    { ayat: 2, kata_idx: 0, expected: "ٱلْحَمْدُ", actual: "ٱلْحَمْدِ", severity: "major", note: "Dhammah dibaca kasrah" },
+    { ayat: 5, kata_idx: 3, expected: "نَسْتَعِينُ", actual: "نَسْتَعِينَ", severity: "minor", note: "Dhammah akhir kurang jelas" },
+  ],
+  errors_huruf: [
+    { ayat: 6, kata_idx: 1, expected: "ٱلصِّرَٰطَ", actual: "ٱلسِّرَاطَ", severity: "major", note: "Shad dibaca sin" },
+    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
+  ],
+  errors_panjang_pendek: [
+    { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "major", note: "Mad kurang panjang" },
+    { ayat: 3, kata_idx: 0, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "minor", note: "Mad alif sedikit pendek" },
+  ],
+  errors_syaddah: [
+    { ayat: 1, kata_idx: 1, expected: "ٱللَّهِ", actual: "ٱلَهِ", severity: "major", note: "Syaddah lam hilang" },
+    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَالِينَ", severity: "minor", note: "Syaddah lam kurang tegas" },
+  ],
+};
+
+const ERRORS_SKOR_1: ErrorSet = {
+  errors_harakat: [
+    { ayat: 1, kata_idx: 0, expected: "بِسْمِ", actual: "بَسْمِ", severity: "major", note: "Kasrah dibaca fathah" },
+    { ayat: 2, kata_idx: 0, expected: "ٱلْحَمْدُ", actual: "ٱلْحَمْدِ", severity: "major", note: "Dhammah dibaca kasrah" },
+    { ayat: 4, kata_idx: 0, expected: "مَٰلِكِ", actual: "مَالِكَ", severity: "major", note: "Kasrah dibaca fathah" },
+    { ayat: 5, kata_idx: 0, expected: "إِيَّاكَ", actual: "إِيَّاكِ", severity: "major", note: "Fathah dibaca kasrah" },
+    { ayat: 5, kata_idx: 3, expected: "نَسْتَعِينُ", actual: "نَسْتَعِينَ", severity: "minor", note: "Dhammah akhir samar" },
+  ],
+  errors_huruf: [
+    { ayat: 5, kata_idx: 1, expected: "نَعْبُدُ", actual: "نَأْبُدُ", severity: "major", note: "'Ain dibaca hamzah" },
+    { ayat: 6, kata_idx: 1, expected: "ٱلصِّرَٰطَ", actual: "ٱلسِّرَاطَ", severity: "major", note: "Shad dibaca sin" },
+    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
+    { ayat: 6, kata_idx: 2, expected: "ٱلْمُسْتَقِيمَ", actual: "ٱلْمُسْتَكِيمَ", severity: "minor", note: "Qaf kurang jelas" },
+  ],
+  errors_panjang_pendek: [
+    { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "major", note: "Mad wajib hilang" },
+    { ayat: 1, kata_idx: 3, expected: "ٱلرَّحِيمِ", actual: "ٱلرَّحِمِ", severity: "major", note: "Mad terlalu pendek" },
+    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَّالِّينَ", severity: "major", note: "Mad lazim kurang panjang" },
+    { ayat: 3, kata_idx: 0, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "minor", note: "Mad alif pendek" },
+  ],
+  errors_syaddah: [
+    { ayat: 1, kata_idx: 1, expected: "ٱللَّهِ", actual: "ٱلَهِ", severity: "major", note: "Syaddah lam hilang" },
+    { ayat: 2, kata_idx: 2, expected: "رَبِّ", actual: "رَبِ", severity: "minor", note: "Syaddah ba kurang" },
+  ],
+};
+
+function errorsBySkor(skor: number): ErrorSet {
+  switch (skor) {
+    case 4: return ERRORS_SKOR_4;
+    case 3: return ERRORS_SKOR_3;
+    case 2: return ERRORS_SKOR_2;
+    case 1: return ERRORS_SKOR_1;
+    default: return { errors_harakat: [], errors_huruf: [], errors_panjang_pendek: [], errors_syaddah: [] };
+  }
+}
+
+const SEVERITY_WEIGHT = { major: 1, minor: 0.5 };
+const SCORE_THRESHOLDS = [
+  { min: 0, max: 0, skor: 5, label: "Bacaan Sempurna" },
+  { min: 0.5, max: 2, skor: 4, label: "Bacaan Sangat Baik" },
+  { min: 2.5, max: 5, skor: 3, label: "Bacaan Cukup Baik" },
+  { min: 5.5, max: 10, skor: 2, label: "Bacaan Perlu Penguatan" },
+  { min: 10.5, max: Infinity, skor: 1, label: "Bacaan Perlu Penguatan Dasar" },
+];
+
+function computeScoreInline(errors: ErrorSet) {
+  const all = [
+    ...errors.errors_harakat, ...errors.errors_huruf,
+    ...errors.errors_panjang_pendek, ...errors.errors_syaddah,
+  ];
+  let major = 0, minor = 0, ws = 0;
+  for (const e of all) {
+    if (e.severity === "major") major++;
+    else minor++;
+    ws += SEVERITY_WEIGHT[e.severity];
+  }
+  const tier = SCORE_THRESHOLDS.find((t) => ws >= t.min && ws <= t.max) ?? SCORE_THRESHOLDS[4]!;
+  return { skor: tier.skor, status_label: tier.label, weighted_score: ws, total_errors_major: major, total_errors_minor: minor };
+}
+
+function narrativeBySkor(skor: number): string {
+  switch (skor) {
+    case 5: return "Masha Allah, bacaan Al-Fatihah sudah sempurna. Tidak ditemukan kesalahan pada keempat indikator. Pertahankan kualitas bacaan ini.";
+    case 4: return "Bacaan sudah sangat baik, Masha Allah. Hanya ditemukan sedikit kekurangan minor pada panjang-pendek bacaan. Dengan latihan rutin, bacaan bisa menjadi sempurna. Disarankan mengikuti program Tahsin Al-Fatihah untuk penyempurnaan.";
+    case 3: return "Bacaan cukup baik secara keseluruhan. Ditemukan beberapa kesalahan pada harakat dan makhraj huruf yang perlu diperbaiki. Disarankan mengikuti program Tahsin Al-Fatihah untuk penguatan bacaan.";
+    case 2: return "Bacaan perlu penguatan pada beberapa aspek, terutama harakat, makhraj huruf, dan panjang-pendek. Sangat disarankan mengikuti program Tahsin Al-Fatihah untuk memperbaiki fondasi bacaan Al-Fatihah.";
+    case 1: return "Bacaan memerlukan penguatan dasar pada semua indikator: harakat, huruf, panjang-pendek, dan syaddah. Program Tahsin Al-Fatihah akan sangat membantu memperbaiki bacaan dari dasar. Jangan berkecil hati — setiap langkah menuju perbaikan bacaan adalah ibadah.";
+    default: return "";
+  }
+}
+
+interface PesertaSeed {
+  nama: string;
+  jenis_kelamin: Gender;
+  nomor_wa: string;
+  rapot_slug: string;
+  target_skor: number;
+  audio_duration_sec: number;
+  gates: { gate: string; response: string }[];
+  booking_status?: string;
+  tahsin_sessions_attended?: number;
+}
+
+const PESERTA: PesertaSeed[] = [
+  {
+    nama: "Muhammad Rizki Pratama", jenis_kelamin: "ikhwan",
+    nomor_wa: "089900000001", rapot_slug: "demo-rizki-01",
+    target_skor: 3, audio_duration_sec: 52,
+    gates: [{ gate: "gate1_post_rapot", response: "no" }],
+  },
+  {
+    nama: "Siti Nur Halimah", jenis_kelamin: "akhwat",
+    nomor_wa: "089900000002", rapot_slug: "demo-halimah-02",
+    target_skor: 2, audio_duration_sec: 58,
+    gates: [{ gate: "gate1_post_rapot", response: "later" }],
+  },
+  {
+    nama: "Ahmad Fauzi Rahman", jenis_kelamin: "ikhwan",
+    nomor_wa: "089900000003", rapot_slug: "demo-fauzi-03",
+    target_skor: 4, audio_duration_sec: 45,
+    gates: [{ gate: "gate1_post_rapot", response: "yes" }],
+    booking_status: "confirmed",
+  },
+  {
+    nama: "Aisyah Putri Ramadhani", jenis_kelamin: "akhwat",
+    nomor_wa: "089900000004", rapot_slug: "demo-aisyah-04",
+    target_skor: 3, audio_duration_sec: 55,
+    gates: [{ gate: "gate1_post_rapot", response: "yes" }],
+    booking_status: "reserved",
+  },
+  {
+    nama: "Umar Faruq Habibi", jenis_kelamin: "ikhwan",
+    nomor_wa: "089900000005", rapot_slug: "demo-umar-05",
+    target_skor: 2, audio_duration_sec: 61,
+    gates: [{ gate: "gate1_post_rapot", response: "yes" }],
+    booking_status: "attended",
+  },
+  {
+    nama: "Khadijah Aminah Zahra", jenis_kelamin: "akhwat",
+    nomor_wa: "089900000006", rapot_slug: "demo-khadijah-06",
+    target_skor: 3, audio_duration_sec: 48,
+    gates: [
+      { gate: "gate1_post_rapot", response: "yes" },
+      { gate: "gate2_post_assessment", response: "yes" },
+    ],
+    booking_status: "attended",
+    tahsin_sessions_attended: 0,
+  },
+  {
+    nama: "Ibrahim Maulana Akbar", jenis_kelamin: "ikhwan",
+    nomor_wa: "089900000007", rapot_slug: "demo-ibrahim-07",
+    target_skor: 2, audio_duration_sec: 65,
+    gates: [
+      { gate: "gate1_post_rapot", response: "yes" },
+      { gate: "gate2_post_assessment", response: "yes" },
+    ],
+    booking_status: "attended",
+    tahsin_sessions_attended: 2,
+  },
+  {
+    nama: "Fatimah Azzahra Putri", jenis_kelamin: "akhwat",
+    nomor_wa: "089900000008", rapot_slug: "demo-fatimah-08",
+    target_skor: 1, audio_duration_sec: 70,
+    gates: [
+      { gate: "gate1_post_rapot", response: "yes" },
+      { gate: "gate2_post_assessment", response: "yes" },
+    ],
+    booking_status: "attended",
+    tahsin_sessions_attended: 3,
+  },
+  {
+    nama: "Bilal Abdurrahman", jenis_kelamin: "ikhwan",
+    nomor_wa: "089900000009", rapot_slug: "demo-bilal-09",
+    target_skor: 2, audio_duration_sec: 59,
+    gates: [
+      { gate: "gate1_post_rapot", response: "yes" },
+      { gate: "gate2_post_assessment", response: "yes" },
+      { gate: "gate3_post_tahsin", response: "yes" },
+    ],
+    booking_status: "attended",
+    tahsin_sessions_attended: 4,
+  },
+  {
+    nama: "Maryam Safira Utami", jenis_kelamin: "akhwat",
+    nomor_wa: "089900000010", rapot_slug: "demo-maryam-10",
+    target_skor: 1, audio_duration_sec: 72,
+    gates: [
+      { gate: "gate1_post_rapot", response: "yes" },
+      { gate: "gate2_post_assessment", response: "yes" },
+      { gate: "gate3_post_tahsin", response: "yes" },
+    ],
+    booking_status: "attended",
+    tahsin_sessions_attended: 4,
+  },
+];
+
+// ============================================================
+// 3. Setup
 // ============================================================
 
 function requireEnv(name: string): string {
@@ -123,7 +394,7 @@ const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 const isReset = process.argv.includes("--reset");
 
 // ============================================================
-// Helpers
+// 4. Helpers
 // ============================================================
 
 async function findAuthUserByEmail(email: string): Promise<string | null> {
@@ -143,157 +414,456 @@ async function deleteAuthUser(userId: string): Promise<void> {
   if (error && !error.message.includes("not found")) throw error;
 }
 
-// ============================================================
-// Reset (--reset flag)
-// ============================================================
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+}
 
-async function reset() {
-  console.log("⟲ Reset: deleting existing dummy admin + pengajar...");
+function daysFromNow(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d;
+}
 
-  // Delete teachers + their auth users
-  for (const t of TEACHERS) {
-    const authId = await findAuthUserByPhone(t.phone_e164);
-    if (authId) {
-      // Availability rows + teacher row cascade via FK on auth user? No — they
-      // cascade via teacher_id. Delete teacher row first, then auth user.
-      await sb.from("teachers").delete().eq("auth_user_id", authId);
-      await deleteAuthUser(authId);
-      console.log(`  ✓ Removed pengajar ${t.nama} + auth user`);
-    }
-  }
-
-  // Delete admin
-  const adminAuthId = await findAuthUserByEmail(ADMIN_EMAIL);
-  if (adminAuthId) {
-    await sb.from("admins").delete().eq("auth_user_id", adminAuthId);
-    await deleteAuthUser(adminAuthId);
-    console.log(`  ✓ Removed admin ${ADMIN_EMAIL} + auth user`);
-  }
+function nextDayOfWeek(dow: number, hour: number, minute: number): Date {
+  const d = new Date();
+  const diff = (dow - d.getDay() + 7) % 7 || 7;
+  d.setDate(d.getDate() + diff);
+  d.setHours(hour, minute, 0, 0);
+  return d;
 }
 
 // ============================================================
-// Seed: Admin
+// 5. Reset
+// ============================================================
+
+const ALL_SLOT_IDS = [
+  D.slots.assess_ikh_past, D.slots.assess_akh_past,
+  D.slots.assess_ikh_fut, D.slots.assess_akh_fut,
+  ...D.slots.tahsin_ikh_past, ...D.slots.tahsin_akh_past,
+  ...D.slots.tahsin_ikh_fut, ...D.slots.tahsin_akh_fut,
+];
+const ALL_COHORT_IDS = Object.values(D.cohorts);
+const ALL_CS_IDS = [...D.cs.ikh_past, ...D.cs.akh_past, ...D.cs.ikh_fut, ...D.cs.akh_fut];
+const DEMO_WA_PATTERN = "08990000%";
+
+async function resetFunnelData() {
+  console.log("\n⟲ Reset: deleting funnel demo data...");
+
+  const { data: subs } = await sb
+    .from("submissions").select("id").like("nomor_wa", DEMO_WA_PATTERN);
+  const subIds = (subs ?? []).map((r: { id: string }) => r.id);
+
+  if (subIds.length > 0) {
+    await sb.from("analytics_events").delete().in("submission_id", subIds);
+    await sb.from("interest_responses").delete().in("submission_id", subIds);
+    await sb.from("attendance").delete().in("submission_id", subIds);
+    console.log("  ✓ Cleared attendance, interest, analytics");
+  }
+
+  if (ALL_COHORT_IDS.length > 0) {
+    await sb.from("cohort_enrollments").delete().in("cohort_id", ALL_COHORT_IDS);
+    await sb.from("cohort_sessions").delete().in("cohort_id", ALL_COHORT_IDS);
+    await sb.from("cohorts").delete().in("id", ALL_COHORT_IDS);
+    console.log("  ✓ Cleared cohorts + sessions + enrollments");
+  }
+
+  if (subIds.length > 0) {
+    await sb.from("bookings").delete().in("submission_id", subIds);
+    console.log("  ✓ Cleared bookings");
+  }
+
+  if (ALL_SLOT_IDS.length > 0) {
+    await sb.from("slots").delete().in("id", ALL_SLOT_IDS);
+    console.log("  ✓ Cleared slots");
+  }
+
+  await sb.from("rapot").delete().like("slug", "demo-%");
+  if (subIds.length > 0) {
+    await sb.from("submissions").delete().in("id", subIds);
+  }
+  console.log("  ✓ Cleared submissions + rapot");
+}
+
+async function reset() {
+  console.log("⟲ Reset: deleting existing dummy admin + pengajar...");
+  for (const t of TEACHERS) {
+    await sb.from("teacher_availability").delete().in(
+      "teacher_id",
+      (await sb.from("teachers").select("id").eq("nomor_wa", t.phone_db)).data?.map((r) => r.id) ?? [],
+    );
+    await sb.from("teachers").delete().eq("nomor_wa", t.phone_db);
+    const authId = await findAuthUserByPhone(t.phone_e164);
+    if (authId) {
+      await deleteAuthUser(authId);
+    }
+    console.log(`  ✓ Removed pengajar ${t.nama} + auth user`);
+  }
+  const adminAuthId = await findAuthUserByEmail(ADMIN_EMAIL);
+  await sb.from("admins").delete().eq("email", ADMIN_EMAIL.toLowerCase());
+  if (adminAuthId) {
+    await deleteAuthUser(adminAuthId);
+  }
+  console.log(`  ✓ Removed admin ${ADMIN_EMAIL} + auth user`);
+}
+
+// ============================================================
+// 6. Seed: Admin
 // ============================================================
 
 async function seedAdmin() {
   console.log(`\n→ Seeding admin: ${ADMIN_EMAIL}`);
-
   let authId = await findAuthUserByEmail(ADMIN_EMAIL);
-
   if (authId) {
     console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
   } else {
     const { data, error } = await sb.auth.admin.createUser({
-      email: ADMIN_EMAIL,
-      email_confirm: true,
+      email: ADMIN_EMAIL, email_confirm: true,
       user_metadata: { role: "admin", nama: ADMIN_NAMA },
     });
-    if (error) {
-      console.error(`  ✗ Failed to create auth user: ${error.message}`);
-      return;
-    }
+    if (error) { console.error(`  ✗ Failed to create auth user: ${error.message}`); return; }
     authId = data.user.id;
     console.log(`  ✓ Auth user created (${authId.slice(0, 8)}...)`);
   }
-
-  // Upsert admins row
   const { error: dbError } = await sb.from("admins").upsert(
-    {
-      auth_user_id: authId,
-      nama: ADMIN_NAMA,
-      email: ADMIN_EMAIL.toLowerCase(),
-      role: ADMIN_ROLE,
-      is_active: true,
-    },
+    { auth_user_id: authId, nama: ADMIN_NAMA, email: ADMIN_EMAIL.toLowerCase(), role: ADMIN_ROLE, is_active: true },
     { onConflict: "auth_user_id" },
   );
-
-  if (dbError) {
-    console.error(`  ✗ Failed to upsert admins row: ${dbError.message}`);
-    return;
-  }
+  if (dbError) { console.error(`  ✗ Failed to upsert admins row: ${dbError.message}`); return; }
   console.log(`  ✓ admins row ready (role=${ADMIN_ROLE})`);
-  console.log(`    → Login at /admin/login with email ${ADMIN_EMAIL} (magic link)`);
 }
 
 // ============================================================
-// Seed: Pengajar
+// 7. Seed: Pengajar
 // ============================================================
 
 async function seedTeacher(t: TeacherSeed) {
   console.log(`\n→ Seeding pengajar: ${t.nama} (${t.jenis_kelamin})`);
-
   let authId = await findAuthUserByPhone(t.phone_e164);
-
   if (authId) {
     console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
   } else {
     const { data, error } = await sb.auth.admin.createUser({
-      phone: t.phone_e164,
-      password: DUMMY_PASSWORD,
-      phone_confirm: true,
+      phone: t.phone_e164, password: DUMMY_PASSWORD, phone_confirm: true,
       user_metadata: { role: "teacher", nama: t.nama },
     });
     if (error) {
       console.error(`  ✗ Failed to create auth user: ${error.message}`);
-      if (error.message.toLowerCase().includes("phone provider")) {
-        console.error(
-          "    Hint: enable Phone provider at Supabase Dashboard → Authentication → Providers",
-        );
-      }
+      if (error.message.toLowerCase().includes("phone provider"))
+        console.error("    Hint: enable Phone provider at Supabase Dashboard → Authentication → Providers");
       return;
     }
     authId = data.user.id;
     console.log(`  ✓ Auth user created (${authId.slice(0, 8)}...)`);
   }
 
-  // Upsert teachers row
-  const { data: teacher, error: dbError } = await sb
-    .from("teachers")
-    .upsert(
-      {
-        auth_user_id: authId,
-        nama: t.nama,
-        jenis_kelamin: t.jenis_kelamin,
-        nomor_wa: t.phone_db,
-        email_meet: t.email_meet,
-        bio: t.bio,
-        status: "active",
-        activated_at: new Date().toISOString(),
-      },
-      { onConflict: "auth_user_id" },
-    )
-    .select("id")
-    .single();
+  const { data: teacher, error: dbError } = await sb.from("teachers").upsert(
+    {
+      auth_user_id: authId, nama: t.nama, jenis_kelamin: t.jenis_kelamin,
+      nomor_wa: t.phone_db, email_meet: t.email_meet, bio: t.bio,
+      status: "active", activated_at: new Date().toISOString(),
+    },
+    { onConflict: "nomor_wa" },
+  ).select("id").single();
 
-  if (dbError || !teacher) {
-    console.error(`  ✗ Failed to upsert teachers row: ${dbError?.message}`);
-    return;
-  }
+  if (dbError || !teacher) { console.error(`  ✗ Failed to upsert teachers row: ${dbError?.message}`); return; }
   console.log(`  ✓ teachers row ready (id=${teacher.id.slice(0, 8)}...)`);
-  console.log(`    → Login at /portal-mpt-x7/login`);
-  console.log(`      WA: ${t.phone_db}   Password: ${DUMMY_PASSWORD}`);
+  console.log(`    → Login: /portal-mpt-x7/login  WA: ${t.phone_db}  Pwd: ${DUMMY_PASSWORD}`);
 
-  // Replace availability windows (delete + insert for clean state)
   await sb.from("teacher_availability").delete().eq("teacher_id", teacher.id);
   const windowRows = t.windows.map((w) => ({
-    teacher_id: teacher.id,
-    day_of_week: w.day_of_week,
-    start_time: w.start_time,
-    end_time: w.end_time,
-    kind: w.kind,
-    is_active: true,
+    teacher_id: teacher.id, day_of_week: w.day_of_week,
+    start_time: w.start_time, end_time: w.end_time, kind: w.kind, is_active: true,
   }));
   const { error: availErr } = await sb.from("teacher_availability").insert(windowRows);
-  if (availErr) {
-    console.error(`  ✗ Failed to insert availability: ${availErr.message}`);
-    return;
-  }
+  if (availErr) { console.error(`  ✗ Failed to insert availability: ${availErr.message}`); return; }
   console.log(`  ✓ ${windowRows.length} availability window(s) set`);
 }
 
 // ============================================================
-// Main
+// 8. Seed: Funnel demo data
+// ============================================================
+
+async function seedFunnelData() {
+  console.log("\n═══════════════════════════════════════════════════════");
+  console.log("  Seeding funnel demo data...");
+  console.log("═══════════════════════════════════════════════════════");
+
+  // ---- Look up teacher IDs ----
+  const { data: tRows } = await sb
+    .from("teachers").select("id, nomor_wa, jenis_kelamin")
+    .in("nomor_wa", TEACHERS.map((t) => t.phone_db));
+
+  if (!tRows || tRows.length < 4) {
+    console.error("  ✗ Could not find all 4 teachers. Run teacher seed first.");
+    return;
+  }
+
+  const tMap: Record<string, { id: string; g: string }> = {};
+  for (const r of tRows as { id: string; nomor_wa: string; jenis_kelamin: string }[]) {
+    tMap[r.nomor_wa] = { id: r.id, g: r.jenis_kelamin };
+  }
+  const ahmad = tMap["081200000001"]!;
+  const yusuf = tMap["081200000002"]!;
+  const aisyah = tMap["081200000003"]!;
+  const fatimah = tMap["081200000004"]!;
+
+  // ---- 1. Submissions ----
+  console.log("\n→ Seeding submissions...");
+  const subData = PESERTA.map((p) => ({
+    nama: p.nama, jenis_kelamin: p.jenis_kelamin, nomor_wa: p.nomor_wa,
+    audio_path: "demo/placeholder.webm", audio_duration_sec: p.audio_duration_sec,
+    status: "completed" as const, processed_at: daysAgo(42).toISOString(),
+    rapot_slug: p.rapot_slug,
+  }));
+  const { data: subRows, error: subErr } = await sb
+    .from("submissions").upsert(subData, { onConflict: "rapot_slug" }).select("id, rapot_slug");
+  if (subErr || !subRows) { console.error(`  ✗ submissions: ${subErr?.message}`); return; }
+  const slugToId: Record<string, string> = {};
+  for (const r of subRows as { id: string; rapot_slug: string }[]) slugToId[r.rapot_slug] = r.id;
+  console.log(`  ✓ ${subRows.length} submissions`);
+
+  // ---- 2. Rapot ----
+  console.log("→ Seeding rapot...");
+  const rapotData = PESERTA.map((p, i) => {
+    const errors = errorsBySkor(p.target_skor);
+    const score = computeScoreInline(errors);
+    return {
+      slug: p.rapot_slug, submission_id: slugToId[p.rapot_slug],
+      skor: score.skor, status_label: score.status_label,
+      errors_harakat: errors.errors_harakat, errors_huruf: errors.errors_huruf,
+      errors_panjang_pendek: errors.errors_panjang_pendek, errors_syaddah: errors.errors_syaddah,
+      total_errors_major: score.total_errors_major, total_errors_minor: score.total_errors_minor,
+      weighted_score: score.weighted_score,
+      ml_model_version: "muaalem-v3_2", ml_confidence: 0.82 + i * 0.015,
+      ai_narrative: narrativeBySkor(p.target_skor), ai_narrative_model: "claude-sonnet-4-6",
+    };
+  });
+  const { error: rapotErr } = await sb.from("rapot").upsert(rapotData, { onConflict: "slug" });
+  if (rapotErr) { console.error(`  ✗ rapot: ${rapotErr.message}`); return; }
+  console.log(`  ✓ ${rapotData.length} rapot`);
+
+  // ---- 3. Slots ----
+  console.log("→ Seeding slots...");
+
+  const assessIkhPast = daysAgo(21); assessIkhPast.setHours(19, 30, 0, 0);
+  const assessAkhPast = daysAgo(14); assessAkhPast.setHours(16, 0, 0, 0);
+  const assessIkhFut = nextDayOfWeek(1, 19, 30);
+  const assessAkhFut = nextDayOfWeek(1, 16, 0);
+
+  const tahsinIkhPastDates = [35, 28, 21, 14].map((d) => { const dt = daysAgo(d); dt.setHours(19, 30, 0, 0); return dt; });
+  const tahsinAkhPastDates = [33, 26, 19, 12].map((d) => { const dt = daysAgo(d); dt.setHours(16, 0, 0, 0); return dt; });
+  const tahsinIkhFutDates = [10, 17, 24, 31].map((d) => { const dt = daysFromNow(d); dt.setHours(8, 0, 0, 0); return dt; });
+  const tahsinAkhFutDates = [11, 18, 25, 32].map((d) => { const dt = daysFromNow(d); dt.setHours(16, 0, 0, 0); return dt; });
+
+  function mkSlot(id: string, teacherId: string, kind: "assessment" | "tahsin", at: Date, gender: Gender, past: boolean) {
+    return {
+      id, teacher_id: teacherId, kind,
+      created_at: past ? new Date(at.getTime() - 86_400_000).toISOString() : undefined,
+      scheduled_at: at.toISOString(), duration_min: kind === "assessment" ? 60 : 90,
+      capacity: 12, gender_target: gender,
+      status: past ? "completed" : "scheduled",
+      meet_join_url: `https://meet.google.com/demo-${id.slice(0, 8)}-${id.slice(9, 13)}`,
+      meet_calendar_event_id: id,
+    };
+  }
+
+  const slotRows = [
+    mkSlot(D.slots.assess_ikh_past, ahmad.id, "assessment", assessIkhPast, "ikhwan", true),
+    mkSlot(D.slots.assess_akh_past, aisyah.id, "assessment", assessAkhPast, "akhwat", true),
+    mkSlot(D.slots.assess_ikh_fut, ahmad.id, "assessment", assessIkhFut, "ikhwan", false),
+    mkSlot(D.slots.assess_akh_fut, aisyah.id, "assessment", assessAkhFut, "akhwat", false),
+    ...tahsinIkhPastDates.map((dt, i) => mkSlot(D.slots.tahsin_ikh_past[i]!, ahmad.id, "tahsin", dt, "ikhwan", true)),
+    ...tahsinAkhPastDates.map((dt, i) => mkSlot(D.slots.tahsin_akh_past[i]!, aisyah.id, "tahsin", dt, "akhwat", true)),
+    ...tahsinIkhFutDates.map((dt, i) => mkSlot(D.slots.tahsin_ikh_fut[i]!, yusuf.id, "tahsin", dt, "ikhwan", false)),
+    ...tahsinAkhFutDates.map((dt, i) => mkSlot(D.slots.tahsin_akh_fut[i]!, fatimah.id, "tahsin", dt, "akhwat", false)),
+  ];
+
+  const { error: slotErr } = await sb.from("slots").upsert(slotRows, { onConflict: "id" });
+  if (slotErr) { console.error(`  ✗ slots: ${slotErr.message}`); return; }
+  const pastCount = slotRows.filter((s) => s.status === "completed").length;
+  console.log(`  ✓ ${slotRows.length} slots (${pastCount} past, ${slotRows.length - pastCount} future)`);
+
+  // ---- 4. Cohorts ----
+  console.log("→ Seeding cohorts...");
+  const cohortRows = [
+    {
+      id: D.cohorts.ikh_past, teacher_id: ahmad.id, name: "Tahsin Ikhwan — Batch Demo",
+      gender_target: "ikhwan", start_date: daysAgo(35).toISOString().slice(0, 10),
+      end_date: daysAgo(7).toISOString().slice(0, 10), capacity: 12, status: "in_progress",
+    },
+    {
+      id: D.cohorts.akh_past, teacher_id: aisyah.id, name: "Tahsin Akhwat — Batch Demo",
+      gender_target: "akhwat", start_date: daysAgo(33).toISOString().slice(0, 10),
+      end_date: daysAgo(5).toISOString().slice(0, 10), capacity: 12, status: "in_progress",
+    },
+    {
+      id: D.cohorts.ikh_fut, teacher_id: yusuf.id, name: "Tahsin Ikhwan — Batch Baru",
+      gender_target: "ikhwan", start_date: daysFromNow(10).toISOString().slice(0, 10),
+      end_date: daysFromNow(31).toISOString().slice(0, 10), capacity: 12, status: "open",
+    },
+    {
+      id: D.cohorts.akh_fut, teacher_id: fatimah.id, name: "Tahsin Akhwat — Batch Baru",
+      gender_target: "akhwat", start_date: daysFromNow(11).toISOString().slice(0, 10),
+      end_date: daysFromNow(32).toISOString().slice(0, 10), capacity: 12, status: "open",
+    },
+  ];
+  const { error: cohortErr } = await sb.from("cohorts").upsert(cohortRows, { onConflict: "id" });
+  if (cohortErr) { console.error(`  ✗ cohorts: ${cohortErr.message}`); return; }
+  console.log(`  ✓ ${cohortRows.length} cohorts`);
+
+  // ---- 5. Cohort sessions ----
+  console.log("→ Seeding cohort sessions...");
+  const csRows = [
+    ...D.cs.ikh_past.map((id, i) => ({ id, cohort_id: D.cohorts.ikh_past, slot_id: D.slots.tahsin_ikh_past[i]!, session_number: i + 1 })),
+    ...D.cs.akh_past.map((id, i) => ({ id, cohort_id: D.cohorts.akh_past, slot_id: D.slots.tahsin_akh_past[i]!, session_number: i + 1 })),
+    ...D.cs.ikh_fut.map((id, i) => ({ id, cohort_id: D.cohorts.ikh_fut, slot_id: D.slots.tahsin_ikh_fut[i]!, session_number: i + 1 })),
+    ...D.cs.akh_fut.map((id, i) => ({ id, cohort_id: D.cohorts.akh_fut, slot_id: D.slots.tahsin_akh_fut[i]!, session_number: i + 1 })),
+  ];
+  const { error: csErr } = await sb.from("cohort_sessions").upsert(csRows, { onConflict: "id" });
+  if (csErr) { console.error(`  ✗ cohort_sessions: ${csErr.message}`); return; }
+  console.log(`  ✓ ${csRows.length} cohort sessions`);
+
+  // ---- 6. Bookings ----
+  console.log("→ Seeding bookings...");
+  const bookedPeserta = PESERTA.filter((p) => p.booking_status);
+  const bookingRows = bookedPeserta.map((p) => {
+    const isPast = p.booking_status === "attended" || p.booking_status === "no_show";
+    const slotId = p.jenis_kelamin === "ikhwan"
+      ? (isPast ? D.slots.assess_ikh_past : D.slots.assess_ikh_fut)
+      : (isPast ? D.slots.assess_akh_past : D.slots.assess_akh_fut);
+    return {
+      slot_id: slotId,
+      submission_id: slugToId[p.rapot_slug],
+      status: p.booking_status,
+      reserved_until: isPast ? daysAgo(20).toISOString() : daysFromNow(7).toISOString(),
+    };
+  });
+  const { error: bookErr } = await sb
+    .from("bookings").upsert(bookingRows, { onConflict: "slot_id,submission_id", ignoreDuplicates: false });
+  if (bookErr) { console.error(`  ✗ bookings: ${bookErr.message}`); return; }
+  console.log(`  ✓ ${bookingRows.length} bookings`);
+
+  // Look up booking IDs for attendance
+  const demoSubIds = Object.values(slugToId);
+  const { data: bookingLookup } = await sb
+    .from("bookings").select("id, slot_id, submission_id").in("submission_id", demoSubIds);
+  const bookingMap: Record<string, string> = {};
+  for (const b of (bookingLookup ?? []) as { id: string; slot_id: string; submission_id: string }[]) {
+    bookingMap[`${b.slot_id}:${b.submission_id}`] = b.id;
+  }
+
+  // ---- 7. Cohort enrollments ----
+  console.log("→ Seeding cohort enrollments...");
+  const enrolledPeserta = PESERTA.filter((p) => p.tahsin_sessions_attended !== undefined);
+  const enrollRows = enrolledPeserta.map((p) => ({
+    cohort_id: p.jenis_kelamin === "ikhwan" ? D.cohorts.ikh_past : D.cohorts.akh_past,
+    submission_id: slugToId[p.rapot_slug],
+  }));
+  const { error: enrollErr } = await sb
+    .from("cohort_enrollments").upsert(enrollRows, { onConflict: "cohort_id,submission_id", ignoreDuplicates: true });
+  if (enrollErr) { console.error(`  ✗ cohort_enrollments: ${enrollErr.message}`); return; }
+  console.log(`  ✓ ${enrollRows.length} enrollments`);
+
+  // ---- 8. Attendance ----
+  console.log("→ Seeding attendance...");
+  const attendanceRows: Record<string, unknown>[] = [];
+  let attIdx = 0;
+
+  // Assessment attendance (P5–P10: status='attended')
+  for (const p of PESERTA.filter((p) => p.booking_status === "attended")) {
+    attIdx++;
+    const subId = slugToId[p.rapot_slug]!;
+    const slotId = p.jenis_kelamin === "ikhwan" ? D.slots.assess_ikh_past : D.slots.assess_akh_past;
+    const bookingId = bookingMap[`${slotId}:${subId}`];
+    if (!bookingId) continue;
+    const joinedAt = p.jenis_kelamin === "ikhwan" ? daysAgo(21) : daysAgo(14);
+    joinedAt.setHours(joinedAt.getHours(), joinedAt.getMinutes() + 2, 0, 0);
+    attendanceRows.push({
+      id: demoId("dddddddd", attIdx),
+      booking_id: bookingId, cohort_session_id: null,
+      submission_id: subId, attended: true,
+      source: "manual", joined_at: joinedAt.toISOString(), duration_min: 55,
+    });
+  }
+
+  // Tahsin attendance
+  for (const p of PESERTA.filter((p) => (p.tahsin_sessions_attended ?? 0) > 0)) {
+    const subId = slugToId[p.rapot_slug]!;
+    const sessions = p.jenis_kelamin === "ikhwan" ? D.cs.ikh_past : D.cs.akh_past;
+    const slotDates = p.jenis_kelamin === "ikhwan" ? tahsinIkhPastDates : tahsinAkhPastDates;
+    for (let s = 0; s < p.tahsin_sessions_attended!; s++) {
+      attIdx++;
+      const joinedAt = new Date(slotDates[s]!);
+      joinedAt.setMinutes(joinedAt.getMinutes() + 3);
+      attendanceRows.push({
+        id: demoId("dddddddd", 100 + attIdx),
+        booking_id: null, cohort_session_id: sessions[s],
+        submission_id: subId, attended: true,
+        source: "manual", joined_at: joinedAt.toISOString(), duration_min: 85,
+      });
+    }
+  }
+
+  const { error: attErr } = await sb.from("attendance").upsert(attendanceRows, { onConflict: "id" });
+  if (attErr) { console.error(`  ✗ attendance: ${attErr.message}`); return; }
+  console.log(`  ✓ ${attendanceRows.length} attendance records`);
+
+  // ---- 9. Interest responses ----
+  console.log("→ Seeding interest responses...");
+  const gateRows: { submission_id: string; gate: string; response: string }[] = [];
+  for (const p of PESERTA) {
+    for (const g of p.gates) {
+      gateRows.push({ submission_id: slugToId[p.rapot_slug]!, gate: g.gate, response: g.response });
+    }
+  }
+  const { error: gateErr } = await sb
+    .from("interest_responses").upsert(gateRows, { onConflict: "submission_id,gate", ignoreDuplicates: true });
+  if (gateErr) { console.error(`  ✗ interest_responses: ${gateErr.message}`); return; }
+  console.log(`  ✓ ${gateRows.length} gate responses`);
+
+  // ---- 10. Analytics events ----
+  console.log("→ Seeding analytics events...");
+  await sb.from("analytics_events").delete().in("submission_id", demoSubIds);
+  const eventRows: { event_name: string; submission_id: string; occurred_at: string }[] = [];
+  for (const p of PESERTA) {
+    const subId = slugToId[p.rapot_slug]!;
+    const base = daysAgo(42);
+    eventRows.push({ event_name: "submission_created", submission_id: subId, occurred_at: base.toISOString() });
+    eventRows.push({ event_name: "rapot_viewed", submission_id: subId, occurred_at: new Date(base.getTime() + 60_000).toISOString() });
+    if (p.booking_status) {
+      eventRows.push({ event_name: "booking_created", submission_id: subId, occurred_at: new Date(base.getTime() + 120_000).toISOString() });
+    }
+    if (p.booking_status === "attended") {
+      eventRows.push({ event_name: "assessment_attended", submission_id: subId, occurred_at: daysAgo(21).toISOString() });
+    }
+    if (p.tahsin_sessions_attended !== undefined) {
+      eventRows.push({ event_name: "tahsin_enrolled", submission_id: subId, occurred_at: daysAgo(35).toISOString() });
+    }
+    if (p.gates.some((g) => g.gate === "gate3_post_tahsin" && g.response === "yes")) {
+      eventRows.push({ event_name: "hits_cta_clicked", submission_id: subId, occurred_at: daysAgo(3).toISOString() });
+    }
+  }
+  const { error: evtErr } = await sb.from("analytics_events").insert(eventRows);
+  if (evtErr) { console.error(`  ✗ analytics_events: ${evtErr.message}`); return; }
+  console.log(`  ✓ ${eventRows.length} analytics events`);
+
+  // ---- Summary ----
+  console.log("\n  ✓ Funnel demo data seeded!");
+  console.log("\n  Demo peserta:");
+  for (const p of PESERTA) {
+    const stage =
+      (p.tahsin_sessions_attended ?? -1) >= 3 ? "HITS qualified" :
+      (p.tahsin_sessions_attended ?? -1) >= 0 ? `tahsin (${p.tahsin_sessions_attended}/4)` :
+      p.booking_status === "attended" ? "post-assessment" :
+      p.booking_status ? `booked (${p.booking_status})` : "rapot only";
+    console.log(`    /rapot/${p.rapot_slug}  skor=${p.target_skor}  ${stage}  (${p.jenis_kelamin})`);
+  }
+}
+
+// ============================================================
+// 9. Main
 // ============================================================
 
 async function main() {
@@ -303,38 +873,41 @@ async function main() {
   console.log(`  Mode:   ${isReset ? "RESET + SEED" : "SEED (idempotent)"}`);
   console.log("═══════════════════════════════════════════════════════");
 
-  // Sanity check: verify migration is applied by querying a V2 table
   const { error: sanityErr } = await sb
-    .from("teachers")
-    .select("id", { count: "exact", head: true });
+    .from("teachers").select("id", { count: "exact", head: true });
   if (sanityErr) {
     console.error("\n✗ Cannot query teachers table:");
     console.error(`  ${sanityErr.message}`);
-    console.error("\n  Likely cause: migration 0002_booking_v2.sql not applied yet.");
-    console.error("  Run it first at Supabase Dashboard → SQL Editor, then retry seed.");
+    console.error("\n  Likely cause: migrations not applied yet.");
+    console.error("  Run migrations at Supabase Dashboard → SQL Editor, then retry seed.");
     process.exit(1);
   }
 
   if (isReset) {
+    await resetFunnelData();
     await reset();
   }
 
   await seedAdmin();
-
   for (const t of TEACHERS) {
     await seedTeacher(t);
   }
+  await seedFunnelData();
 
   console.log("\n═══════════════════════════════════════════════════════");
   console.log("  ✓ Seed complete");
   console.log("═══════════════════════════════════════════════════════");
   console.log("\nNext steps:");
-  console.log(`  1. Login admin: ${SUPABASE_URL.replace("//", "//app.")}/admin/login`);
-  console.log(`     (use ${ADMIN_EMAIL}, then click magic link in inbox)`);
-  console.log(`  2. Login pengajar: /portal-mpt-x7/login`);
-  console.log(`     (use any of the phone numbers above + ${DUMMY_PASSWORD})`);
-  console.log(`  3. Admin → /admin/jadwal → klik "Generate Slot" untuk buat slot konkret`);
-  console.log(`  4. Admin → /admin/cohort → "Buat Cohort Baru" untuk Tahsin cohort`);
+  console.log(`  1. Admin login: /admin/login (email: ${ADMIN_EMAIL}, magic link)`);
+  console.log(`  2. Pengajar login: /portal-mpt-x7/login (WA: 081200000001, pwd: ${DUMMY_PASSWORD})`);
+  console.log("  3. Demo rapot pages:");
+  console.log("     /rapot/demo-rizki-01   — skor 3, gate1=no (stopped)");
+  console.log("     /rapot/demo-fauzi-03   — skor 4, gate1=yes → booking flow");
+  console.log("     /rapot/demo-umar-05    — skor 2, attended assessment");
+  console.log("     /rapot/demo-ibrahim-07 — skor 2, tahsin 2/4 sessions");
+  console.log("     /rapot/demo-bilal-09   — skor 2, tahsin 4/4 → HITS qualified");
+  console.log("  4. Admin → /admin/jadwal untuk lihat slots");
+  console.log("  5. Admin → /admin/cohort untuk lihat tahsin cohorts");
 }
 
 main().catch((err) => {
