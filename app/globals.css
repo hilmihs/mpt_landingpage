@@ -132,6 +132,7 @@
   }
   .font-arabic {
     font-family: var(--font-arabic), "Amiri", "Scheherazade New", serif;
+    font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
   }
   .font-display {
     font-family: var(--font-nunito), system-ui, sans-serif;

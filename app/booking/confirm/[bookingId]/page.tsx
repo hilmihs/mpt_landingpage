@@ -7,6 +7,7 @@ import {
   Video,
   MessageCircle,
   ChevronLeft,
+  SkipForward,
 } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
 import { ZoomNameReminder } from "@/components/booking/ZoomNameReminder";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ bookingId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export const metadata: Metadata = {
@@ -107,8 +109,10 @@ function fmtDateTime(iso: string, durationMin: number): string {
   return `${date}, ${start} – ${endStr} WIB`;
 }
 
-export default async function BookingConfirmPage({ params }: Props) {
+export default async function BookingConfirmPage({ params, searchParams }: Props) {
   const { bookingId } = await params;
+  const sp = await searchParams;
+  const devMode = sp.dev === "1";
   const booking = await fetchBooking(bookingId);
   if (!booking) notFound();
 
@@ -347,6 +351,40 @@ export default async function BookingConfirmPage({ params }: Props) {
           </Link>
         )}
       </div>
+
+      {devMode && submission.rapot_slug && (
+        <div
+          style={{
+            marginTop: 32,
+            padding: "16px 20px",
+            borderRadius: 12,
+            border: "1px dashed var(--ink-mute)",
+            background: "color-mix(in oklab, var(--warning), transparent 92%)",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--ink-mute)",
+              marginBottom: 8,
+            }}
+          >
+            Dev Mode
+          </div>
+          <Link
+            href={`/peserta/${submission.rapot_slug}/assessment-result`}
+            className="btn-mpt btn-mpt-outline"
+            style={{ minHeight: 38, fontSize: 12, color: "var(--ink-soft)" }}
+          >
+            <SkipForward size={14} strokeWidth={2.2} />
+            Skip ke Hasil Assessment Pengajar
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

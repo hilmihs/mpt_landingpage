@@ -85,6 +85,7 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
       </div>
       <div
         dir="rtl"
+        lang="ar"
         className="font-arabic"
         style={{
           fontSize: 26,
@@ -92,6 +93,8 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
           textAlign: "right",
           color: "var(--ink)",
           margin: "0 0 10px",
+          wordSpacing: "0.12em",
+          fontFeatureSettings: '"liga" 1, "calt" 1, "kern" 1',
         }}
       >
         {ayat.words.map((word, idx) => {
@@ -103,22 +106,17 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
                 key={idx}
                 style={{
                   background: `color-mix(in oklab, ${meta.color}, transparent 80%)`,
-                  padding: "0 6px",
+                  padding: "0 4px",
                   borderRadius: 6,
                   borderBottom: `2px solid ${meta.color}`,
-                  margin: "0 2px",
                 }}
               >
                 {word}
               </span>
             );
           }
-          return (
-            <span key={idx} style={{ margin: "0 2px" }}>
-              {word}
-            </span>
-          );
-        })}
+          return <span key={idx}>{word}</span>;
+        })}{" "}
       </div>
       <div
         style={{
