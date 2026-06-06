@@ -18,6 +18,7 @@ export default function LandingPage() {
       <Indikator />
       <Steps />
       <RapotPreview />
+      <JalurMasuk />
       <CTAStrip />
       <LandingFooter />
     </div>
@@ -1074,6 +1075,213 @@ function RapotPreview() {
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+/* ============================================================
+ * JALUR MASUK — 3 entry-point cards
+ * ============================================================ */
+function JalurMasuk() {
+  const jalur = [
+    {
+      badge: "Gratis",
+      badgeColor: "var(--success)",
+      title: "Assessment Al-Fatihah",
+      desc: "Rekam bacaan Al-Fatihah, dapatkan rapot AI instan, lalu ikuti Tahsin dan masuk HITS berjenjang.",
+      href: "/assessment/consent",
+      btnClass: "btn-mpt btn-mpt-accent",
+      btnLabel: "Mulai Assessment",
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <rect x="9" y="3" width="6" height="12" rx="3" />
+          <path d="M5 10v2a7 7 0 0 0 14 0v-2" />
+          <line x1="12" y1="19" x2="12" y2="22" />
+        </svg>
+      ),
+    },
+    {
+      badge: "Niat Serius",
+      badgeColor: "var(--primary)",
+      title: "Langsung Daftar HITS",
+      desc: "Sudah bisa baca Al-Quran? Langsung daftar, ikuti tes penempatan, dan masuk kelas sesuai level.",
+      href: "/daftar-hits",
+      btnClass: "btn-mpt btn-mpt-primary",
+      btnLabel: "Daftar Sekarang",
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+          <path d="M6 12v5c3 3 9 3 12 0v-5" />
+        </svg>
+      ),
+    },
+    {
+      badge: "Organisasi",
+      badgeColor: "var(--accent-deep)",
+      title: "Pengajuan Halaqah",
+      desc: "Untuk komunitas, masjid, atau lembaga yang ingin membuka kelas HITS private untuk anggotanya.",
+      href: "/pengajuan",
+      btnClass: "btn-mpt btn-mpt-outline",
+      btnLabel: "Ajukan Halaqah",
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <section
+      id="jalur-masuk"
+      style={{
+        padding: "80px 32px",
+        position: "relative",
+      }}
+    >
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div
+          className="scroll-anim"
+          style={{ textAlign: "center", marginBottom: 48 }}
+        >
+          <div
+            className="dot-divider"
+            style={{ maxWidth: 260, margin: "0 auto 20px" }}
+          >
+            <span>Jalur Masuk</span>
+          </div>
+          <h2
+            className="font-display"
+            style={{
+              fontSize: "clamp(28px, 4vw, 44px)",
+              margin: "0 0 14px",
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.1,
+            }}
+          >
+            Pilih jalur yang{" "}
+            <span style={{ color: "var(--accent-deep)" }}>sesuai</span> untuk
+            Anda
+          </h2>
+          <p
+            style={{
+              fontSize: 16,
+              color: "var(--ink-soft)",
+              maxWidth: 620,
+              margin: "0 auto",
+              lineHeight: 1.6,
+            }}
+          >
+            Tiga pintu masuk ke program HITS — sesuaikan dengan kondisi dan
+            kesiapan Anda saat ini.
+          </p>
+        </div>
+
+        <div
+          className="jalur-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 24,
+          }}
+        >
+          {jalur.map((j, i) => (
+            <div
+              key={i}
+              className="card-accent scroll-anim"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                transitionDelay: `${0.1 + i * 0.12}s`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  marginBottom: 18,
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 16,
+                    background: `color-mix(in oklab, ${j.badgeColor}, transparent 88%)`,
+                    color: j.badgeColor,
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  {j.icon}
+                </div>
+                <span
+                  className="pill"
+                  style={{
+                    background: `color-mix(in oklab, ${j.badgeColor}, transparent 85%)`,
+                    color: j.badgeColor,
+                  }}
+                >
+                  {j.badge}
+                </span>
+              </div>
+
+              <h3
+                className="font-display"
+                style={{
+                  fontSize: 22,
+                  margin: "0 0 8px",
+                  fontWeight: 800,
+                  lineHeight: 1.2,
+                }}
+              >
+                {j.title}
+              </h3>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "var(--ink-soft)",
+                  lineHeight: 1.6,
+                  margin: "0 0 24px",
+                  flex: 1,
+                }}
+              >
+                {j.desc}
+              </p>
+
+              <Link
+                href={j.href}
+                className={j.btnClass}
+                style={{ width: "100%", justifyContent: "center" }}
+              >
+                {j.btnLabel}
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 840px) {
+          .jalur-grid { grid-template-columns: 1fr !important; max-width: 480px; margin: 0 auto !important; }
+        }
+      `}</style>
     </section>
   );
 }

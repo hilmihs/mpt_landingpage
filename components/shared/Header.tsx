@@ -15,7 +15,9 @@ export function Header() {
     pathname.startsWith("/tahsin") ||
     pathname.startsWith("/hits") ||
     pathname.startsWith("/portal-mpt-x7") ||
-    pathname.startsWith("/admin");
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/daftar-hits") ||
+    pathname.startsWith("/pengajuan");
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

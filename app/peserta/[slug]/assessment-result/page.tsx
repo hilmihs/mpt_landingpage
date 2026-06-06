@@ -40,7 +40,7 @@ export default async function AssessmentResultPage({
 }: Props) {
   const { slug } = await params;
   const sp = await searchParams;
-  const devMode = sp.dev === "1";
+  const devMode = process.env.NODE_ENV === "development" && sp.dev === "1";
   const peserta = await fetchPeserta(slug);
   if (!peserta) notFound();
 

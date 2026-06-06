@@ -9,7 +9,7 @@ import {
   SkipForward,
 } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
-import { INDIKATOR_META, type ScoreResult } from "@/lib/scoring";
+import { INDIKATOR_META, computeScore } from "@/lib/scoring";
 import type { IndikatorKey } from "@/types";
 import type { Metadata } from "next";
 
@@ -63,17 +63,30 @@ async function fetchReportData(slug: string) {
     syaddah: (rapot.errors_syaddah as unknown[])?.length ?? 0,
   };
 
+  const improvementRate: Record<IndikatorKey, number> = {
+    harakat: 0.6, huruf: 0.5, panjang_pendek: 0.7, syaddah: 0.4,
+  };
+
   const postErrors: Record<IndikatorKey, number> = {
-    harakat: Math.max(0, aiErrors.harakat - Math.ceil(aiErrors.harakat * 0.6)),
-    huruf: Math.max(0, aiErrors.huruf - Math.ceil(aiErrors.huruf * 0.5)),
-    panjang_pendek: Math.max(0, aiErrors.panjang_pendek - Math.ceil(aiErrors.panjang_pendek * 0.7)),
-    syaddah: Math.max(0, aiErrors.syaddah - Math.ceil(aiErrors.syaddah * 0.4)),
+    harakat: Math.max(0, aiErrors.harakat - Math.floor(aiErrors.harakat * improvementRate.harakat)),
+    huruf: Math.max(0, aiErrors.huruf - Math.floor(aiErrors.huruf * improvementRate.huruf)),
+    panjang_pendek: Math.max(0, aiErrors.panjang_pendek - Math.floor(aiErrors.panjang_pendek * improvementRate.panjang_pendek)),
+    syaddah: Math.max(0, aiErrors.syaddah - Math.floor(aiErrors.syaddah * improvementRate.syaddah)),
   };
 
   const postTotal = Object.values(postErrors).reduce((a, b) => a + b, 0);
   const aiTotal = Object.values(aiErrors).reduce((a, b) => a + b, 0);
 
-  const postSkor = postTotal === 0 ? 5 : postTotal <= 2 ? 4 : postTotal <= 4 ? 3 : postTotal <= 8 ? 2 : 1;
+  const postErrorItems = (cat: IndikatorKey) =>
+    ((rapot[`errors_${cat}` as keyof typeof rapot] as unknown[]) ?? [])
+      .slice(0, postErrors[cat]) as import("@/types").ErrorItem[];
+  const postScoreResult = computeScore({
+    errors_harakat: postErrorItems("harakat"),
+    errors_huruf: postErrorItems("huruf"),
+    errors_panjang_pendek: postErrorItems("panjang_pendek"),
+    errors_syaddah: postErrorItems("syaddah"),
+  });
+  const postSkor = postScoreResult.skor;
 
   return {
     nama: submission.nama,
@@ -95,7 +108,7 @@ export default async function TahsinReportPage({
 }: Props) {
   const { slug } = await params;
   const sp = await searchParams;
-  const devMode = sp.dev === "1";
+  const devMode = process.env.NODE_ENV === "development" && sp.dev === "1";
   const data = await fetchReportData(slug);
   if (!data) notFound();
 

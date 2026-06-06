@@ -62,9 +62,9 @@ async function fetchDashboardData(slug: string) {
 
   const { data: attendance } = await sb
     .from("attendance")
-    .select("id, status, attended_at")
+    .select("id, attended, joined_at")
     .eq("submission_id", submission.id)
-    .eq("status", "present");
+    .eq("attended", true);
 
   return {
     submission,

@@ -1,12 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Trophy, ExternalLink, ArrowLeft } from "lucide-react";
+import { Trophy, ArrowLeft, ArrowRight } from "lucide-react";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { GateImpressionTracker } from "@/components/rapot/GateImpressionTracker";
 
 export const dynamic = "force-dynamic";
-
-const HITS_URL = "https://linktr.ee/muhajirprojecttilawah";
 
 export default async function HitsUnlockPage({
   params,
@@ -160,27 +158,26 @@ export default async function HitsUnlockPage({
               margin: "0 0 18px",
             }}
           >
-            HITS Linktree berisi program-program tilawah lanjutan: Tahsin Surat,
-            Tahfizh, Tajwid Mutqin, Qiraat Sab&apos;ah, dan kajian khusus. Khusus untuk
+            HITS (Halaqah Intensif Tahsin) adalah program berjenjang 4 tingkat
+            untuk mendalami tajwid, tahsin, dan hafalan Al-Quran. Khusus untuk
             alumni Tahsin Al-Fatihah.
           </p>
 
-          <form action={`/api/hits/click?slug=${slug}`} method="POST">
-            <button
-              type="submit"
-              className="btn-mpt btn-mpt-accent"
-              style={{
-                width: "100%",
-                minHeight: 54,
-                fontSize: 14,
-                fontWeight: 700,
-                gap: 8,
-              }}
-            >
-              Buka HITS Linktree
-              <ExternalLink size={15} strokeWidth={2.4} />
-            </button>
-          </form>
+          <Link
+            href={`/peserta/${slug}/hits`}
+            className="btn-mpt btn-mpt-accent"
+            style={{
+              width: "100%",
+              minHeight: 54,
+              fontSize: 14,
+              fontWeight: 700,
+              gap: 8,
+              justifyContent: "center",
+            }}
+          >
+            Daftar Program HITS
+            <ArrowRight size={15} strokeWidth={2.4} />
+          </Link>
 
           <p
             style={{
@@ -191,8 +188,7 @@ export default async function HitsUnlockPage({
               lineHeight: 1.5,
             }}
           >
-            Anda akan diarahkan ke{" "}
-            <code style={{ fontSize: 10 }}>{HITS_URL}</code>.
+            Pilih tingkat dan jadwal yang sesuai untuk Anda.
           </p>
         </div>
       </div>

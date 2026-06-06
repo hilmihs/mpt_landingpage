@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { use, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   BookOpen,
@@ -11,141 +12,37 @@ import {
   CheckCircle2,
   ArrowRight,
   SkipForward,
+  Layers,
+  Award,
 } from "lucide-react";
-
-interface HitsProgram {
-  id: string;
-  name: string;
-  level: "dasar" | "lanjutan";
-  scheduleType: "weekday" | "weekend";
-  days: string;
-  time: string;
-  teacher: string;
-  gender: "ikhwan" | "akhwat";
-  capacity: number;
-  enrolled: number;
-}
-
-const DUMMY_PROGRAMS: HitsProgram[] = [
-  {
-    id: "hits-dasar-wd-1",
-    name: "HITS Dasar — Weekday Pagi",
-    level: "dasar",
-    scheduleType: "weekday",
-    days: "Senin & Rabu",
-    time: "08.00 – 09.30 WIB",
-    teacher: "Ustadz Ahmad Hidayat",
-    gender: "ikhwan",
-    capacity: 20,
-    enrolled: 8,
-  },
-  {
-    id: "hits-dasar-wd-2",
-    name: "HITS Dasar — Weekday Malam",
-    level: "dasar",
-    scheduleType: "weekday",
-    days: "Selasa & Kamis",
-    time: "19.30 – 21.00 WIB",
-    teacher: "Ustadzah Aisyah Rahmawati",
-    gender: "akhwat",
-    capacity: 20,
-    enrolled: 12,
-  },
-  {
-    id: "hits-dasar-we-1",
-    name: "HITS Dasar — Weekend",
-    level: "dasar",
-    scheduleType: "weekend",
-    days: "Sabtu & Ahad",
-    time: "09.00 – 10.30 WIB",
-    teacher: "Ustadz Yusuf Mahmud",
-    gender: "ikhwan",
-    capacity: 20,
-    enrolled: 5,
-  },
-  {
-    id: "hits-dasar-we-2",
-    name: "HITS Dasar — Weekend Sore",
-    level: "dasar",
-    scheduleType: "weekend",
-    days: "Sabtu & Ahad",
-    time: "15.00 – 16.30 WIB",
-    teacher: "Ustadzah Fatimah Az-Zahra",
-    gender: "akhwat",
-    capacity: 20,
-    enrolled: 14,
-  },
-  {
-    id: "hits-lanjut-wd-1",
-    name: "HITS Lanjutan — Weekday Malam",
-    level: "lanjutan",
-    scheduleType: "weekday",
-    days: "Senin & Rabu",
-    time: "19.30 – 21.00 WIB",
-    teacher: "Ustadz Ahmad Hidayat",
-    gender: "ikhwan",
-    capacity: 15,
-    enrolled: 6,
-  },
-  {
-    id: "hits-lanjut-wd-2",
-    name: "HITS Lanjutan — Weekday Sore",
-    level: "lanjutan",
-    scheduleType: "weekday",
-    days: "Selasa & Kamis",
-    time: "16.00 – 17.30 WIB",
-    teacher: "Ustadzah Aisyah Rahmawati",
-    gender: "akhwat",
-    capacity: 15,
-    enrolled: 9,
-  },
-  {
-    id: "hits-lanjut-we-1",
-    name: "HITS Lanjutan — Weekend",
-    level: "lanjutan",
-    scheduleType: "weekend",
-    days: "Sabtu & Ahad",
-    time: "10.30 – 12.00 WIB",
-    teacher: "Ustadz Yusuf Mahmud",
-    gender: "ikhwan",
-    capacity: 15,
-    enrolled: 3,
-  },
-  {
-    id: "hits-lanjut-we-2",
-    name: "HITS Lanjutan — Weekend Sore",
-    level: "lanjutan",
-    scheduleType: "weekend",
-    days: "Sabtu & Ahad",
-    time: "16.30 – 18.00 WIB",
-    teacher: "Ustadzah Fatimah Az-Zahra",
-    gender: "akhwat",
-    capacity: 15,
-    enrolled: 7,
-  },
-];
+import {
+  HITS_TIERS,
+  DUMMY_PROGRAMS,
+  getTierInfo,
+  type HitsTier,
+  type HitsProgram,
+} from "@/lib/demo-data";
 
 type Step = "level" | "schedule" | "program" | "confirm";
 
 export default function HitsEnrollmentPage({
-  params: _params,
+  params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const [slug, setSlug] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>("level");
-  const [level, setLevel] = useState<"dasar" | "lanjutan" | null>(null);
+  const { slug } = use(params);
+  const sp = useSearchParams();
+  const preselectedTier = sp.get("tier") as HitsTier | null;
+
+  const [step, setStep] = useState<Step>(preselectedTier ? "schedule" : "level");
+  const [tier, setTier] = useState<HitsTier | null>(preselectedTier);
   const [scheduleType, setScheduleType] = useState<"weekday" | "weekend" | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<HitsProgram | null>(null);
   const [enrolled, setEnrolled] = useState(false);
 
-  if (!slug) {
-    _params.then((p) => setSlug(p.slug));
-  }
-
   const filteredPrograms = DUMMY_PROGRAMS.filter(
     (p) =>
-      p.level === level &&
+      p.tier === tier &&
       p.scheduleType === scheduleType &&
       p.enrolled < p.capacity,
   );
@@ -187,36 +84,23 @@ export default function HitsEnrollmentPage({
             Jadwal: {selectedProgram.days}, {selectedProgram.time}.
             Pengajar: {selectedProgram.teacher}.
           </p>
+
+          <Link
+            href={`/peserta/${slug}/hits/kelas?tier=${selectedProgram.tier}&sim=0`}
+            className="btn-mpt btn-mpt-accent"
+            style={{ width: "100%", justifyContent: "center", minHeight: 48, fontSize: 15 }}
+          >
+            <Layers size={18} strokeWidth={2.2} />
+            Masuk Kelas HITS
+          </Link>
         </div>
 
-        <div
-          style={{
-            marginTop: 28,
-            padding: "16px 20px",
-            borderRadius: 12,
-            border: "1px dashed var(--ink-mute)",
-            background: "color-mix(in oklab, var(--warning), transparent 92%)",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--ink-mute)",
-              marginBottom: 8,
-            }}
-          >
-            Dev Mode
-          </div>
+        <div style={{ marginTop: 12, textAlign: "center" }}>
           <Link
-            href={`/peserta/${slug}?dev=1`}
+            href={`/peserta/${slug}`}
             className="btn-mpt btn-mpt-outline"
-            style={{ minHeight: 36, fontSize: 12, color: "var(--ink-soft)" }}
+            style={{ fontSize: 13 }}
           >
-            <SkipForward size={14} strokeWidth={2.2} />
             Ke Dashboard Peserta
           </Link>
         </div>
@@ -226,22 +110,20 @@ export default function HitsEnrollmentPage({
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
-      {slug && (
-        <Link
-          href={`/peserta/${slug}/tahsin/report?dev=1`}
-          className="btn-mpt btn-mpt-outline"
-          style={{
-            minHeight: 36,
-            fontSize: 12,
-            padding: "8px 14px",
-            marginBottom: 22,
-            display: "inline-flex",
-          }}
-        >
-          <ChevronLeft size={14} strokeWidth={2.4} />
-          Kembali
-        </Link>
-      )}
+      <Link
+        href={`/peserta/${slug}/tahsin/report?dev=1`}
+        className="btn-mpt btn-mpt-outline"
+        style={{
+          minHeight: 36,
+          fontSize: 12,
+          padding: "8px 14px",
+          marginBottom: 22,
+          display: "inline-flex",
+        }}
+      >
+        <ChevronLeft size={14} strokeWidth={2.4} />
+        Kembali
+      </Link>
 
       <div className="card-mpt" style={{ padding: "28px 22px", marginBottom: 22 }}>
         <h1
@@ -264,20 +146,21 @@ export default function HitsEnrollmentPage({
 
       {step === "level" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 20 }}>
-          <OptionCard
-            icon={<BookOpen size={24} />}
-            title="Kelas Dasar"
-            description="Untuk yang baru mengenal tajwid atau ingin menguatkan fondasi. Cocok untuk pemula."
-            selected={level === "dasar"}
-            onClick={() => { setLevel("dasar"); setStep("schedule"); }}
-          />
-          <OptionCard
-            icon={<GraduationCap size={24} />}
-            title="Kelas Lanjutan"
-            description="Untuk yang sudah memahami dasar tajwid dan ingin mendalami. Terdapat pre-test."
-            selected={level === "lanjutan"}
-            onClick={() => { setLevel("lanjutan"); setStep("schedule"); }}
-          />
+          {HITS_TIERS.map((t) => {
+            const icons = [BookOpen, GraduationCap, Award, Award] as const;
+            const Icon = icons[t.number - 1] ?? BookOpen;
+            return (
+              <OptionCard
+                key={t.id}
+                icon={<Icon size={24} />}
+                title={t.name}
+                description={t.description}
+                badge={t.duration}
+                selected={tier === t.id}
+                onClick={() => { setTier(t.id); setStep("schedule"); }}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -296,7 +179,7 @@ export default function HitsEnrollmentPage({
               marginBottom: 4,
             }}
           >
-            ← Ganti level
+            ← Ganti tingkat
           </button>
           <OptionCard
             icon={<Calendar size={24} />}
@@ -409,7 +292,7 @@ export default function HitsEnrollmentPage({
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
               <InfoRow label="Program" value={selectedProgram.name} />
-              <InfoRow label="Level" value={selectedProgram.level === "dasar" ? "Kelas Dasar" : "Kelas Lanjutan"} />
+              <InfoRow label="Tingkat" value={getTierInfo(selectedProgram.tier).name} />
               <InfoRow label="Jadwal" value={`${selectedProgram.days}, ${selectedProgram.time}`} />
               <InfoRow label="Pengajar" value={selectedProgram.teacher} />
               <InfoRow label="Kuota tersisa" value={`${selectedProgram.capacity - selectedProgram.enrolled} dari ${selectedProgram.capacity}`} />
@@ -480,12 +363,14 @@ function OptionCard({
   icon,
   title,
   description,
+  badge,
   selected,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  badge?: string;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -517,9 +402,17 @@ function OptionCard({
       >
         {icon}
       </div>
-      <div>
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
-          {title}
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>{title}</span>
+          {badge && (
+            <span
+              className="pill"
+              style={{ fontSize: 10, background: "color-mix(in oklab, var(--primary), transparent 85%)", color: "var(--primary)" }}
+            >
+              {badge}
+            </span>
+          )}
         </div>
         <div style={{ fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.5 }}>
           {description}

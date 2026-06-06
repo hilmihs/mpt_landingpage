@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/shared/Header";
 import { Footer } from "@/components/shared/Footer";
 import { Toaster } from "@/components/ui/sonner";
+import { DemoNavigator } from "@/components/demo/DemoNavigator";
 
 const nunito = Nunito_Sans({
   variable: "--font-nunito",
@@ -41,6 +42,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <Footer />
         <Toaster />
+        {process.env.NEXT_PUBLIC_DEMO_MODE === "1" && <DemoNavigator />}
       </body>
     </html>
   );

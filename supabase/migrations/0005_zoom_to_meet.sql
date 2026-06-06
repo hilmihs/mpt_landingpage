@@ -39,6 +39,7 @@ SELECT
   s.duration_min,
   s.capacity,
   s.reserved_count,
+  (s.capacity - s.reserved_count) AS available_capacity,
   s.gender_target,
   s.status,
   s.meet_join_url,

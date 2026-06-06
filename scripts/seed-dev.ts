@@ -182,7 +182,7 @@ const ERRORS_SKOR_2: ErrorSet = {
   ],
   errors_huruf: [
     { ayat: 6, kata_idx: 1, expected: "ٱلصِّرَٰطَ", actual: "ٱلسِّرَاطَ", severity: "major", note: "Shad dibaca sin" },
-    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
+    { ayat: 7, kata_idx: 8, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
   ],
   errors_panjang_pendek: [
     { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "major", note: "Mad kurang panjang" },
@@ -190,7 +190,7 @@ const ERRORS_SKOR_2: ErrorSet = {
   ],
   errors_syaddah: [
     { ayat: 1, kata_idx: 1, expected: "ٱللَّهِ", actual: "ٱلَهِ", severity: "major", note: "Syaddah lam hilang" },
-    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَالِينَ", severity: "minor", note: "Syaddah lam kurang tegas" },
+    { ayat: 7, kata_idx: 8, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَالِينَ", severity: "minor", note: "Syaddah lam kurang tegas" },
   ],
 };
 
@@ -205,13 +205,13 @@ const ERRORS_SKOR_1: ErrorSet = {
   errors_huruf: [
     { ayat: 5, kata_idx: 1, expected: "نَعْبُدُ", actual: "نَأْبُدُ", severity: "major", note: "'Ain dibaca hamzah" },
     { ayat: 6, kata_idx: 1, expected: "ٱلصِّرَٰطَ", actual: "ٱلسِّرَاطَ", severity: "major", note: "Shad dibaca sin" },
-    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
+    { ayat: 7, kata_idx: 8, expected: "ٱلضَّآلِّينَ", actual: "ٱلدَّالِّينَ", severity: "major", note: "Dhad dibaca dal" },
     { ayat: 6, kata_idx: 2, expected: "ٱلْمُسْتَقِيمَ", actual: "ٱلْمُسْتَكِيمَ", severity: "minor", note: "Qaf kurang jelas" },
   ],
   errors_panjang_pendek: [
     { ayat: 1, kata_idx: 2, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "major", note: "Mad wajib hilang" },
     { ayat: 1, kata_idx: 3, expected: "ٱلرَّحِيمِ", actual: "ٱلرَّحِمِ", severity: "major", note: "Mad terlalu pendek" },
-    { ayat: 7, kata_idx: 3, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَّالِّينَ", severity: "major", note: "Mad lazim kurang panjang" },
+    { ayat: 7, kata_idx: 8, expected: "ٱلضَّآلِّينَ", actual: "ٱلضَّالِّينَ", severity: "major", note: "Mad lazim kurang panjang" },
     { ayat: 3, kata_idx: 0, expected: "ٱلرَّحْمَٰنِ", actual: "ٱلرَّحْمَنِ", severity: "minor", note: "Mad alif pendek" },
   ],
   errors_syaddah: [

@@ -93,7 +93,6 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
           textAlign: "right",
           color: "var(--ink)",
           margin: "0 0 10px",
-          wordSpacing: "0.12em",
           fontFeatureSettings: '"liga" 1, "calt" 1, "kern" 1',
         }}
       >
@@ -107,6 +106,7 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
                 style={{
                   background: `color-mix(in oklab, ${meta.color}, transparent 80%)`,
                   padding: "0 4px",
+                  margin: "0 2px",
                   borderRadius: 6,
                   borderBottom: `2px solid ${meta.color}`,
                 }}
@@ -115,7 +115,7 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
               </span>
             );
           }
-          return <span key={idx}>{word}</span>;
+          return <span key={idx} style={{ margin: "0 2px" }}>{word}</span>;
         })}{" "}
       </div>
       <div
