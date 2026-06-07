@@ -25,8 +25,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const DEMO_RAPOT_URL =
-  "https://assessment-alfatihah-user.netlify.app/results/019e631d-7102-7105-8878-539a41083b8a";
 
 async function fetchReportData(slug: string) {
   const sb = supabaseService();
@@ -37,7 +35,7 @@ async function fetchReportData(slug: string) {
       `slug, skor, status_label, weighted_score,
        total_errors_major, total_errors_minor,
        errors_harakat, errors_huruf, errors_panjang_pendek, errors_syaddah,
-       submissions:submission_id(id, nama, rapot_slug)`,
+       submissions:submission_id(id, nama, rapot_slug, jenis_kelamin)`,
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -48,6 +46,7 @@ async function fetchReportData(slug: string) {
     id: string;
     nama: string;
     rapot_slug: string;
+    jenis_kelamin: "ikhwan" | "akhwat";
   };
 
   const { data: enrollment } = await sb
@@ -90,6 +89,7 @@ async function fetchReportData(slug: string) {
 
   return {
     nama: submission.nama,
+    gender: submission.jenis_kelamin,
     slug,
     aiSkor: rapot.skor,
     aiLabel: rapot.status_label,
@@ -116,15 +116,15 @@ export default async function TahsinReportPage({
   const same = data.postSkor === data.aiSkor;
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
       <Link
-        href={`/peserta/${slug}/tahsin?dev=1`}
+        href={`/peserta/${slug}/tahsin`}
         className="btn-mpt btn-mpt-outline"
         style={{
           minHeight: 36,
           fontSize: 12,
           padding: "8px 14px",
-          marginBottom: 22,
+          marginBottom: 16,
           display: "inline-flex",
         }}
       >
@@ -134,7 +134,7 @@ export default async function TahsinReportPage({
 
       <div
         className="card-mpt"
-        style={{ padding: "28px 22px", marginBottom: 22, textAlign: "center" }}
+        style={{ padding: "22px 18px", marginBottom: 14, textAlign: "center" }}
       >
         <h1
           className="font-display"
@@ -156,8 +156,8 @@ export default async function TahsinReportPage({
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gap: 14,
-          marginBottom: 22,
+          gap: 10,
+          marginBottom: 14,
         }}
       >
         <ScoreCard
@@ -177,8 +177,8 @@ export default async function TahsinReportPage({
       <div
         className="card-mpt"
         style={{
-          padding: "18px 22px",
-          marginBottom: 22,
+          padding: "14px 18px",
+          marginBottom: 14,
           textAlign: "center",
           background: improved
             ? "color-mix(in oklab, var(--success), transparent 92%)"
@@ -205,8 +205,8 @@ export default async function TahsinReportPage({
         </div>
       </div>
 
-      <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 14px" }}>
+      <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 14 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>
           Detail per Indikator
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -254,51 +254,60 @@ export default async function TahsinReportPage({
         </div>
       </div>
 
-      <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 10px" }}>
-          Rapot Lengkap dari Pengajar
+      <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 14 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 10px" }}>
+          Catatan Pengajar
         </h2>
-        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 14px" }}>
-          Detail evaluasi pengajar per ayat:
-        </p>
         <div
           style={{
-            borderRadius: 12,
-            overflow: "hidden",
-            border: "1px solid var(--line)",
+            padding: "12px 14px",
+            borderRadius: 8,
+            background: "color-mix(in oklab, var(--success), transparent 93%)",
+            border: "1px solid color-mix(in oklab, var(--success), transparent 70%)",
+            fontSize: 13,
+            color: "var(--ink)",
+            lineHeight: 1.6,
           }}
         >
-          <iframe
-            src={DEMO_RAPOT_URL}
-            title="Rapot Pengajar Post-Tahsin"
-            style={{ width: "100%", height: 500, border: "none", display: "block" }}
-            sandbox="allow-scripts allow-same-origin"
-          />
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>Alhamdulillah</strong>, setelah 4 sesi Tahsin Al-Fatihah,
+            bacaan {data.nama.split(" ")[0]} menunjukkan peningkatan yang
+            signifikan:
+          </p>
+          <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+            <li>Harakat lebih konsisten dan tepat</li>
+            <li>Makhraj huruf semakin jelas, terutama huruf-huruf yang berdekatan</li>
+            <li>Panjang mad sudah lebih terkontrol</li>
+            <li>Perlu terus berlatih pada penekanan syaddah</li>
+          </ul>
+          <p style={{ margin: 0, fontWeight: 600, color: "var(--success)" }}>
+            Disarankan untuk melanjutkan ke program HITS untuk pendalaman lebih lanjut.
+          </p>
         </div>
       </div>
 
-      <div className="card-mpt" style={{ padding: "24px 22px", marginBottom: 22 }}>
+      <div className="card-mpt" style={{ padding: "20px 18px", marginBottom: 14 }}>
         <h2
           className="font-display"
-          style={{ fontSize: 19, fontWeight: 700, margin: "0 0 10px" }}
+          style={{ fontSize: 17, fontWeight: 700, margin: "0 0 8px" }}
         >
           Program Selanjutnya
         </h2>
-        <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 16px", lineHeight: 1.6 }}>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 14px", lineHeight: 1.6 }}>
           Pilih langkah selanjutnya untuk terus memperbaiki bacaan Al-Quran Anda.
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <Link
             href={`/tahsin/${slug}`}
             className="btn-mpt btn-mpt-outline"
-            style={{ minHeight: 44, fontSize: 14, width: "100%" }}
+            style={{ minHeight: 40, fontSize: 13, width: "100%" }}
           >
             Ulangi Tahsin Al-Fatihah
           </Link>
           <Link
-            href={`/peserta/${slug}/hits?dev=1`}
+            href={`/peserta/${slug}/hits?gender=${data.gender}`}
             className="btn-mpt btn-mpt-accent"
-            style={{ minHeight: 48, fontSize: 15, fontWeight: 700, width: "100%" }}
+            style={{ minHeight: 44, fontSize: 14, fontWeight: 700, width: "100%" }}
           >
             Daftar HITS (Halaqah Intensif Tahsin)
             <ArrowRight size={16} strokeWidth={2.4} />
@@ -309,28 +318,19 @@ export default async function TahsinReportPage({
       {devMode && (
         <div
           style={{
-            marginTop: 20,
-            padding: "16px 20px",
+            marginTop: 14,
+            padding: "14px 18px",
             borderRadius: 12,
             border: "1px dashed var(--ink-mute)",
             background: "color-mix(in oklab, var(--warning), transparent 92%)",
             textAlign: "center",
           }}
         >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--ink-mute)",
-              marginBottom: 8,
-            }}
-          >
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-mute)", marginBottom: 6 }}>
             Dev Mode
           </div>
           <Link
-            href={`/peserta/${slug}/hits?dev=1`}
+            href={`/peserta/${slug}/hits?gender=${data.gender}`}
             className="btn-mpt btn-mpt-outline"
             style={{ minHeight: 36, fontSize: 12, color: "var(--ink-soft)" }}
           >

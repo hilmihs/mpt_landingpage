@@ -14,11 +14,11 @@ const schema = z.object({
 });
 
 const REASON_MESSAGES: Record<string, string> = {
-  cohort_not_found: "Cohort tidak ditemukan.",
-  cohort_closed: "Cohort ini sudah tidak menerima pendaftaran.",
-  gender_mismatch: "Cohort ini untuk gender yang berbeda.",
-  cohort_full: "Cohort ini sudah penuh.",
-  already_enrolled: "Anda sudah terdaftar di cohort ini.",
+  cohort_not_found: "Kelas tidak ditemukan.",
+  cohort_closed: "Kelas ini sudah tidak menerima pendaftaran.",
+  gender_mismatch: "Kelas ini untuk gender yang berbeda.",
+  cohort_full: "Kelas ini sudah penuh.",
+  already_enrolled: "Anda sudah terdaftar di kelas ini.",
 };
 
 const REASON_STATUS: Record<string, number> = {
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "already_enrolled",
-        message: `Anda sudah terdaftar di cohort "${eligibility.enrolled_cohort.name}".`,
+        message: `Anda sudah terdaftar di kelas "${eligibility.enrolled_cohort.name}".`,
         cohort_id: eligibility.enrolled_cohort.id,
       },
       { status: 409 },
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: reason,
-        message: REASON_MESSAGES[reason] ?? "Gagal mendaftar cohort.",
+        message: REASON_MESSAGES[reason] ?? "Gagal mendaftar kelas.",
       },
       { status: REASON_STATUS[reason] ?? 400 },
     );

@@ -116,7 +116,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
   );
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
       {justEnrolled && (
         <div
           style={{
@@ -141,8 +141,8 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
       <div
         className="card-mpt"
         style={{
-          padding: "28px 22px",
-          marginBottom: 22,
+          padding: "22px 18px",
+          marginBottom: 16,
           background: "linear-gradient(135deg, color-mix(in oklab, var(--primary), var(--surface) 85%), var(--surface))",
         }}
       >
@@ -183,7 +183,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: 10,
-          marginBottom: 22,
+          marginBottom: 16,
         }}
       >
         <StatCard
@@ -207,7 +207,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
       </div>
 
       {upcomingBookings.length > 0 && (
-        <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
+        <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 16 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 8 }}>
             <Calendar size={16} strokeWidth={2.2} />
             Jadwal Mendatang
@@ -263,7 +263,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
         </div>
       )}
 
-      <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
+      <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 8 }}>
           <FileText size={16} strokeWidth={2.2} />
           Rapot Saya
@@ -294,7 +294,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
             </Link>
           )}
           <Link
-            href={`/peserta/${slug}/assessment-result?dev=1`}
+            href={`/peserta/${slug}/assessment-result`}
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -317,7 +317,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
           </Link>
           {activeEnrollments.some((e) => e.completed_sessions >= 4) && (
             <Link
-              href={`/peserta/${slug}/tahsin/report?dev=1`}
+              href={`/peserta/${slug}/tahsin/report`}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -345,7 +345,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
       </div>
 
       {activeEnrollments.length > 0 && (
-        <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
+        <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 16 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 14px", display: "flex", alignItems: "center", gap: 8 }}>
             <BookOpen size={16} strokeWidth={2.2} />
             Program Saya
@@ -364,7 +364,7 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
               return (
                 <Link
                   key={e.id}
-                  href={`/peserta/${slug}/tahsin?dev=1`}
+                  href={`/peserta/${slug}/tahsin`}
                   style={{
                     padding: "14px 16px",
                     borderRadius: 10,

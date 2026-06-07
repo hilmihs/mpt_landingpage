@@ -11,9 +11,7 @@ import {
   Clock,
   CheckCircle2,
   ArrowRight,
-  SkipForward,
   Layers,
-  Award,
 } from "lucide-react";
 import {
   HITS_TIERS,
@@ -22,8 +20,9 @@ import {
   type HitsTier,
   type HitsProgram,
 } from "@/lib/demo-data";
+import { RecordingStep } from "@/components/hits/RecordingStep";
 
-type Step = "level" | "schedule" | "program" | "confirm";
+type Step = "level" | "recording" | "schedule" | "program" | "confirm";
 
 export default function HitsEnrollmentPage({
   params,
@@ -33,6 +32,7 @@ export default function HitsEnrollmentPage({
   const { slug } = use(params);
   const sp = useSearchParams();
   const preselectedTier = sp.get("tier") as HitsTier | null;
+  const gender = sp.get("gender") as "ikhwan" | "akhwat" | null;
 
   const [step, setStep] = useState<Step>(preselectedTier ? "schedule" : "level");
   const [tier, setTier] = useState<HitsTier | null>(preselectedTier);
@@ -40,20 +40,23 @@ export default function HitsEnrollmentPage({
   const [selectedProgram, setSelectedProgram] = useState<HitsProgram | null>(null);
   const [enrolled, setEnrolled] = useState(false);
 
+  const VISIBLE_TIERS = HITS_TIERS.filter((t) => t.id === "dasar" || t.id === "lanjutan_awal");
+
   const filteredPrograms = DUMMY_PROGRAMS.filter(
     (p) =>
       p.tier === tier &&
       p.scheduleType === scheduleType &&
-      p.enrolled < p.capacity,
+      p.enrolled < p.capacity &&
+      (!gender || p.gender === gender),
   );
 
   if (enrolled && selectedProgram) {
     return (
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
         <div
           className="card-mpt"
           style={{
-            padding: "32px 22px",
+            padding: "28px 20px",
             textAlign: "center",
             background: "color-mix(in oklab, var(--success), var(--surface) 92%)",
             borderColor: "color-mix(in oklab, var(--success), transparent 60%)",
@@ -109,15 +112,15 @@ export default function HitsEnrollmentPage({
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
       <Link
-        href={`/peserta/${slug}/tahsin/report?dev=1`}
+        href={`/peserta/${slug}/tahsin/report`}
         className="btn-mpt btn-mpt-outline"
         style={{
           minHeight: 36,
           fontSize: 12,
           padding: "8px 14px",
-          marginBottom: 22,
+          marginBottom: 16,
           display: "inline-flex",
         }}
       >
@@ -125,7 +128,7 @@ export default function HitsEnrollmentPage({
         Kembali
       </Link>
 
-      <div className="card-mpt" style={{ padding: "28px 22px", marginBottom: 22 }}>
+      <div className="card-mpt" style={{ padding: "22px 18px", marginBottom: 14 }}>
         <h1
           className="font-display"
           style={{
@@ -142,26 +145,36 @@ export default function HitsEnrollmentPage({
         </p>
       </div>
 
-      <StepIndicator current={step} />
+      <StepIndicator current={step} isLanjutan={tier === "lanjutan_awal"} />
 
       {step === "level" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 20 }}>
-          {HITS_TIERS.map((t) => {
-            const icons = [BookOpen, GraduationCap, Award, Award] as const;
-            const Icon = icons[t.number - 1] ?? BookOpen;
+          {VISIBLE_TIERS.map((t) => {
+            const Icon = t.id === "dasar" ? BookOpen : GraduationCap;
+            const displayName = t.id === "lanjutan_awal" ? "HITS Lanjutan" : t.name;
+            const displayDesc = t.id === "lanjutan_awal"
+              ? "Perincian mendalam dalam mempelajari bacaan Al-Quran yang benar dan menghafal beberapa juz"
+              : t.description;
             return (
               <OptionCard
                 key={t.id}
                 icon={<Icon size={24} />}
-                title={t.name}
-                description={t.description}
+                title={displayName}
+                description={displayDesc}
                 badge={t.duration}
                 selected={tier === t.id}
-                onClick={() => { setTier(t.id); setStep("schedule"); }}
+                onClick={() => {
+                  setTier(t.id);
+                  setStep(t.id === "lanjutan_awal" ? "recording" : "schedule");
+                }}
               />
             );
           })}
         </div>
+      )}
+
+      {step === "recording" && (
+        <RecordingStep slug={slug} onBack={() => setStep("level")} />
       )}
 
       {step === "schedule" && (
@@ -319,13 +332,18 @@ export default function HitsEnrollmentPage({
   );
 }
 
-function StepIndicator({ current }: { current: Step }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: "level", label: "Level" },
-    { key: "schedule", label: "Jadwal" },
-    { key: "program", label: "Kelas" },
-    { key: "confirm", label: "Konfirmasi" },
-  ];
+function StepIndicator({ current, isLanjutan }: { current: Step; isLanjutan: boolean }) {
+  const steps: { key: Step; label: string }[] = isLanjutan
+    ? [
+        { key: "level", label: "Level" },
+        { key: "recording", label: "Rekaman" },
+      ]
+    : [
+        { key: "level", label: "Level" },
+        { key: "schedule", label: "Jadwal" },
+        { key: "program", label: "Kelas" },
+        { key: "confirm", label: "Konfirmasi" },
+      ];
   const currentIdx = steps.findIndex((s) => s.key === current);
   return (
     <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
@@ -333,8 +351,8 @@ function StepIndicator({ current }: { current: Step }) {
         <div key={s.key} style={{ flex: 1, textAlign: "center" }}>
           <div
             style={{
-              height: 4,
-              borderRadius: 2,
+              height: 6,
+              borderRadius: 3,
               background:
                 i <= currentIdx
                   ? "var(--accent)"

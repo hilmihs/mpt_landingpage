@@ -10,6 +10,7 @@ import {
   GraduationCap,
   LogOut,
   Menu,
+  Mic,
   X,
   User,
 } from "lucide-react";
@@ -19,7 +20,8 @@ const NAV_ITEMS = [
   { href: "/portal-mpt-x7/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portal-mpt-x7/availability", label: "Ketersediaan", icon: CalendarClock },
   { href: "/portal-mpt-x7/bookings", label: "Booking Masuk", icon: Users },
-  { href: "/portal-mpt-x7/cohorts", label: "Cohort Tahsin", icon: GraduationCap },
+  { href: "/portal-mpt-x7/cohorts", label: "Kelas Tahsin", icon: GraduationCap },
+  { href: "/portal-mpt-x7/recordings", label: "Review Rekaman", icon: Mic },
   { href: "/portal-mpt-x7/attendance", label: "Kehadiran", icon: ClipboardCheck },
   { href: "/portal-mpt-x7/profil", label: "Profil", icon: User },
 ];

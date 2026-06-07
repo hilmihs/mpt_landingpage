@@ -151,7 +151,7 @@ export default async function TahsinProgressPage({
 
   if (!enrollment) {
     return (
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
         <div className="card-mpt" style={{ padding: "32px 22px", textAlign: "center" }}>
           <h1 className="font-display" style={{ fontSize: 24, margin: "0 0 12px" }}>
             Belum Terdaftar Tahsin
@@ -180,7 +180,7 @@ export default async function TahsinProgressPage({
   const progressPct = Math.round((completedCount / totalSessions) * 100);
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 48px" }}>
       <Link
         href={`/peserta/${slug}`}
         className="btn-mpt btn-mpt-outline"
@@ -188,7 +188,7 @@ export default async function TahsinProgressPage({
           minHeight: 36,
           fontSize: 12,
           padding: "8px 14px",
-          marginBottom: 22,
+          marginBottom: 16,
           display: "inline-flex",
         }}
       >
@@ -198,7 +198,7 @@ export default async function TahsinProgressPage({
 
       <div
         className="card-mpt"
-        style={{ padding: "28px 22px", marginBottom: 22 }}
+        style={{ padding: "22px 18px", marginBottom: 14 }}
       >
         <h1
           className="font-display"
@@ -265,12 +265,12 @@ export default async function TahsinProgressPage({
         )}
       </div>
 
-      <div className="card-mpt" style={{ padding: "20px 22px", marginBottom: 22 }}>
+      <div className="card-mpt" style={{ padding: "18px 18px", marginBottom: 14 }}>
         <h2
           style={{
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: 700,
-            margin: "0 0 14px",
+            margin: "0 0 12px",
             letterSpacing: "-0.01em",
           }}
         >
@@ -347,21 +347,21 @@ export default async function TahsinProgressPage({
       </div>
 
       {isComplete && (
-        <div className="card-mpt" style={{ padding: "24px 22px", marginBottom: 22 }}>
+        <div className="card-mpt" style={{ padding: "20px 18px", marginBottom: 14 }}>
           <h2
             className="font-display"
-            style={{ fontSize: 19, fontWeight: 700, margin: "0 0 10px" }}
+            style={{ fontSize: 17, fontWeight: 700, margin: "0 0 8px" }}
           >
             Rapot Tahsin
           </h2>
-          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 16px", lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 12px", lineHeight: 1.6 }}>
             Lihat perbandingan rapot awal (AI) dengan rapot pengajar setelah
             menyelesaikan 4 sesi Tahsin Al-Fatihah.
           </p>
           <Link
-            href={`/peserta/${slug}/tahsin/report?dev=1`}
+            href={`/peserta/${slug}/tahsin/report`}
             className="btn-mpt btn-mpt-accent"
-            style={{ minHeight: 48, fontSize: 15, fontWeight: 700, width: "100%" }}
+            style={{ minHeight: 44, fontSize: 14, fontWeight: 700, width: "100%" }}
           >
             Lihat Rapot Perbandingan
             <ArrowRight size={16} strokeWidth={2.4} />
@@ -370,28 +370,28 @@ export default async function TahsinProgressPage({
       )}
 
       {isComplete && qualified && (
-        <div className="card-mpt" style={{ padding: "24px 22px", marginBottom: 22 }}>
+        <div className="card-mpt" style={{ padding: "20px 18px", marginBottom: 14 }}>
           <h2
             className="font-display"
-            style={{ fontSize: 19, fontWeight: 700, margin: "0 0 10px" }}
+            style={{ fontSize: 17, fontWeight: 700, margin: "0 0 8px" }}
           >
             Langkah Selanjutnya
           </h2>
-          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 16px", lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 12px", lineHeight: 1.6 }}>
             Selamat! Anda memenuhi syarat untuk melanjutkan ke program berikutnya.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <Link
               href={`/tahsin/${slug}`}
               className="btn-mpt btn-mpt-outline"
-              style={{ minHeight: 44, fontSize: 14, width: "100%" }}
+              style={{ minHeight: 40, fontSize: 13, width: "100%" }}
             >
               Ulangi Tahsin Al-Fatihah
             </Link>
             <Link
-              href={`/peserta/${slug}/hits?dev=1`}
+              href={`/peserta/${slug}/hits?gender=${submission.jenis_kelamin}`}
               className="btn-mpt btn-mpt-accent"
-              style={{ minHeight: 48, fontSize: 15, fontWeight: 700, width: "100%" }}
+              style={{ minHeight: 44, fontSize: 14, fontWeight: 700, width: "100%" }}
             >
               Daftar HITS (Halaqah Intensif Tahsin)
               <ArrowRight size={16} strokeWidth={2.4} />

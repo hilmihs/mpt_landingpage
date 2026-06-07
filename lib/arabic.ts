@@ -72,6 +72,51 @@ export const AL_FATIHAH: AyatData[] = [
   },
 ];
 
+export const ASY_SYURA_1_6: AyatData[] = [
+  {
+    number: 1,
+    arabic: "حمٓ",
+    words: ["حمٓ"],
+    transliterasi: "Ḥā Mīm",
+    terjemahan: "Ha Mim.",
+  },
+  {
+    number: 2,
+    arabic: "عٓسٓقٓ",
+    words: ["عٓسٓقٓ"],
+    transliterasi: "'Ain Sīn Qāf",
+    terjemahan: "'Ain Sin Qaf.",
+  },
+  {
+    number: 3,
+    arabic: "كَذَٰلِكَ يُوحِىٓ إِلَيْكَ وَإِلَى ٱلَّذِينَ مِن قَبْلِكَ ٱللَّهُ ٱلْعَزِيزُ ٱلْحَكِيمُ",
+    words: ["كَذَٰلِكَ", "يُوحِىٓ", "إِلَيْكَ", "وَإِلَى", "ٱلَّذِينَ", "مِن", "قَبْلِكَ", "ٱللَّهُ", "ٱلْعَزِيزُ", "ٱلْحَكِيمُ"],
+    transliterasi: "Każālika yūḥī ilaika wa ilal-lażīna min qablika-llāhul-'azīzul-ḥakīm",
+    terjemahan: "Demikianlah Allah Yang Maha Perkasa, Maha Bijaksana mewahyukan kepadamu dan kepada orang-orang sebelummu.",
+  },
+  {
+    number: 4,
+    arabic: "لَهُۥ مَا فِى ٱلسَّمَـٰوَٰتِ وَمَا فِى ٱلْأَرْضِ ۖ وَهُوَ ٱلْعَلِىُّ ٱلْعَظِيمُ",
+    words: ["لَهُۥ", "مَا", "فِى", "ٱلسَّمَـٰوَٰتِ", "وَمَا", "فِى", "ٱلْأَرْضِ", "وَهُوَ", "ٱلْعَلِىُّ", "ٱلْعَظِيمُ"],
+    transliterasi: "Lahū mā fis-samāwāti wa mā fil-arḍ, wa huwal-'aliyyul-'aẓīm",
+    terjemahan: "Milik-Nya apa yang ada di langit dan apa yang ada di bumi. Dan Dialah Yang Maha Tinggi, Maha Besar.",
+  },
+  {
+    number: 5,
+    arabic: "تَكَادُ ٱلسَّمَـٰوَٰتُ يَتَفَطَّرْنَ مِن فَوْقِهِنَّ ۚ وَٱلْمَلَـٰٓئِكَةُ يُسَبِّحُونَ بِحَمْدِ رَبِّهِمْ وَيَسْتَغْفِرُونَ لِمَن فِى ٱلْأَرْضِ ۗ أَلَآ إِنَّ ٱللَّهَ هُوَ ٱلْغَفُورُ ٱلرَّحِيمُ",
+    words: ["تَكَادُ", "ٱلسَّمَـٰوَٰتُ", "يَتَفَطَّرْنَ", "مِن", "فَوْقِهِنَّ", "وَٱلْمَلَـٰٓئِكَةُ", "يُسَبِّحُونَ", "بِحَمْدِ", "رَبِّهِمْ", "وَيَسْتَغْفِرُونَ", "لِمَن", "فِى", "ٱلْأَرْضِ", "أَلَآ", "إِنَّ", "ٱللَّهَ", "هُوَ", "ٱلْغَفُورُ", "ٱلرَّحِيمُ"],
+    transliterasi: "Takādus-samāwātu yatafattarna min fauqihinn, wal-malā'ikatu yusabbiḥūna bi-ḥamdi rabbihim wa yastaghfirūna liman fil-arḍ. Alā innallāha huwal-ghafūrur-raḥīm",
+    terjemahan: "Hampir saja langit itu pecah dari sebelah atasnya. Dan para malaikat bertasbih memuji Tuhannya dan memohonkan ampunan bagi orang-orang yang ada di bumi. Ingatlah, sesungguhnya Allah Maha Pengampun, Maha Penyayang.",
+  },
+  {
+    number: 6,
+    arabic: "وَٱلَّذِينَ ٱتَّخَذُوا۟ مِن دُونِهِۦٓ أَوْلِيَآءَ ٱللَّهُ حَفِيظٌ عَلَيْهِمْ وَمَآ أَنتَ عَلَيْهِم بِوَكِيلٍ",
+    words: ["وَٱلَّذِينَ", "ٱتَّخَذُوا۟", "مِن", "دُونِهِۦٓ", "أَوْلِيَآءَ", "ٱللَّهُ", "حَفِيظٌ", "عَلَيْهِمْ", "وَمَآ", "أَنتَ", "عَلَيْهِم", "بِوَكِيلٍ"],
+    transliterasi: "Wal-lażīnat-takhażū min dūnihī auliyā'-allāhu ḥafīẓun 'alaihim wa mā anta 'alaihim biwakīl",
+    terjemahan: "Dan orang-orang yang mengambil pelindung-pelindung selain Allah, Allah mengawasi mereka; dan engkau bukanlah orang yang diserahi mengurus mereka.",
+  },
+];
+
 export function getAyat(ayatNumber: number): AyatData | undefined {
   return AL_FATIHAH.find((a) => a.number === ayatNumber);
 }

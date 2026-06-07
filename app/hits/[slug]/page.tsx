@@ -164,7 +164,7 @@ export default async function HitsUnlockPage({
           </p>
 
           <Link
-            href={`/peserta/${slug}/hits`}
+            href={`/peserta/${slug}/hits?gender=${eligibility.jenis_kelamin}`}
             className="btn-mpt btn-mpt-accent"
             style={{
               width: "100%",

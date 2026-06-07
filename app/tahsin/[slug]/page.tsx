@@ -155,7 +155,7 @@ export default async function TahsinEnrollPage({
             }}
           >
             <GraduationCap size={13} strokeWidth={2.4} />
-            Gate 2 — Tahsin Al-Fatihah
+            Tahsin Al-Fatihah
           </div>
           <h1
             className="font-display"
@@ -167,7 +167,7 @@ export default async function TahsinEnrollPage({
               lineHeight: 1.15,
             }}
           >
-            Pilih Cohort Tahsin Anda
+            Pilih Kelas Tahsin Anda
           </h1>
           <p
             style={{
@@ -180,7 +180,7 @@ export default async function TahsinEnrollPage({
           >
             Assalamu&apos;alaikum {eligibility.nama.split(" ")[0]}. Program Tahsin Al-Fatihah
             terdiri dari <strong>4 sesi × 90 menit</strong>, dijalankan dua kali seminggu
-            selama dua minggu. Pilih cohort yang waktunya cocok dengan jadwal Anda.
+            selama dua minggu. Pilih kelas yang waktunya cocok dengan jadwal Anda.
           </p>
         </header>
 

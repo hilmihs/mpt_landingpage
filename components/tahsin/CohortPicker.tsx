@@ -74,7 +74,7 @@ export function CohortPicker({ rapotSlug, cohorts }: Props) {
             letterSpacing: "-0.02em",
           }}
         >
-          Belum ada cohort yang dibuka
+          Belum Ada Kelas yang Dibuka
         </h2>
         <p
           style={{
@@ -85,9 +85,9 @@ export function CohortPicker({ rapotSlug, cohorts }: Props) {
             margin: "0 auto",
           }}
         >
-          Saat ini belum ada cohort Tahsin Al-Fatihah yang sesuai dengan gender Anda
-          dan masih membuka pendaftaran. Tim kami akan menghubungi via WhatsApp
-          begitu cohort baru tersedia.
+          Saat ini belum ada kelas Tahsin Al-Fatihah yang sesuai dan masih
+          membuka pendaftaran. Tim kami akan menghubungi via WhatsApp
+          begitu kelas baru tersedia.
         </p>
       </div>
     );

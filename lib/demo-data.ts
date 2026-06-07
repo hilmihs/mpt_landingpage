@@ -27,7 +27,7 @@ export const HITS_TIERS: HitsTierInfo[] = [
     nameShort: "Dasar",
     number: 1,
     duration: "~6 bulan",
-    description: "Pemberantasan buta huruf Al-Quran (3 pilar)",
+    description: "Membangun pondasi bacaan Al-Quran yang benar",
     modul: "Annuroniyyah + Tahsin Al-Baqarah",
     hafalan: "—",
     materi: [

@@ -101,22 +101,29 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
           if (cat) {
             const meta = INDIKATOR_META[cat];
             return (
-              <span
-                key={idx}
-                style={{
-                  background: `color-mix(in oklab, ${meta.color}, transparent 80%)`,
-                  padding: "0 4px",
-                  margin: "0 2px",
-                  borderRadius: 6,
-                  borderBottom: `2px solid ${meta.color}`,
-                }}
-              >
-                {word}
+              <span key={idx}>
+                {idx > 0 && " "}
+                <span
+                  style={{
+                    background: `color-mix(in oklab, ${meta.color}, transparent 80%)`,
+                    padding: "0 4px",
+                    margin: "0 2px",
+                    borderRadius: 6,
+                    borderBottom: `2px solid ${meta.color}`,
+                  }}
+                >
+                  {word}
+                </span>
               </span>
             );
           }
-          return <span key={idx} style={{ margin: "0 2px" }}>{word}</span>;
-        })}{" "}
+          return (
+            <span key={idx}>
+              {idx > 0 && " "}
+              <span style={{ margin: "0 2px" }}>{word}</span>
+            </span>
+          );
+        })}
       </div>
       <div
         style={{

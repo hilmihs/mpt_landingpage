@@ -391,6 +391,13 @@ export default async function RapotPage({ params }: Props) {
         }}
       >
         <Link
+          href={`/peserta/${slug}`}
+          className="btn-mpt btn-mpt-accent"
+          style={{ minHeight: 44, padding: "10px 20px", fontSize: 13 }}
+        >
+          Dashboard Peserta
+        </Link>
+        <Link
           href="/assessment/consent"
           className="btn-mpt btn-mpt-outline"
           style={{ minHeight: 44, padding: "10px 20px", fontSize: 13 }}

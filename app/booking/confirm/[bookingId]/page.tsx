@@ -123,7 +123,7 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
       {submission.rapot_slug && (
         <Link
-          href={`/rapot/${submission.rapot_slug}`}
+          href={`/peserta/${submission.rapot_slug}`}
           className="btn-mpt btn-mpt-outline"
           style={{
             minHeight: 36,
@@ -134,7 +134,7 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
           }}
         >
           <ChevronLeft size={14} strokeWidth={2.4} />
-          Kembali ke Rapot
+          Kembali ke Dashboard
         </Link>
       )}
 
@@ -343,11 +343,11 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
         </a>
         {submission.rapot_slug && (
           <Link
-            href={`/rapot/${submission.rapot_slug}`}
-            className="btn-mpt btn-mpt-outline"
+            href={`/peserta/${submission.rapot_slug}`}
+            className="btn-mpt btn-mpt-accent"
             style={{ minHeight: 42, fontSize: 13 }}
           >
-            Lihat Rapot
+            Dashboard Peserta
           </Link>
         )}
       </div>
