@@ -352,7 +352,7 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
         )}
       </div>
 
-      {devMode && submission.rapot_slug && (
+      {devMode && (
         <div
           style={{
             marginTop: 32,
@@ -376,7 +376,7 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
             Dev Mode
           </div>
           <Link
-            href={`/peserta/${submission.rapot_slug}/assessment-result`}
+            href={`/peserta/${submission.rapot_slug ?? "demo-bilal-09"}/assessment-result?dev=1`}
             className="btn-mpt btn-mpt-outline"
             style={{ minHeight: 38, fontSize: 12, color: "var(--ink-soft)" }}
           >
