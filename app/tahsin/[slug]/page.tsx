@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, GraduationCap } from "lucide-react";
+import { ArrowLeft, GraduationCap, SkipForward } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { CohortPicker } from "@/components/tahsin/CohortPicker";
@@ -73,20 +73,25 @@ async function fetchAvailableCohorts(
 
 export default async function TahsinEnrollPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const devMode = sp.dev === "1";
+
   const eligibility = await getParticipantEligibilityBySlug(slug);
   if (!eligibility) notFound();
 
-  // Already enrolled → bounce back to rapot
-  if (eligibility.enrolled_cohort) {
+  // Already enrolled → bounce back to rapot (skip in dev mode)
+  if (!devMode && eligibility.enrolled_cohort) {
     redirect(`/rapot/${slug}?already_enrolled=1`);
   }
 
-  // Not yet attended assessment → block with friendly message
-  if (!eligibility.gate2_eligible) {
+  // Not yet attended assessment → block with friendly message (skip in dev mode)
+  if (!devMode && !eligibility.gate2_eligible) {
     return (
       <NotEligibleState
         slug={slug}
@@ -180,6 +185,40 @@ export default async function TahsinEnrollPage({
         </header>
 
         <CohortPicker rapotSlug={slug} cohorts={cohorts} />
+
+        {devMode && (
+          <div
+            style={{
+              marginTop: 28,
+              padding: "16px 20px",
+              borderRadius: 12,
+              border: "1px dashed var(--ink-mute)",
+              background: "color-mix(in oklab, var(--warning), transparent 92%)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--ink-mute)",
+                marginBottom: 8,
+              }}
+            >
+              Dev Mode
+            </div>
+            <Link
+              href={`/peserta/${slug}/tahsin?dev=1`}
+              className="btn-mpt btn-mpt-outline"
+              style={{ minHeight: 38, fontSize: 12, color: "var(--ink-soft)" }}
+            >
+              <SkipForward size={14} strokeWidth={2.2} />
+              Skip ke Tahsin Progress
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
