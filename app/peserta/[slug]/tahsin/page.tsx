@@ -7,9 +7,9 @@ import {
   Clock,
   Video,
   ArrowRight,
-  SkipForward,
 } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
+import { SkipSessionButton } from "@/components/tahsin/SkipSessionButton";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -141,7 +141,7 @@ export default async function TahsinProgressPage({
 }: Props) {
   const { slug } = await params;
   const sp = await searchParams;
-  const devMode = process.env.NODE_ENV === "development" && sp.dev === "1";
+  const devMode = sp.dev === "1";
   const simSession = devMode ? Number(sp.sim ?? 0) : 0;
 
   const data = await fetchTahsinData(slug);
@@ -182,7 +182,7 @@ export default async function TahsinProgressPage({
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
       <Link
-        href={`/rapot/${slug}`}
+        href={`/peserta/${slug}`}
         className="btn-mpt btn-mpt-outline"
         style={{
           minHeight: 36,
@@ -193,7 +193,7 @@ export default async function TahsinProgressPage({
         }}
       >
         <ChevronLeft size={14} strokeWidth={2.4} />
-        Kembali ke Rapot
+        Kembali ke Dashboard
       </Link>
 
       <div
@@ -400,49 +400,8 @@ export default async function TahsinProgressPage({
         </div>
       )}
 
-      {devMode && (
-        <div
-          style={{
-            marginTop: 20,
-            padding: "16px 20px",
-            borderRadius: 12,
-            border: "1px dashed var(--ink-mute)",
-            background: "color-mix(in oklab, var(--warning), transparent 92%)",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--ink-mute)",
-              marginBottom: 8,
-            }}
-          >
-            Dev Mode — Simulasi Progress
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
-            {[1, 2, 3, 4].map((n) => (
-              <Link
-                key={n}
-                href={`/peserta/${slug}/tahsin?dev=1&sim=${n}`}
-                className="btn-mpt btn-mpt-outline"
-                style={{
-                  minHeight: 32,
-                  fontSize: 11,
-                  padding: "4px 12px",
-                  color: n === simSession ? "var(--accent)" : "var(--ink-soft)",
-                  borderColor: n === simSession ? "var(--accent)" : undefined,
-                }}
-              >
-                <SkipForward size={12} strokeWidth={2.2} />
-                {n} sesi
-              </Link>
-            ))}
-          </div>
-        </div>
+      {devMode && !isComplete && (
+        <SkipSessionButton slug={slug} />
       )}
     </div>
   );

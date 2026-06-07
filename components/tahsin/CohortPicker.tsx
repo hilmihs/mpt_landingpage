@@ -52,7 +52,7 @@ export function CohortPicker({ rapotSlug, cohorts }: Props) {
         setError(data.message ?? "Gagal mendaftar. Coba lagi.");
         return;
       }
-      router.push(`/rapot/${rapotSlug}?enrolled=1`);
+      router.push(`/peserta/${rapotSlug}?enrolled=1`);
       router.refresh();
     } finally {
       setSubmitting(false);

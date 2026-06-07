@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export const metadata: Metadata = {
@@ -91,8 +92,11 @@ function fmtDateTime(iso: string): string {
   return `${days[d.getDay()]}, ${d.getDate()} ${["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"][d.getMonth()]} · ${time} WIB`;
 }
 
-export default async function PesertaDashboard({ params }: Props) {
+export default async function PesertaDashboard({ params, searchParams }: Props) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const justEnrolled = sp.enrolled === "1";
+
   const data = await fetchDashboardData(slug);
   if (!data) notFound();
 
@@ -113,6 +117,27 @@ export default async function PesertaDashboard({ params }: Props) {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 20px 80px" }}>
+      {justEnrolled && (
+        <div
+          style={{
+            padding: "14px 18px",
+            borderRadius: 12,
+            marginBottom: 16,
+            background: "color-mix(in oklab, var(--success), var(--surface) 90%)",
+            border: "1px solid color-mix(in oklab, var(--success), transparent 60%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--success)",
+          }}
+        >
+          <CheckCircle2 size={18} strokeWidth={2.4} />
+          Pendaftaran Tahsin Al-Fatihah berhasil!
+        </div>
+      )}
+
       <div
         className="card-mpt"
         style={{
