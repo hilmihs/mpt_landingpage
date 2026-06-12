@@ -1,361 +1,220 @@
-# CLAUDE CODE PROMPT v2 — Muhajir Project Tilawah
+# CLAUDE CODE PROMPT v3 — Muhajir Project Tilawah
 
 ## Project Context
 
-Anda akan membangun **Assessment Al-Fatihah** untuk Muhajir Project Tilawah, sebuah lembaga pendampingan tilawah Al-Quran di Indonesia. Platform web ini memungkinkan peserta merekam bacaan Al-Fatihah, dianalisis oleh AI untuk deteksi 4 indikator Lahn Jaliy (Harakat, Huruf, Panjang Pendek, Syaddah), dan mendapat rapot dengan skor 1-5 serta rekomendasi mendaftar Program Tahsin Al-Fatihah.
+Ini adalah codebase **Assessment Al-Fatihah + Funnel HITS** untuk Muhajir Project Tilawah, lembaga pendampingan tilawah Al-Quran di Indonesia. Peserta merekam bacaan Al-Fatihah, dianalisis AI untuk deteksi 4 indikator Lahn Jaliy (Harakat, Huruf, Panjang Pendek, Syaddah), mendapat rapot skor 1-5, lalu masuk funnel bertahap: booking assessment dengan pengajar → Tahsin Al-Fatihah (cohort) → program HITS berjenjang.
 
-**Catatan penting:** Ini bukan sekedar Whisper transcription. Sistem ini WAJIB deteksi 4 indikator Lahn Jaliy. AI engine yang dipakai adalah **Mu'alim Open Source** dari researcher obadx (model `muaalem-model-v3_2`), dideploy self-host di GPU server.
+**Catatan penting:** Ini bukan sekedar Whisper transcription. Sistem WAJIB deteksi 4 indikator Lahn Jaliy. AI engine target adalah **Mu'alim Open Source** dari researcher obadx (model `muaalem-model-v3_2`), self-host di GPU server. **Saat ini ML masih MOCK** (`lib/mock-ml.ts`) — integrasi real ML adalah pekerjaan tersisa terbesar (lihat "Pekerjaan Tersisa").
+
+## Status Implementasi
+
+Sudah selesai (jangan rencanakan ulang dari nol — kode sudah ada):
+
+- ✅ **Phase 1–3 (V1):** landing, consent, record, form, loading, rapot, API submit/status/rapot, worker dengan mock ML, cleanup audio 7 hari, rate limiting
+- ✅ **V2:** funnel gates, booking assessment (slot picker, gender-matched, auto-assign pengajar), portal pengajar, admin console, cohort manager, attendance, AI narrative rapot
+- ✅ **V2 lanjutan:** integrasi **Google Meet** (menggantikan Zoom — lihat migration 0005), seed scripts
+- ✅ **V3:** dashboard peserta `/peserta/[slug]`, halaman progress Tahsin + comparison report, HITS enrollment flow
+- ✅ **V4 (demo journey):** 3 jalur masuk dari landing, HITS berjenjang 4 tingkat, pengajuan halaqah organisasi, DemoNavigator
+
+Belum selesai:
+
+- ⏳ **Real ML server** (Python/FastAPI di GPU server) + integrasi ke worker
+- ⏳ Refinement, copy review Ustadzah, load testing, launch
 
 ## Architecture Overview
 
-Sistem ini ada 3 layer terpisah yang bisa di-develop paralel:
-
 ```
-[Browser]                    [Vercel]                    [GPU Server]
-   |                            |                              |
-Frontend Next.js  --------->  API Routes Next.js   --------->  ML Inference Python
-+ Recording               + Job Queue (BullMQ)         + Mu'alim v3_2 TorchScript
-+ UI Rapot                + Supabase Storage           + FastAPI worker
-                          + Postgres DB
-                          + Redis Upstash
+[Browser]                  [Vercel]                         [GPU Server — BELUM ADA]
+   |                          |                                    |
+Frontend Next.js  ------->  API Routes Next.js        ------->  ML Inference Python
++ Recording               + Queue (Upstash Redis REST)       + Mu'alim v3_2 TorchScript
++ UI Rapot/Funnel         + Supabase Postgres+Storage+Auth   + FastAPI worker
+                          + Anthropic API (AI narrative rapot, lib/ai)
+                          + Google Calendar/Meet API (lib/google-meet)
 ```
 
-**Phase 1-3:** Build frontend + backend + DB lengkap dengan mock ML response, supaya bisa progress paralel sambil ML engineer Anda setup model di GPU server.
+Cron Vercel (`vercel.json`, daily karena limit Hobby plan):
+- `/api/worker` 03:00 — drain queue (dev: trigger manual `curl -X POST /api/worker -H "x-worker-secret: $WORKER_SECRET"`)
+- `/api/cleanup` 02:00 — hapus audio >7 hari
+- `/api/meet/reconcile` 04:00 — attendance dari Google Meet
 
-**Phase 4-7:** Integrasi ke real ML server, testing, refinement, launch.
-
-## Tech Stack (LOCKED)
+## Tech Stack (aktual)
 
 ```yaml
-Frontend:
-  framework: Next.js 15.x (App Router)
+Frontend/Backend (satu proyek Next.js):
+  framework: Next.js 16.2.6 (App Router) + React 19.2   # spec lama bilang 15.x; aktual 16
   language: TypeScript strict mode
-  styling: Tailwind v4
-  ui: shadcn/ui
-  animation: Framer Motion
-  audio_recording: MediaRecorder API
-  audio_viz: Web Audio AnalyserNode
-  state: Zustand atau React Context
-
-Backend:
-  framework: Next.js API Routes (sama proyek)
-  database: Supabase Postgres
-  storage: Supabase Storage
-  queue: BullMQ + Upstash Redis
+  styling: Tailwind v4 + shadcn/ui (radix-ui) + Framer Motion + sonner
+  state: Zustand (lib/store.ts)
+  validation: Zod v4 (lib/validation.ts)
+  audio: MediaRecorder API + Web Audio AnalyserNode (hooks/useAudioRecorder.ts)
+  database: Supabase Postgres (+ Auth untuk admin/pengajar, + Storage untuk audio)
+  queue: Upstash Redis REST (lib/queue.ts, lib/redis.ts)
+  ai_narrative: "@anthropic-ai/sdk (lib/ai/anthropic.ts + explain-rapot.ts)"
+  meet: googleapis + google-auth-library (lib/google-meet/)
   id_generator: nanoid(12)
 
-ML Server (separate Python project):
-  framework: FastAPI
-  ml: PyTorch + Mu'alim v3_2 TorchScript
-  worker: BullMQ Python client atau custom Redis worker
-  audio: librosa + ffmpeg
+ML Server (proyek Python terpisah, BELUM dibuat):
+  framework: FastAPI, PyTorch + Mu'alim v3_2 TorchScript, librosa + ffmpeg
 
-Deployment:
-  frontend_backend: Vercel
-  ml_server: Biznet Gio Cloud T4 16GB (rekomendasi)
-
-Development Tools:
+Tooling:
   package_manager: pnpm
-  linting: ESLint + Prettier
-  testing: Vitest + Playwright (optional)
+  seed: pnpm seed:dev / pnpm seed:reset (scripts/seed-dev.ts, via tsx)
+  deployment: Vercel (frontend+backend), Biznet Gio Cloud T4 (rencana ML)
 ```
 
-## Database Schema
+## Database
 
-```sql
--- Peserta submission
-CREATE TABLE submissions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMPTZ DEFAULT now(),
+**Sumber kebenaran: `supabase/migrations/` — jangan duplikasi schema dari dokumen, baca migration-nya.**
 
-  -- Form data
-  nama TEXT NOT NULL,
-  jenis_kelamin TEXT NOT NULL CHECK (jenis_kelamin IN ('ikhwan', 'akhwat')),
-  nomor_wa TEXT NOT NULL,
+- `0001_init.sql` — `submissions` + `rapot` (skor 1-5, errors per 4 indikator JSONB, constraint WA Indonesia)
+- `0002_booking_v2.sql` — `teachers`, `teacher_availability`, `slots`, `bookings`, `cohorts`, `cohort_sessions`, `cohort_enrollments`, `attendance`, `interest_responses`, `analytics_events`, `admins`, `audit_logs`, view `v_funnel_metrics` + `v_slots_availability`
+- `0003_tahsin_enroll_rpc.sql` — RPC enrollment Tahsin (atomic, kapasitas-aware)
+- `0004_booking_rpc.sql` — RPC booking slot
+- `0005_zoom_to_meet.sql` — rename kolom Zoom → Google Meet: `slots.meet_calendar_event_id/meet_join_url/meet_host_email/meet_conference_id`, `attendance.meet_participant_*`, `teachers.email_meet`
 
-  -- Audio
-  audio_path TEXT NOT NULL,
-  audio_duration_sec NUMERIC,
+**PENTING:** enum `attendance_source` tetap berisi nilai `zoom_webhook` untuk backward compatibility — artinya "auto-detect via platform meeting", JANGAN di-rename.
 
-  -- Processing status
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-  error_message TEXT,
-  processed_at TIMESTAMPTZ,
-
-  -- Reference ke rapot
-  rapot_slug TEXT UNIQUE,
-
-  CONSTRAINT valid_wa CHECK (nomor_wa ~ '^(\+62|0|62)[0-9]{8,13}$')
-);
-
--- Hasil rapot
-CREATE TABLE rapot (
-  slug TEXT PRIMARY KEY,
-  submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT now(),
-
-  -- Skor utama 1-5
-  skor INT NOT NULL CHECK (skor BETWEEN 1 AND 5),
-  status_label TEXT NOT NULL,
-
-  -- Errors per 4 indikator (JSONB)
-  errors_harakat JSONB DEFAULT '[]'::jsonb,
-  errors_huruf JSONB DEFAULT '[]'::jsonb,
-  errors_panjang_pendek JSONB DEFAULT '[]'::jsonb,
-  errors_syaddah JSONB DEFAULT '[]'::jsonb,
-
-  -- Aggregate stats
-  total_errors_major INT NOT NULL DEFAULT 0,
-  total_errors_minor INT NOT NULL DEFAULT 0,
-  weighted_score NUMERIC,
-
-  -- ML metadata
-  ml_model_version TEXT,
-  ml_confidence NUMERIC,
-  ml_raw_output JSONB
-);
-
-CREATE INDEX idx_submissions_status ON submissions(status) WHERE status != 'completed';
-CREATE INDEX idx_submissions_created ON submissions(created_at DESC);
-CREATE INDEX idx_rapot_submission ON rapot(submission_id);
-```
-
-## API Contracts
-
-### POST /api/submit
+## API Contracts (inti, tidak berubah)
 
 ```typescript
-// Request: FormData with audio + nama + jenis_kelamin + nomor_wa
-// Response 200: { submission_id: string, estimated_wait_seconds: number }
-// Response 400: { error: 'validation_failed', details: [...] }
+// POST /api/submit         — FormData audio+nama+jenis_kelamin+nomor_wa
+//   200: { submission_id, estimated_wait_seconds } | 400: { error: 'validation_failed', details }
+// GET /api/rapot/[slug]/status — { status: 'pending'|'processing' } | { status:'completed', rapot_url } | { status:'failed', error_message }
+// GET /api/rapot/[slug]    — full rapot + errors per kategori + recommendation
+// ML Server POST /predict (kontrak untuk Phase ML):
+//   Request: { submission_id, audio_url, surah: 1, ayat_range: '1-7' }
+//   Response: { result: { errors_*, total_*, weighted_score, confidence, model_version } }
+//   Schema TypeScript: MLPredictResult di types/index.ts
 ```
 
-### GET /api/rapot/[slug]/status
+Route group lain yang sudah ada: `api/booking/{create,slots}`, `api/tahsin/{cohorts,enroll}`, `api/interest`, `api/gate-impression`, `api/analytics/track`, `api/hits/click`, `api/admin/**` (pengajar/cohort/slots CRUD), `api/portal/**` (attendance/availability/profile), `api/meet/reconcile`, `api/zoom/webhook` (legacy), `api/dev/skip-session`, `api/bypass/[slug]`.
+
+## Scoring Logic (`lib/scoring.ts` — LOCKED)
 
 ```typescript
-// Response 200 (processing): { status: 'pending' | 'processing', progress?: number }
-// Response 200 (done): { status: 'completed', rapot_url: string }
-// Response 200 (failed): { status: 'failed', error_message: string }
+const SEVERITY_WEIGHT = { major: 1, minor: 0.5 };  // major=Lahn Jaliy, minor=Lahn Khafiy
+// Threshold weighted_score → skor 1-5:
+// 0 → 5 'Bacaan Sempurna' | 0.5–2 → 4 'Sangat Baik' | 2.5–5 → 3 'Cukup Baik'
+// 5.5–10 → 2 'Perlu Penguatan' | >10 → 1 'Perlu Penguatan Dasar'
+// Semua skor 1-5 → rekomendasi Tahsin Al-Fatihah (single funnel di rapot)
 ```
 
-### GET /api/rapot/[slug]
+## Funnel & Fitur (V2–V4)
 
-```typescript
-// Response 200: full rapot data dengan errors per kategori + recommendation
+**3 jalur masuk dari landing page (`app/page.tsx`):**
+1. **Assessment AI** → consent → record → form → rapot (`app/assessment/**`, `app/rapot/[slug]`)
+2. **Daftar HITS langsung** → form + tes penempatan 6 soal tajwid → tier assignment (`app/daftar-hits/**`)
+3. **Pengajuan halaqah organisasi** → form + konfirmasi (`app/pengajuan/**`)
+
+**Funnel gates setelah rapot:**
+```
+Rapot → Gate 1 (InterestGate) ──Ya──→ Booking Assessment (/booking/assessment/[slug])
+          │ Tidak                       → Meeting 60 menit, 12 peserta, gender-matched
+          ▼                           → Gate 2 → Tahsin Al-Fatihah (cohort, 4 sesi × 90 menit)
+   Thank-you state                    → Gate 3 → Enrollment HITS IN-APP (bukan Linktree!)
+   (TANPA redirect Linktree)
 ```
 
-### ML Server: POST /predict
+- **Gate 3 sudah BUKAN Linktree.** Enrollment HITS terjadi in-app (`app/peserta/[slug]/hits/**`). URL `linktr.ee/muhajirprojecttilawah` hanya tersisa di `api/hits/click/route.ts` (tracked click).
+- **HITS berjenjang 4 tingkat** (definisi di `lib/demo-data.ts` → `HITS_TIERS`): HITS Dasar → Lanjutan Awal → Lanjutan Menengah → Lanjutan Expert. Halaman kelas: dashboard progress, daftar sesi, ujian badge, naik tingkat (`app/peserta/[slug]/hits/kelas/**`).
+- **Dashboard peserta** `/peserta/[slug]`: riwayat rapot, program aktif, jadwal.
+- **Attendance:** Google Meet reconcile (cron) primary → AI fuzzy match fallback (≥0.8 confidence, `lib/google-meet/matcher.ts`) → manual override pengajar.
+- Konstrain locked: assessment 60 menit kapasitas 12; Tahsin 90 menit × 4 sesi (2x/minggu × 2 minggu) kapasitas 12; semua gender-matched strict (ikhwan-ikhwan, akhwat-akhwat); user pilih slot → sistem auto-assign pengajar (filter gender); lulus Tahsin = ≥3 dari 4 sesi attended.
 
-```typescript
-// Request: { submission_id, audio_url, surah: 1, ayat_range: '1-7' }
-// Response: { result: { errors_*, total_*, weighted_score, confidence, model_version } }
-```
+**Auth 3 role:**
+- Peserta: anonymous + slug-based (tanpa akun)
+- Pengajar: Supabase Auth **phone+password**, route obscure `/portal-mpt-x7` (login: nomor WA + password dari admin)
+- Admin: Supabase Auth **email magic link**, `/admin`
+- `app/robots.ts` disallow: `/portal-mpt-x7/`, `/admin/`, `/booking/confirm/`, `/api/`, `/auth/`
 
-## Scoring Logic
+## Konvensi Dev & Demo
 
-```typescript
-// File: lib/scoring.ts
+- `NEXT_PUBLIC_DEMO_MODE=1` → DemoNavigator floating panel (`components/demo/DemoNavigator.tsx`); demo slug: `DEMO_SLUG = "demo-bilal-09"` di `lib/demo-data.ts`
+- `?dev=1` di banyak halaman → tombol skip/bypass alur
+- `POST /api/dev/skip-session` → insert attendance sesi cohort berikutnya (untuk demo progress Tahsin)
+- `/api/bypass/[slug]` → bypass gate
+- `DEV_BYPASS_RATELIMIT=1` → bypass rate limit submit
+- Seed: `pnpm seed:dev` (10 peserta di semua tahap funnel + admin + 4 pengajar dummy), `pnpm seed:reset`
+- **Semua fitur dev/bypass di atas WAJIB di-guard agar tidak aktif di production.**
 
-const SEVERITY_WEIGHT = {
-  major: 1,    // Lahn Jaliy
-  minor: 0.5,  // Lahn Khafiy
-};
+## Pekerjaan Tersisa (jangan kerjakan ulang yang sudah ✅)
 
-const SCORE_THRESHOLDS = [
-  { min: 0, max: 0, skor: 5, label: 'Bacaan Sempurna' },
-  { min: 0.5, max: 2, skor: 4, label: 'Bacaan Sangat Baik' },
-  { min: 2.5, max: 5, skor: 3, label: 'Bacaan Cukup Baik' },
-  { min: 5.5, max: 10, skor: 2, label: 'Bacaan Perlu Penguatan' },
-  { min: 10.5, max: Infinity, skor: 1, label: 'Bacaan Perlu Penguatan Dasar' },
-];
-
-// IMPORTANT: Semua skor 1-5 recommendation = Tahsin Al-Fatihah (single funnel)
-```
-
-## Mock ML Response untuk Development
-
-Selama Phase 1-3, gunakan mock supaya developer bisa progress tanpa nunggu ML engineer:
-
-```typescript
-// File: lib/mock-ml.ts
-// Replace dengan real ML call di Phase 4
-
-export function mockMLPredict(input): MLPredictResult {
-  // Deterministic random based on submission_id
-  // Return scenario: lancar (40%), cukup (30%), banyak salah (20%), pemula (10%)
-}
-```
-
-## V2 — Revisi Funnel Bertahap (Update Mei 2026)
-
-Berdasarkan rapat HITS Juni 2026 (sumber: `docs/ARCHITECTURE_V2.md`), funnel direvisi dari direct linktree menjadi step-by-step:
-
-```
-Rapot → Gate 1 ("Tertarik laporan lebih dalam?") → Booking Assessment dengan pengajar
-      → Meeting (60 menit, 12 peserta) → Gate 2 → Tahsin Cohort (4 sesi × 90 menit)
-      → Gate 3 → HITS Linktree (qualified lead saja)
-```
-
-**Tambahan tabel di migration `0002_booking_v2.sql`:**
-- `teachers`, `teacher_availability`, `slots`, `bookings`
-- `cohorts`, `cohort_sessions`, `cohort_enrollments`
-- `attendance` (sumber: `zoom_webhook` / `ai_match` / `manual`)
-- `interest_responses` (track Gate 1/2/3)
-- `analytics_events` (funnel metric)
-- `admins`, `audit_logs`
-- View: `v_funnel_metrics`, `v_slots_availability`
-
-**Auth strategy (3 role):**
-- Peserta: anonymous + slug-based (unchanged)
-- Pengajar: Supabase Auth phone+password, di route obscure `/portal-mpt-x7` (noindex, robots block)
-- Admin: Supabase Auth email magic link, di `/admin` (noindex, robots block)
-
-**Konstrain V2 (locked):**
-- Assessment: 60 menit, kapasitas 12 peserta, gender-matched strict (ikhwan-ikhwan, akhwat-akhwat)
-- Tahsin Al-Fatihah: 90 menit × 4 sesi (2x/minggu × 2 minggu), cohort-based, kapasitas 12, gender-matched
-- Booking model: user pilih slot, sistem auto-assign pengajar (filter gender)
-- Attendance: Zoom Webhook primary, AI fuzzy match fallback (≥0.8 confidence), manual override pengajar
-- AI Phase 1 only: penjelasan rapot personalized + AI fuzzy match attendance
-- HITS Linktree hanya muncul setelah lulus Tahsin Al-Fatihah (≥3 dari 4 sesi attended)
-
-## Implementation Phases
-
-### Phase 1: Foundation (Hari 1-3)
-- Init Next.js 15 + TypeScript strict
-- Setup Tailwind v4 + shadcn/ui
-- Setup Supabase + Upstash Redis
-- Run migration: tabel submissions + rapot
-- Setup Vercel deployment
-
-### Phase 2: Frontend Core (Hari 4-10)
-- Landing page dengan hero + CTA
-- Consent screen privacy notice
-- Recording page dengan MediaRecorder + audio visualizer
-- Form page (nama + jenis kelamin + nomor WA)
-- Loading screen dengan polling
-- Rapot page dengan 4 section indikator + CTA Tahsin
-- Mobile responsive (target 70% traffic dari HP)
-
-### Phase 3: Backend API + Mock ML (Hari 11-15)
-- POST /api/submit
-- GET /api/rapot/[slug]/status
-- GET /api/rapot/[slug]
-- Worker dengan mockMLPredict
-- Auto-delete audio > 7 hari
-- Rate limiting per IP
-
-### Phase 4: ML Server Setup (Hari 16-25) - Parallel
-ML Engineer Anda kerja paralel di Python project terpisah:
-- Setup Python 3.11 + Poetry
-- Download model obadx/muaalem-v3_2-torchscript-v1
-- Build inference pipeline (audio preprocessing, segmentasi, forward pass, decode QPS, mapping 4 indikator)
-- FastAPI endpoint POST /predict
-- Redis worker
-- Dockerize + deploy ke Biznet Gio Cloud T4
-- Test dengan 20 sample audio
-- Benchmark akurasi vs ground truth Ustadzah
-
-### Phase 5: Integration (Hari 26-30)
-- Replace mockMLPredict dengan real call
-- Setup secure communication (API key + HTTPS)
-- Error handling + retry logic
-- End-to-end testing
-- Load testing 50 concurrent
-
-### Phase 6: Refinement (Hari 31-35)
-- UX polish dan micro-interactions
-- Copy review oleh Ustadzah
-- Edge case handling
-- Performance optimization
-- SEO dan analytics
-
-### Phase 7: Launch (Hari 36-40)
-- Soft launch 50 peserta internal
-- Collect feedback + bug fixes
-- Compare AI output vs Ustadzah judgement
-- Public launch via Linktree
-- Monitor first week
+1. **ML server Python** (proyek terpisah): FastAPI `POST /predict`, Mu'alim v3_2 TorchScript, deploy GPU server, benchmark vs ground truth Ustadzah.
+2. **Integrasi:** satu titik swap — `app/api/worker/route.ts` saat ini memanggil `mockMLPredict(...)` tanpa kondisi. Env `ML_SERVER_URL` + `ML_SERVER_API_KEY` sudah disiapkan di `.env.example` tapi belum dibaca worker. Buat `lib/ml-client.ts` yang memenuhi kontrak `MLPredictResult` (`types/index.ts`), dengan retry + error handling.
+3. Refinement: copy review, edge cases, load testing 50 concurrent, Lighthouse >90, launch.
 
 ## Key Constraints (LOCKED)
 
 ```yaml
-audio_format: WebM/Opus
-audio_max_duration: 5 menit
-audio_retention: 7 hari (auto-delete)
+audio_format: WebM/Opus, max 5 menit, retensi 7 hari (auto-delete)
 slug_length: 12 karakter (nanoid)
-form_required: nama, jenis_kelamin, nomor_wa
-nomor_wa_format: Indonesia (+62, 0, atau 62)
-scoring_scale: 1-5 (BUKAN 1-10)
-severity_weights: major=1, minor=0.5
-recommendation_target: Tahsin Al-Fatihah (single funnel untuk SEMUA skor)
-linktree_url: linktr.ee/muhajirprojecttilawah
-share_method: Share via WA + Copy Link
-report_flow: redirect setelah AI selesai
-ml_engine: Mu'alim Open Source obadx/muaalem-model-v3_2
-ml_deployment: self-host GPU server
-data_residency: Indonesia (UU PDP)
+form_required: nama, jenis_kelamin, nomor_wa (format +62/0/62)
+scoring_scale: 1-5 (BUKAN 1-10), severity major=1 minor=0.5
+recommendation_rapot: Tahsin Al-Fatihah single funnel untuk SEMUA skor
+gate_3: enrollment HITS in-app 4 tingkat (BUKAN redirect Linktree)
+meeting_platform: Google Meet (kolom meet_*; lib/zoom = legacy)
+ml_engine: Mu'alim obadx/muaalem-model-v3_2, self-host GPU (saat ini mock)
+data_residency: Indonesia (UU PDP) — Supabase region Singapore
 ```
 
-## File Structure
+## File Structure (aktual, ringkas)
 
 ```
-muhajir-tilawah/
-├── app/
-│   ├── (marketing)/page.tsx
-│   ├── assessment/
-│   │   ├── consent/page.tsx
-│   │   ├── record/page.tsx
-│   │   ├── form/page.tsx
-│   │   └── loading/[id]/page.tsx
-│   ├── rapot/[slug]/page.tsx
-│   ├── api/
-│   │   ├── submit/route.ts
-│   │   ├── rapot/[slug]/route.ts
-│   │   ├── rapot/[slug]/status/route.ts
-│   │   ├── worker/route.ts
-│   │   └── cleanup/route.ts
-│   └── layout.tsx
-├── components/
-│   ├── ui/ (shadcn)
-│   ├── recording/
-│   ├── rapot/
-│   └── shared/
-├── lib/
-│   ├── supabase.ts
-│   ├── redis.ts
-│   ├── arabic.ts
-│   ├── scoring.ts
-│   ├── mock-ml.ts (Phase 1-3)
-│   ├── ml-client.ts (Phase 4+)
-│   └── utils.ts
-├── hooks/
-└── types/
+app/
+├── page.tsx                  # Landing — 3 jalur masuk
+├── assessment/{consent,record,form,loading/[id]}/
+├── rapot/[slug]/             # Rapot + InterestGate (Gate 1)
+├── booking/{assessment/[slug],confirm/[bookingId]}/
+├── tahsin/[slug]/            # Gate 2 enrollment
+├── peserta/[slug]/           # Dashboard peserta
+│   ├── assessment-result/  tahsin/{,report}/
+│   └── hits/{,kelas/{,sesi/[n],naik-tingkat}}/
+├── daftar-hits/{,penempatan,hasil}/   # Jalur 2
+├── pengajuan/{,konfirmasi}/           # Jalur 3
+├── hits/[slug]/
+├── admin/{login,(authed)/{overview,peserta,pengajar,jadwal,cohort,analytics}}/
+├── portal-mpt-x7/{login,(authed)/{dashboard,bookings,availability,attendance,cohorts,profil}}/
+├── auth/callback/  robots.ts
+└── api/ (lihat "API Contracts")
+components/{ui,recording,rapot,booking,tahsin,assessment,admin,portal,demo,shared}/
+lib/
+├── ai/{anthropic,explain-rapot}.ts    # AI narrative rapot
+├── auth/{admin,teacher}.ts  google-meet/{auth,client,matcher,reconcile}.ts
+├── zoom/ (legacy)  slots/generate.ts
+├── scoring.ts  mock-ml.ts  demo-data.ts  eligibility.ts  validation.ts
+├── supabase.ts  supabase-server.ts  redis.ts  queue.ts  analytics.ts
+hooks/{useAudioRecorder,useRapotPolling,useScrollAnim}.ts
+types/index.ts                # incl. MLPredictResult (kontrak ML)
+supabase/migrations/0001–0005
+scripts/seed-dev.ts
 ```
 
 ## Anti-Patterns to Avoid
 
 - JANGAN pakai Whisper sebagai engine utama (tidak detect 4 indikator)
-- JANGAN hardcode API key di code (gunakan env vars)
-- JANGAN simpan audio peserta lebih dari 7 hari
-- JANGAN kirim audio peserta ke third-party
-- JANGAN expose Supabase service_role key ke client
+- JANGAN hardcode API key (env vars; lihat `.env.example`)
+- JANGAN simpan audio peserta >7 hari, JANGAN kirim audio ke third-party
+- JANGAN expose Supabase service_role key ke client (`supabaseService()` server-only)
 - JANGAN process ML inference di Next.js (butuh GPU)
-- JANGAN polling lebih cepat dari setiap 2 detik
-- JANGAN buat scoring linear 0-100 (gunakan 1-5)
-- JANGAN beda CTA per skor (semua ke Tahsin Al-Fatihah)
-- JANGAN skip mobile testing
+- JANGAN polling lebih cepat dari 2 detik (`hooks/useRapotPolling.ts`)
+- JANGAN scoring linear 0-100 (gunakan 1-5)
+- JANGAN beda CTA per skor di rapot (semua ke Tahsin Al-Fatihah)
+- JANGAN redirect ke Linktree dari Gate 1/rapot (bypass funnel — sudah diperbaiki di `InterestGate.tsx`)
+- JANGAN menulis kode Zoom baru — platform meeting adalah Google Meet (`lib/google-meet/`)
+- JANGAN rename nilai enum `attendance_source: zoom_webhook` (backward compat)
+- JANGAN skip mobile testing (target 70% traffic HP)
 
 ## Success Criteria
 
-- Peserta bisa record + submit dalam 3 menit
-- ML processing kurang dari 30 detik untuk audio 60 detik
-- Rapot rendering kurang dari 1 detik setelah ML completed
-- Mobile UX smooth tanpa lag
-- Akurasi AI agreement rate di atas 70% dengan Ustadzah
-- Uptime di atas 99% untuk frontend
-- Audio peserta benar-benar terhapus dalam 7 hari
-- Lighthouse score di atas 90
+- Record + submit < 3 menit; ML < 30 detik untuk audio 60 detik; rapot render < 1 detik
+- Akurasi AI agreement rate > 70% dengan Ustadzah
+- Audio benar-benar terhapus dalam 7 hari; uptime > 99%; Lighthouse > 90
+
+## Referensi Dokumen
+
+- `docs/ARCHITECTURE_V2.md` — desain V2 awal (historis; deviasi V3/V4 dicatat di prompt ini: Zoom→Meet, Gate 3 in-app, HITS 4 tingkat)
+- `README.md` — setup Supabase/Upstash/env, smoke test, deployment
 
 ## Final Notes
 
