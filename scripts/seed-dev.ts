@@ -113,6 +113,10 @@ const D = {
     assess_akh_past: demoId("aaaaaaaa", 2),
     assess_ikh_fut: demoId("aaaaaaaa", 3),
     assess_akh_fut: demoId("aaaaaaaa", 4),
+    assess_ikh_fut2: demoId("aaaaaaaa", 5),
+    assess_ikh_fut3: demoId("aaaaaaaa", 6),
+    assess_akh_fut2: demoId("aaaaaaaa", 7),
+    assess_akh_fut3: demoId("aaaaaaaa", 8),
     tahsin_ikh_past: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 10 + i)),
     tahsin_akh_past: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 20 + i)),
     tahsin_ikh_fut: [1, 2, 3, 4].map((i) => demoId("aaaaaaaa", 30 + i)),
@@ -441,6 +445,8 @@ function nextDayOfWeek(dow: number, hour: number, minute: number): Date {
 const ALL_SLOT_IDS = [
   D.slots.assess_ikh_past, D.slots.assess_akh_past,
   D.slots.assess_ikh_fut, D.slots.assess_akh_fut,
+  D.slots.assess_ikh_fut2, D.slots.assess_ikh_fut3,
+  D.slots.assess_akh_fut2, D.slots.assess_akh_fut3,
   ...D.slots.tahsin_ikh_past, ...D.slots.tahsin_akh_past,
   ...D.slots.tahsin_ikh_fut, ...D.slots.tahsin_akh_fut,
 ];
@@ -649,8 +655,15 @@ async function seedFunnelData() {
 
   const assessIkhPast = daysAgo(21); assessIkhPast.setHours(19, 30, 0, 0);
   const assessAkhPast = daysAgo(14); assessAkhPast.setHours(16, 0, 0, 0);
-  const assessIkhFut = nextDayOfWeek(1, 19, 30);
-  const assessAkhFut = nextDayOfWeek(1, 16, 0);
+  // NOTE: assessment future slots use daysFromNow (not nextDayOfWeek) so they stay
+  // comfortably in the future and don't decay to "past" within days of seeding.
+  // Kept inside the ~14-day horizon of v_slots_availability. Three options per gender.
+  const assessIkhFut = daysFromNow(4); assessIkhFut.setHours(19, 30, 0, 0);
+  const assessIkhFut2 = daysFromNow(8); assessIkhFut2.setHours(19, 30, 0, 0);
+  const assessIkhFut3 = daysFromNow(12); assessIkhFut3.setHours(19, 30, 0, 0);
+  const assessAkhFut = daysFromNow(5); assessAkhFut.setHours(16, 0, 0, 0);
+  const assessAkhFut2 = daysFromNow(9); assessAkhFut2.setHours(16, 0, 0, 0);
+  const assessAkhFut3 = daysFromNow(13); assessAkhFut3.setHours(16, 0, 0, 0);
 
   const tahsinIkhPastDates = [35, 28, 21, 14].map((d) => { const dt = daysAgo(d); dt.setHours(19, 30, 0, 0); return dt; });
   const tahsinAkhPastDates = [33, 26, 19, 12].map((d) => { const dt = daysAgo(d); dt.setHours(16, 0, 0, 0); return dt; });
@@ -673,7 +686,11 @@ async function seedFunnelData() {
     mkSlot(D.slots.assess_ikh_past, ahmad.id, "assessment", assessIkhPast, "ikhwan", true),
     mkSlot(D.slots.assess_akh_past, aisyah.id, "assessment", assessAkhPast, "akhwat", true),
     mkSlot(D.slots.assess_ikh_fut, ahmad.id, "assessment", assessIkhFut, "ikhwan", false),
+    mkSlot(D.slots.assess_ikh_fut2, ahmad.id, "assessment", assessIkhFut2, "ikhwan", false),
+    mkSlot(D.slots.assess_ikh_fut3, ahmad.id, "assessment", assessIkhFut3, "ikhwan", false),
     mkSlot(D.slots.assess_akh_fut, aisyah.id, "assessment", assessAkhFut, "akhwat", false),
+    mkSlot(D.slots.assess_akh_fut2, aisyah.id, "assessment", assessAkhFut2, "akhwat", false),
+    mkSlot(D.slots.assess_akh_fut3, aisyah.id, "assessment", assessAkhFut3, "akhwat", false),
     ...tahsinIkhPastDates.map((dt, i) => mkSlot(D.slots.tahsin_ikh_past[i]!, ahmad.id, "tahsin", dt, "ikhwan", true)),
     ...tahsinAkhPastDates.map((dt, i) => mkSlot(D.slots.tahsin_akh_past[i]!, aisyah.id, "tahsin", dt, "akhwat", true)),
     ...tahsinIkhFutDates.map((dt, i) => mkSlot(D.slots.tahsin_ikh_fut[i]!, yusuf.id, "tahsin", dt, "ikhwan", false)),

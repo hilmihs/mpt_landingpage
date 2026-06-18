@@ -325,6 +325,7 @@ export const DEMO_NAV_LINKS = [
     links: [
       { label: "Assessment (consent)", href: "/assessment/consent" },
       { label: "Rapot AI", href: `/rapot/${DEMO_SLUG}` },
+      { label: "Booking Jadwal", href: `/booking/assessment/demo-rizki-01` },
       { label: "Peserta Dashboard", href: `/peserta/${DEMO_SLUG}` },
       { label: "Assessment Result", href: `/peserta/${DEMO_SLUG}/assessment-result` },
       { label: "Tahsin Progress", href: `/peserta/${DEMO_SLUG}/tahsin` },
