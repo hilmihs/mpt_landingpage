@@ -29,87 +29,54 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
   const noteCount = lookup.size;
 
   return (
-    <div
-      style={{
-        padding: "20px 22px",
-        borderRadius: 16,
-        background: "var(--paper)",
-        border: "1px solid var(--line)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <span
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            background: "var(--primary)",
-            color: "var(--primary-ink)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 14,
-            fontWeight: 800,
-          }}
-        >
-          {ayat.number}
-        </span>
+    <div className="ayat-card">
+      {/* Header: nomor ayat + badge catatan */}
+      <div className="ayat-card-head">
+        <span className="ayat-num">{ayat.number}</span>
         {noteCount > 0 ? (
           <span
             className="pill"
             style={{
-              background: "color-mix(in oklab, var(--danger), transparent 85%)",
+              background: "color-mix(in oklab, var(--danger), transparent 86%)",
               color: "var(--danger)",
             }}
           >
+            <span className="ayat-badge-dot" />
             {noteCount} catatan
           </span>
         ) : (
           <span
             className="pill"
             style={{
-              background: "color-mix(in oklab, var(--success), transparent 85%)",
+              background:
+                "color-mix(in oklab, var(--success), transparent 86%)",
               color: "var(--success)",
             }}
           >
+            <span
+              className="ayat-badge-dot"
+              style={{ background: "var(--success)" }}
+            />
             Baik
           </span>
         )}
       </div>
-      <div
-        dir="rtl"
-        lang="ar"
-        className="font-arabic"
-        style={{
-          fontSize: 26,
-          lineHeight: 2.1,
-          textAlign: "right",
-          color: "var(--ink)",
-          margin: "0 0 10px",
-          fontFeatureSettings: '"liga" 1, "calt" 1, "kern" 1',
-        }}
-      >
+
+      {/* Teks Arab */}
+      <div dir="rtl" lang="ar" className="font-arabic ayat-arabic">
         {ayat.words.map((word, idx) => {
           const cat = lookup.get(idx);
+          const sep = idx > 0 ? " " : "";
           if (cat) {
             const meta = INDIKATOR_META[cat];
             return (
               <span key={idx}>
-                {idx > 0 && " "}
+                {sep}
                 <span
+                  className="arabic-mark"
                   style={{
-                    background: `color-mix(in oklab, ${meta.color}, transparent 80%)`,
-                    padding: "0 4px",
-                    margin: "0 2px",
-                    borderRadius: 6,
-                    borderBottom: `2px solid ${meta.color}`,
+                    background: `color-mix(in oklab, ${meta.color}, transparent 82%)`,
+                    borderBottom: `2.5px solid ${meta.color}`,
                   }}
                 >
                   {word}
@@ -119,21 +86,16 @@ export function AyatCard({ ayatNumber, errorsByCategory }: Props) {
           }
           return (
             <span key={idx}>
-              {idx > 0 && " "}
-              <span style={{ margin: "0 2px" }}>{word}</span>
+              {sep}
+              {word}
             </span>
           );
         })}
       </div>
-      <div
-        style={{
-          fontSize: 13,
-          color: "var(--ink-mute)",
-          fontStyle: "italic",
-        }}
-      >
-        {ayat.transliterasi}
-      </div>
+
+      {/* Transliterasi + terjemahan */}
+      <div className="ayat-translit">{ayat.transliterasi}</div>
+      <div className="ayat-terjemah">{ayat.terjemahan}</div>
     </div>
   );
 }

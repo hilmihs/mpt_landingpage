@@ -59,6 +59,12 @@ function fmt(sec: number | null | undefined): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function scoreColor(skor: number): string {
+  if (skor >= 4) return "var(--success)";
+  if (skor === 3) return "var(--accent-deep)";
+  return "var(--danger)";
+}
+
 export default async function RapotPage({ params }: Props) {
   const { slug } = await params;
   const rapot = await getRapot(slug);
@@ -78,6 +84,8 @@ export default async function RapotPage({ params }: Props) {
     month: "long",
     year: "numeric",
   });
+
+  const bandColor = scoreColor(rapot.skor);
 
   const indikatorEntries: { kategori: IndikatorKey; errors: ErrorItem[] }[] = [
     { kategori: "harakat", errors: rapot.errors_harakat },
@@ -112,10 +120,10 @@ export default async function RapotPage({ params }: Props) {
             right: -60,
             width: 240,
             height: 240,
-            background: "var(--accent)",
-            opacity: 0.14,
+            background: bandColor,
+            opacity: 0.13,
             borderRadius: "50%",
-            filter: "blur(40px)",
+            filter: "blur(44px)",
             pointerEvents: "none",
           }}
           aria-hidden
@@ -144,7 +152,12 @@ export default async function RapotPage({ params }: Props) {
             position: "relative",
           }}
         >
-          <ScoreCircle score={rapot.skor} max={5} size={180} />
+          <ScoreCircle
+            score={rapot.skor}
+            max={5}
+            size={180}
+            color={bandColor}
+          />
           <div>
             <h1
               className="font-display"
@@ -190,44 +203,38 @@ export default async function RapotPage({ params }: Props) {
         >
           {[
             {
-              label: "Major",
+              label: "Salah Besar",
               val: String(rapot.total_errors_major),
+              unit: "lahn jaliy",
               color: "var(--danger)",
             },
             {
-              label: "Minor",
+              label: "Salah Kecil",
               val: String(rapot.total_errors_minor),
+              unit: "catatan",
               color: "var(--warning)",
             },
             {
               label: "Durasi",
               val: fmt(submission?.audio_duration_sec),
+              unit: "menit",
               color: "var(--success)",
             },
           ].map((s) => (
-            <div key={s.label}>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  color: "var(--ink-mute)",
-                  marginBottom: 6,
-                }}
-              >
+            <div key={s.label} className="rapot-stat">
+              <div className="rapot-stat-label">
+                <span
+                  className="rapot-stat-dot"
+                  style={{ background: s.color }}
+                />
                 {s.label}
               </div>
               <div
-                className="font-display stat-val"
-                style={{
-                  fontSize: 30,
-                  fontWeight: 800,
-                  color: s.color,
-                  letterSpacing: "-0.03em",
-                }}
+                className="font-display rapot-stat-val"
+                style={{ color: s.color }}
               >
                 {s.val}
+                <span className="rapot-stat-unit">{s.unit}</span>
               </div>
             </div>
           ))}
@@ -244,6 +251,7 @@ export default async function RapotPage({ params }: Props) {
 
       {/* Tinjauan per Ayat */}
       <section style={{ marginBottom: 36 }}>
+        <div className="rapot-kicker">Al-Fatihah · 7 Ayat</div>
         <h2
           className="font-display"
           style={{
@@ -277,22 +285,10 @@ export default async function RapotPage({ params }: Props) {
         >
           {(Object.entries(INDIKATOR_META) as [IndikatorKey, (typeof INDIKATOR_META)[IndikatorKey]][]).map(
             ([k, m]) => (
-              <div
-                key={k}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--ink-soft)",
-                }}
-              >
+              <div key={k} className="legend-chip">
                 <span
+                  className="legend-swatch"
                   style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 4,
                     background: `color-mix(in oklab, ${m.color}, transparent 70%)`,
                     borderBottom: `2px solid ${m.color}`,
                   }}
@@ -322,6 +318,7 @@ export default async function RapotPage({ params }: Props) {
 
       {/* Detail per Indikator */}
       <section style={{ marginBottom: 36 }}>
+        <div className="rapot-kicker">4 Indikator Lahn</div>
         <h2
           className="font-display"
           style={{

@@ -582,6 +582,191 @@
 }
 
 /* ============================================================
+ * Rapot — Tinjauan per Ayat
+ * ============================================================ */
+
+.ayat-card {
+  padding: 22px 22px 20px;
+  border-radius: 18px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s,
+    border-color 0.3s;
+}
+.ayat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in oklab, var(--accent), transparent 30%),
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.ayat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: 0 20px 48px -28px rgba(26, 31, 42, 0.3);
+}
+.ayat-card:hover::before {
+  opacity: 1;
+}
+
+.ayat-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.ayat-num {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-nunito), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  box-shadow: 0 6px 16px -8px rgba(26, 36, 56, 0.6);
+}
+.ayat-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+/* Blok teks Arab — spacing & shaping yang benar */
+.ayat-arabic {
+  font-size: 32px;
+  line-height: 2.45;
+  text-align: center;
+  color: var(--ink);
+  word-spacing: 0.12em;
+  padding: 6px 2px 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Highlight kata — inline + clone agar harakat tidak ter-clip
+   dan kotak tidak saling tindih antar baris */
+.arabic-mark {
+  display: inline;
+  padding: 3px 9px;
+  border-radius: 9px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.ayat-translit {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+  margin-top: 14px;
+}
+.ayat-terjemah {
+  font-size: 13px;
+  color: var(--ink-mute);
+  line-height: 1.6;
+  margin-top: 5px;
+}
+
+/* Rapot — stats row chips */
+.rapot-stat {
+  position: relative;
+  padding: 2px 4px;
+}
+.rapot-stat + .rapot-stat::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--line);
+}
+.rapot-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+.rapot-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rapot-stat-val {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.rapot-stat-unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+/* Rapot — legend chips */
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 5px;
+}
+
+/* Rapot — section heading with accent kicker */
+.rapot-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin-bottom: 10px;
+}
+.rapot-kicker::before {
+  content: "";
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* ============================================================
  * Mobile responsiveness
  * ============================================================ */
 
@@ -627,7 +812,21 @@
   .score-circle { width: 140px !important; height: 140px !important; }
 
   /* Smaller stats row in rapot hero */
-  .rapot-stats-row { gap: 10px !important; padding-top: 20px !important; }
-  .rapot-stats-row .stat-val { font-size: 24px !important; }
+  .rapot-stats-row { gap: 12px !important; padding-top: 20px !important; }
+  .rapot-stat-val { font-size: 24px !important; }
+  .rapot-stat-unit { font-size: 11px !important; }
+  .rapot-stat + .rapot-stat::before { left: -6px !important; }
+
+  /* Arabic ayat text a touch smaller on phones */
+  .ayat-arabic { font-size: 28px !important; line-height: 2.3 !important; }
+}
+
+/* Small phones (≤480px): prevent narrow-screen breaks */
+@media (max-width: 480px) {
+  /* Assessment/flow header: hide the right-side title label so it can't
+     collide with the brand on narrow screens (step indicator stays). */
+  .assess-header-title { display: none !important; }
+  /* Two-column form grids (e.g. pengajuan WA + Email) stack to one column. */
+  .grid-2col-mobile { grid-template-columns: 1fr !important; }
 }
 

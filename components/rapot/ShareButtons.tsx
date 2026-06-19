@@ -11,18 +11,23 @@ interface Props {
 export function ShareButtons({ slug, skor }: Props) {
   const [copied, setCopied] = useState(false);
 
-  const url =
+  // Resolve the absolute URL lazily at click time so server and client render
+  // identically (no hydration mismatch) and we never touch window during render.
+  const resolveUrl = () =>
     typeof window !== "undefined"
       ? `${window.location.origin}/rapot/${slug}`
       : `/rapot/${slug}`;
 
-  const waText = encodeURIComponent(
-    `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan mendapat skor ${skor}/5. Cek rapot saya: ${url}`,
-  );
+  const shareWhatsApp = () => {
+    const text = encodeURIComponent(
+      `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan mendapat skor ${skor}/5. Cek rapot saya: ${resolveUrl()}`,
+    );
+    window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+  };
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(resolveUrl());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -38,16 +43,15 @@ export function ShareButtons({ slug, skor }: Props) {
         gap: 10,
       }}
     >
-      <a
-        href={`https://wa.me/?text=${waText}`}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={shareWhatsApp}
         className="btn-mpt btn-mpt-outline"
         style={{ minHeight: 48, fontSize: 14 }}
       >
         <MessageCircle className="size-4" />
         Bagikan via WhatsApp
-      </a>
+      </button>
       <button
         type="button"
         onClick={copy}

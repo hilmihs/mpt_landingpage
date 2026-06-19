@@ -2,9 +2,15 @@ interface Props {
   score: number;
   max?: number;
   size?: number;
+  color?: string;
 }
 
-export function ScoreCircle({ score, max = 5, size = 180 }: Props) {
+export function ScoreCircle({
+  score,
+  max = 5,
+  size = 180,
+  color = "var(--primary)",
+}: Props) {
   const r = size / 2 - 10;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, score / max));
@@ -17,9 +23,10 @@ export function ScoreCircle({ score, max = 5, size = 180 }: Props) {
       style={{ position: "relative", width: size, height: size }}
     >
       <svg
-        width={size}
-        height={size}
-        style={{ transform: "rotate(-90deg)" }}
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: "rotate(-90deg)", display: "block" }}
         aria-hidden
       >
         <circle
@@ -35,7 +42,7 @@ export function ScoreCircle({ score, max = 5, size = 180 }: Props) {
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="var(--primary)"
+          stroke={color}
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={c}
@@ -61,7 +68,7 @@ export function ScoreCircle({ score, max = 5, size = 180 }: Props) {
           style={{
             fontSize: size * 0.44,
             fontWeight: 800,
-            color: "var(--primary)",
+            color: color,
             lineHeight: 1,
             letterSpacing: "-0.04em",
           }}
