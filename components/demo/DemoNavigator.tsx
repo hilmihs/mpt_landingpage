@@ -18,7 +18,7 @@ export function DemoNavigator() {
             position: "absolute",
             bottom: 64,
             right: 0,
-            width: 320,
+            width: "min(320px, calc(100vw - 40px))",
             maxHeight: "70vh",
             overflowY: "auto",
             background: "var(--paper)",

@@ -78,12 +78,15 @@ export function AssessmentHeader({ step, total = 3, title }: Props) {
           </div>
         ) : (
           <div
+            className="assess-header-title"
             style={{
               fontSize: 12,
               fontWeight: 700,
               color: "var(--ink-mute)",
               letterSpacing: "0.06em",
               textTransform: "uppercase",
+              textAlign: "right",
+              maxWidth: "45%",
             }}
           >
             {title ?? "Assessment Al-Fatihah"}

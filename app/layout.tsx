@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Nunito_Sans, Amiri } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/shared/Header";
@@ -25,6 +25,12 @@ export const metadata: Metadata = {
   title: "Muhajir Project Tilawah — Assessment Al-Fatihah",
   description:
     "Rekam bacaan Al-Fatihah Anda — sistem memberi umpan balik awal dari 4 indikator kesalahan umum dalam 30 detik.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

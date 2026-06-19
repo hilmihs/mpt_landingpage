@@ -113,7 +113,7 @@ export default function PengajuanPage() {
               />
             </Field>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="grid-2col-mobile" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Nomor WhatsApp PIC *">
                 <input
                   className="input-mpt"
