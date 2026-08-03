@@ -33,6 +33,23 @@ function create() {
     connect_timeout: 10,
     // Cloud SQL lewat private IP tidak memakai TLS di level klien.
     ssl: process.env.DATABASE_SSL === "true" ? "require" : false,
+
+    types: {
+      // postgres.js mengembalikan `numeric` sebagai STRING supaya presisi
+      // desimal tidak hilang. PostgREST dulu mengirimnya sebagai number, jadi
+      // tanpa parser ini kolom seperti weighted_score dan ml_confidence
+      // diam-diam berubah jadi string: `ml_confidence * 100` menghasilkan NaN,
+      // dan bentuk JSON respons berubah tanpa ada yang gagal lebih dulu.
+      //
+      // Semua numeric di skema ini berskala kecil (skor 1-10, confidence 0-1,
+      // durasi detik), jauh di dalam rentang aman double.
+      numeric: {
+        to: 1700,
+        from: [1700],
+        serialize: (x: number | string) => String(x),
+        parse: (x: string) => Number(x),
+      },
+    },
   });
 }
 

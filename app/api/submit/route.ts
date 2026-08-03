@@ -5,6 +5,8 @@ import { uploadAudio, removeAudio } from "@/lib/storage";
 import { submitRatelimit } from "@/lib/redis";
 import { enqueueJob } from "@/lib/queue";
 import { formSchema } from "@/lib/validation";
+import { dispatchSubmission } from "@/lib/dispatch";
+import { sendWhatsApp, tplPesertaSubmitted } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -140,6 +142,51 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("enqueue error", err);
     // Worker will retry by scanning pending submissions
+  }
+
+  // Tugaskan ke pengajar (rotasi, gender ketat) lalu kirim notifikasi WhatsApp.
+  // Nilai yang dilihat peserta berasal dari pengajar, bukan AI — AI jalan
+  // paralel sebagai pembanding internal. Lihat docs/INTEGRASI_PENILAIAN_PENGAJAR.md.
+  //
+  // Kegagalan di sini TIDAK menggagalkan submit: rekamannya sudah aman
+  // tersimpan, dan penugasan bisa diulang dari portal admin.
+  try {
+    const d = await dispatchSubmission({
+      submissionId,
+      pesertaNama: parsed.data.nama,
+      jenisKelamin: parsed.data.jenis_kelamin,
+      durasiDetik: audioDuration,
+    });
+    if (!d.waSent) {
+      console.warn(`[submit] notifikasi pengajar belum terkirim: ${d.error}`);
+    }
+  } catch (err) {
+    console.error("dispatch error", err);
+  }
+
+  // Konfirmasi ke peserta bahwa rekamannya diterima dan sedang diperiksa.
+  // Mas Agil menekankan ini di rapat: pesertanya tidak boleh dibiarkan menunggu
+  // tanpa kabar, karena pemeriksaan pengajar makan waktu berhari-hari.
+  try {
+    const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const send = await sendWhatsApp(
+      parsed.data.nomor_wa,
+      tplPesertaSubmitted({
+        pesertaNama: parsed.data.nama,
+        statusUrl: `${base}/rapot/${rapotSlug}`,
+      }),
+    );
+    if (send.ok) {
+      await sql`
+        UPDATE submissions SET peserta_wa_sent_at = ${new Date()} WHERE id = ${submissionId}
+      `;
+    } else if (!send.skipped) {
+      await sql`
+        UPDATE submissions SET peserta_wa_error = ${send.error ?? null} WHERE id = ${submissionId}
+      `;
+    }
+  } catch (err) {
+    console.error("peserta wa error", err);
   }
 
   return NextResponse.json({
