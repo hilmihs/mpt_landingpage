@@ -96,6 +96,64 @@ Kliennya: `lib/mpt-assessment.ts`. Penyimpanannya: tabel `teacher_evaluations` d
 
 ---
 
+### Peta lengkap endpoint (diprobe 4 Agustus 2026)
+
+| Endpoint | Metode diizinkan |
+|---|---|
+| `/api/recitation-evaluations` | `GET, HEAD` |
+| `/api/recitation-evaluations/{uuid}` | `GET, HEAD` |
+| `/api/recitation-evaluations/by-kode-unik/{kode}` | `GET, HEAD` |
+| `/api/recitation-evaluations/{uuid}/participant` | **`PATCH`** |
+
+**Tidak ada endpoint untuk MEMBUAT penilaian.** `POST` ke koleksi dijawab `405 Method Not Allowed` (diverifikasi dua kali). Satu-satunya jalur tulis, `PATCH .../participant`, hanya menempelkan `nama_lengkap` / `nomor_wa` / `pernah_hits` / `divisi` ke penilaian yang **sudah ada** — itulah yang dipakai `DataDiriForm` di aplikasi peserta.
+
+Konsekuensinya: **penilaian hanya bisa lahir dari panel Filament.** Membangun formulir sendiri lalu menembak API mereka tidak mungkin sampai mereka menambahkan endpoint `POST`.
+
+`GET /{uuid}` mengembalikan bentuk yang jauh lebih kaya daripada `by-kode-unik`: ada `participant` dan peta `ayat` (`ayat_1` … `ayat_7_part_2`), masing-masing berisi array `jaliy` dan `khafiy`.
+
+---
+
+## 2b. Kalau nanti formulir mau dibangun sendiri, bahannya sudah lengkap
+
+**Keputusan 4 Agustus 2026: ditunda.** Pengajar tetap memakai formulir Filament di tab baru lalu menempel kode unik. Bagian ini dicatat supaya risetnya tidak perlu diulang.
+
+Sumbernya di repo [Lzadhito/assessment-alfatihah-user](https://github.com/Lzadhito/assessment-alfatihah-user):
+
+- `app/modules/form_per_ayat/constants.ts` → `EVALUATION_OPTIONS`
+- `app/modules/form_per_ayat/schema.ts` → bentuk payload
+- `app/lib/scoring.ts` → `calculateScore(jaliy, khafiy)`
+
+Jumlah kategorinya **110** — inilah "sudah ada 100" yang Mas Agil sebut di rapat:
+
+| Segmen | Jaliy | Khafiy |
+|---|---|---|
+| Ayat 1 | 8 | 7 |
+| Ayat 2 | 7 | 7 |
+| Ayat 3 | 5 | 6 |
+| Ayat 4 | 5 | 5 |
+| Ayat 5 | 6 | 6 |
+| Ayat 6 | 4 | 8 |
+| Ayat 7 | 9 | 10 |
+| Ayat 7 part 2 | 9 | 8 |
+| **Total** | **53** | **57** |
+
+Strukturnya **per-ayat**, persis seperti permintaan Mas Agil: *"di setiap ayat ada pilihan jalan apa jali sama khofinya setiap ayat"*. Tiap pilihan sudah ditandai indikatornya di ujung kalimat — misal `"Membaca ق menjadi ك pada kata المستقيم [Ketepatan Huruf]"` — sehingga lima skor indikator bisa diturunkan otomatis dari centangan, tanpa pengajar memilih kategori dua kali. Ini yang membuat target 5 menit realistis.
+
+Rumus skornya:
+
+```ts
+calculateScore(jaliy, khafiy):
+  jaliy  > 5  -> 1
+  jaliy >= 1  -> 2
+  khafiy >= 5 -> 3
+  khafiy >= 1 -> 4
+  else        -> 5
+```
+
+Kalau formulir native jadi dibangun, pakai rumus ini apa adanya supaya hasilnya tetap sebanding dengan 4.304 penilaian lama mereka — itu syarat review Agustus–Desember jadi bermakna.
+
+---
+
 ## 3. 🔴 Masalah keamanan di sistem mereka — perlu dilaporkan
 
 Ini **bukan** di kode kita, tapi menyangkut data peserta kita, jadi harus disampaikan ke Mas Iqbal / pengelola sistem itu.
@@ -204,6 +262,54 @@ calculateScore(jaliy, khafiy):
 Artinya **satu saja kesalahan lahn jaliy langsung menjatuhkan skor kategori itu ke 2**. Ini penting dipahami sebelum membandingkan dengan skor AI kita, yang memakai bobot major=1 / minor=0.5 lalu diambang — model penilaiannya berbeda, bukan cuma skalanya.
 
 Kalau nanti form penilaian mau dibangun native di aplikasi kita (supaya tidak perlu pindah tab), `app/constants.ts` itulah sumber datanya — tidak perlu menunggu daftar baru.
+
+---
+
+## 4c. Permintaan untuk Mas Iqbal — tinggal disalin
+
+**Status 4 Agustus 2026: ini jalur yang dipilih.** Formulir native ditahan sampai jawaban Mas Iqbal keluar.
+
+Kenapa ini penting, bukan sekadar kosmetik: pengajar harus bisa **mendengar rekaman sambil mengisi formulir**. Kalau formulirnya di tab lain, dia bolak-balik untuk mengulang bacaan, dan target "5 menit per laporan" dari Mas Agil tidak akan tercapai. Iframe membuat pemutar dan formulir ada di satu layar.
+
+### Permintaan 1 — izinkan halaman di-embed (2 baris)
+
+Sekarang: `x-frame-options: SAMEORIGIN` + cookie sesi `samesite=lax`. Keduanya harus diubah; salah satu saja tidak cukup.
+
+**(a) Ganti header.** Kemungkinan besar dipasang di nginx:
+
+```nginx
+# HAPUS baris ini
+# add_header X-Frame-Options SAMEORIGIN;
+
+# GANTI dengan (isi domain aplikasi kami):
+add_header Content-Security-Policy "frame-ancestors 'self' https://DOMAIN-KAMI";
+```
+
+Kalau ternyata dari middleware Laravel, cari `X-Frame-Options` di `app/Http/Middleware`.
+
+**(b) Cookie sesi.** Di `.env` aplikasi Laravel:
+
+```env
+SESSION_SAME_SITE=none
+SESSION_SECURE_COOKIE=true
+```
+
+`SameSite=None` **wajib** berpasangan dengan `Secure=true` — browser menolak kombinasi lain. Situsnya sudah HTTPS, jadi aman.
+
+Setelah dua perubahan ini, `frame-ancestors` tetap membatasi siapa yang boleh meng-embed — hanya domain yang disebut. Ini **lebih ketat dan lebih spesifik** daripada `SAMEORIGIN`, bukan pelonggaran buta.
+
+### Permintaan 2 — dua lubang keamanan (lihat bagian 3)
+
+Sekalian dibicarakan karena orangnya sama:
+
+1. `GET /api/recitation-evaluations` terbuka tanpa autentikasi — 4.304 catatan, dan `kode_unik`-nya berurutan sehingga bisa ditebak satu per satu.
+2. `PATCH /api/recitation-evaluations/{uuid}/participant` **juga tanpa autentikasi** — siapa pun bisa menimpa nama dan nomor WhatsApp peserta mana pun, dan `uuid`-nya didapat gratis dari endpoint nomor 1.
+
+Yang kedua lebih mendesak: itu tulis, bukan sekadar baca.
+
+### Permintaan 3 — opsional, kalau memungkinkan
+
+Endpoint `POST /api/recitation-evaluations` untuk membuat penilaian. Saat ini tidak ada (`405`), sehingga penilaian hanya bisa lahir dari panel Filament. Kalau endpoint ini ada, formulir bisa dibangun di aplikasi kami dengan data tetap terpusat di sistem mereka.
 
 ---
 
