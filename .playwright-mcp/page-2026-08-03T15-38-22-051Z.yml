@@ -1,7 +1,0 @@
-- generic [active] [ref=e1]:
-  - heading "Uji embed assesment-alfatihah.muhajirproject.com" [level=2] [ref=e2]
-  - paragraph [ref=e3]: "GAGAL: frame kosong (diblokir)"
-  - iframe [ref=e4]:
-    - generic [ref=f1e3]:
-      - strong [ref=f1e4]: assesment-alfatihah.muhajirproject.com
-      - text: refused to connect.

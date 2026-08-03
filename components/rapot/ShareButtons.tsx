@@ -5,7 +5,13 @@ import { useState } from "react";
 
 interface Props {
   slug: string;
-  skor: number;
+  /**
+   * Skor pengajar, skala 1-10. Boleh null kalau belum dinilai.
+   *
+   * Sengaja BUKAN skor AI: pesan ini dibagikan ke grup WhatsApp, sedangkan
+   * skor AI adalah bahan pembanding internal sampai Januari.
+   */
+  skor: number | null;
 }
 
 export function ShareButtons({ slug, skor }: Props) {
@@ -20,7 +26,9 @@ export function ShareButtons({ slug, skor }: Props) {
 
   const shareWhatsApp = () => {
     const text = encodeURIComponent(
-      `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan mendapat skor ${skor}/5. Cek rapot saya: ${resolveUrl()}`,
+      skor != null
+        ? `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan mendapat skor ${skor}/10. Cek rapot saya: ${resolveUrl()}`
+        : `Alhamdulillah, saya baru saja mengikuti Assessment Al-Fatihah di Muhajir Project Tilawah. Cek rapot saya: ${resolveUrl()}`,
     );
     window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
   };

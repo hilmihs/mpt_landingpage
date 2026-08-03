@@ -7,6 +7,13 @@ import { IndikatorCard } from "@/components/rapot/IndikatorCard";
 import { NextStepsGate } from "@/components/rapot/NextStepsGate";
 import { AINarrative } from "@/components/rapot/AINarrative";
 import { getParticipantEligibility } from "@/lib/eligibility";
+import { getCurrentTeacher } from "@/lib/auth/teacher";
+import { getCurrentAdmin } from "@/lib/auth/admin";
+import {
+  TeacherEvaluationReport,
+  type TeacherEvaluationView,
+} from "@/components/rapot/TeacherEvaluationReport";
+import { WaitingForTeacher } from "@/components/rapot/WaitingForTeacher";
 import { ShareButtons } from "@/components/rapot/ShareButtons";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import { INDIKATOR_META } from "@/lib/scoring";
@@ -84,17 +91,76 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
   }
 }
 
+/** Nilai pengajar untuk satu submission, kalau sudah masuk. */
+async function getTeacherEvaluation(
+  submissionId: string,
+): Promise<TeacherEvaluationView | null> {
+  try {
+    const rows = await sql`
+      SELECT kode_unik, pemeriksa, kegiatan, score_min, label_min,
+             score_harakat, label_harakat,
+             score_panjang_pendek, label_panjang_pendek,
+             score_tasydid, label_tasydid,
+             score_hukum_tajwid, label_hukum_tajwid,
+             score_ketepatan_huruf, label_ketepatan_huruf
+      FROM teacher_evaluations
+      WHERE submission_id = ${submissionId}
+      LIMIT 1
+    `;
+    const r = rows[0];
+    if (!r) return null;
+
+    const indikator = [
+      ["Harakat", r.score_harakat, r.label_harakat],
+      ["Ketepatan Huruf", r.score_ketepatan_huruf, r.label_ketepatan_huruf],
+      ["Panjang Pendek", r.score_panjang_pendek, r.label_panjang_pendek],
+      ["Tasydid", r.score_tasydid, r.label_tasydid],
+      ["Hukum Tajwid", r.score_hukum_tajwid, r.label_hukum_tajwid],
+    ] as const;
+
+    return {
+      kodeUnik: r.kode_unik as string,
+      pemeriksa: (r.pemeriksa as string | null) ?? null,
+      kegiatan: (r.kegiatan as string | null) ?? null,
+      scoreMin: (r.score_min as number | null) ?? null,
+      labelMin: (r.label_min as string | null) ?? null,
+      // Aspek yang tidak dinilai disembunyikan, bukan ditampilkan sebagai nol.
+      indikator: indikator
+        .filter(([, score]) => score != null)
+        .map(([label, score, mutu]) => ({
+          label,
+          score: score as number | null,
+          mutu: (mutu as string | null) ?? null,
+        })),
+    };
+  } catch (err) {
+    console.error("[rapot] gagal ambil nilai pengajar:", (err as Error).message);
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const rapot = await getRapot(slug);
   if (!rapot)
     return { title: "Rapot tidak ditemukan — Muhajir Project Tilawah" };
+
+  // Judul dan preview share TIDAK boleh memuat skor AI. Halaman ini bisa
+  // dibagikan ke grup WhatsApp, dan skor AI adalah bahan pembanding internal
+  // sampai Januari — bukan angka yang diumumkan ke peserta.
+  const ev = await getTeacherEvaluation(rapot.submission_id);
+  if (!ev || ev.scoreMin == null) {
+    return {
+      title: "Rapot Assessment Al-Fatihah — Muhajir Project Tilawah",
+      description: "Rekaman sedang diperiksa pengajar.",
+    };
+  }
   return {
-    title: `Rapot Bacaan: Skor ${rapot.skor}/5 — Muhajir Project Tilawah`,
-    description: rapot.status_label,
+    title: `Rapot Bacaan: ${ev.scoreMin}/10 — Muhajir Project Tilawah`,
+    description: ev.labelMin ?? "Rapot Assessment Al-Fatihah",
     openGraph: {
-      title: `Skor ${rapot.skor}/5 — ${rapot.status_label}`,
-      description: "Rapot Assessment Al-Fatihah dari Muhajir Project Tilawah",
+      title: `Rapot Assessment Al-Fatihah: ${ev.scoreMin}/10`,
+      description: "Dinilai langsung oleh pengajar Muhajir Project Tilawah",
     },
   };
 }
@@ -115,6 +181,49 @@ export default async function RapotPage({ params }: Props) {
   const { slug } = await params;
   const rapot = await getRapot(slug);
   if (!rapot) notFound();
+
+  // Sejak rapat 3 Agustus 2026, nilai yang dilihat peserta berasal dari
+  // PENGAJAR. Rapot AI di bawah tetap dihitung, tapi jadi bahan pembanding
+  // internal sampai Januari — hanya pengajar/admin yang login yang melihatnya.
+  const teacherEval = await getTeacherEvaluation(rapot.submission_id);
+  const internalViewer =
+    (await getCurrentTeacher()) ?? (await getCurrentAdmin());
+
+  if (!internalViewer) {
+    const sub = rapot.submissions;
+    const namaPeserta = sub?.nama ?? "Peserta";
+    return (
+      <div
+        className="screen-enter"
+        style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 80px" }}
+      >
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
+          <MountainGlyph size={28} color="var(--accent)" />
+        </div>
+
+        {teacherEval ? (
+          <>
+            <TeacherEvaluationReport nama={namaPeserta} ev={teacherEval} />
+            {sub && (
+              <div style={{ marginTop: 24 }}>
+                <NextStepsGate
+                  rapotSlug={slug}
+                  submissionId={sub.id}
+                  jenisKelamin={sub.jenis_kelamin}
+                  eligibility={await getParticipantEligibility(sub.id)}
+                />
+              </div>
+            )}
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+              <ShareButtons slug={slug} skor={teacherEval.scoreMin} />
+            </div>
+          </>
+        ) : (
+          <WaitingForTeacher nama={namaPeserta} />
+        )}
+      </div>
+    );
+  }
 
   const errorsByCategory: Record<IndikatorKey, ErrorItem[]> = {
     harakat: rapot.errors_harakat,

@@ -1,2 +1,0 @@
-[    1039ms] [ERROR] Refused to display 'https://assesment-alfatihah.muhajirproject.com/' in a frame because it set 'X-Frame-Options' to 'sameorigin'. @ chrome-error://chromewebdata/:0
-[    1143ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8899/favicon.ico:0
