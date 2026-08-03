@@ -1,5 +1,5 @@
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { ProfileForm } from "@/components/portal/ProfileForm";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +14,16 @@ interface Profile {
 }
 
 async function fetchProfile(teacherId: string): Promise<Profile | null> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("teachers")
-    .select("nama, bio, email_meet, foto_url, nomor_wa, jenis_kelamin")
-    .eq("id", teacherId)
-    .maybeSingle();
-  return (data as Profile | null) ?? null;
+  try {
+    const rows = await sql<Profile[]>`
+      SELECT nama, bio, email_meet, foto_url, nomor_wa, jenis_kelamin
+        FROM teachers
+       WHERE id = ${teacherId}
+       LIMIT 1`;
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function ProfilPage() {

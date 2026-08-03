@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 import { enrollRatelimit, getClientIp } from "@/lib/redis";
@@ -86,23 +86,26 @@ export async function POST(req: Request) {
 
   // Atomic enroll via stored procedure — eliminates TOCTOU between
   // capacity check and INSERT. See migration 0003.
-  const sb = supabaseService();
-  const { data: rpcData, error: rpcErr } = await sb.rpc("enroll_in_cohort", {
-    p_cohort_id: cohort_id,
-    p_submission_id: eligibility.submission_id,
-    p_jenis_kelamin: eligibility.jenis_kelamin,
-  });
+  type EnrollResult =
+    | { ok: true; enrollment_id: string; cohort_name: string }
+    | { ok: false; reason: string };
 
-  if (rpcErr) {
+  let result: EnrollResult;
+  try {
+    const [row] = await sql<{ result: EnrollResult }[]>`
+      SELECT enroll_in_cohort(
+        ${cohort_id},
+        ${eligibility.submission_id},
+        ${eligibility.jenis_kelamin}
+      ) AS result
+    `;
+    result = row!.result;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: rpcErr.message },
+      { error: "db_error", message: (err as Error).message },
       { status: 500 },
     );
   }
-
-  const result = rpcData as
-    | { ok: true; enrollment_id: string; cohort_name: string }
-    | { ok: false; reason: string };
 
   if (!result.ok) {
     const reason = result.reason;
@@ -115,17 +118,23 @@ export async function POST(req: Request) {
     );
   }
 
-  // Record gate2='yes' so future eligibility checks see the explicit consent
-  await sb
-    .from("interest_responses")
-    .upsert(
-      {
-        submission_id: eligibility.submission_id,
-        gate: "gate2_post_assessment",
-        response: "yes",
-      },
-      { onConflict: "submission_id,gate" },
-    );
+  // Record gate2='yes' so future eligibility checks see the explicit consent.
+  // Best-effort: enrolment already succeeded, jangan gagalkan request kalau
+  // penulisan jejak ini error (perilaku sama seperti sebelumnya).
+  try {
+    await sql`
+      INSERT INTO interest_responses (submission_id, gate, response)
+      VALUES (
+        ${eligibility.submission_id},
+        ${"gate2_post_assessment"},
+        ${"yes"}
+      )
+      ON CONFLICT (submission_id, gate)
+      DO UPDATE SET response = EXCLUDED.response
+    `;
+  } catch {
+    // ignore
+  }
 
   await trackEvent({
     event_name: FUNNEL_EVENTS.TAHSIN_ENROLLED,

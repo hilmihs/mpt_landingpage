@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { JadwalView } from "@/components/admin/JadwalView";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,6 @@ interface Slot {
 }
 
 async function fetchSlots(): Promise<Slot[]> {
-  const sb = supabaseService();
   const now = new Date();
   // Window: 1 day in the past (to include sessions ending today) through 28 days ahead.
   const earliest = new Date(now);
@@ -27,37 +26,30 @@ async function fetchSlots(): Promise<Slot[]> {
   horizon.setDate(horizon.getDate() + 28);
 
   try {
-    const { data } = await sb
-      .from("slots")
-      .select(
-        `id, teacher_id, kind, scheduled_at, duration_min, capacity, reserved_count, gender_target, status, meet_join_url,
-         teachers:teacher_id(nama)`,
-      )
-      .gte("scheduled_at", earliest.toISOString())
-      .lte("scheduled_at", horizon.toISOString())
-      .order("scheduled_at", { ascending: true })
-      .limit(500);
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      teacher_id: string;
-      kind: string;
-      scheduled_at: string;
-      duration_min: number;
-      capacity: number;
-      reserved_count: number;
-      gender_target: string;
-      status: string;
-      meet_join_url: string | null;
-      teachers: { nama: string } | null;
-    }[];
+    const rows = await sql<
+      (Omit<Slot, "scheduled_at" | "teacher_nama"> & {
+        scheduled_at: Date;
+        teacher_nama: string | null;
+      })[]
+    >`
+      SELECT s.id, s.teacher_id, s.kind, s.scheduled_at, s.duration_min,
+             s.capacity, s.reserved_count, s.gender_target, s.status,
+             s.meet_join_url,
+             t.nama AS teacher_nama
+      FROM slots s
+      LEFT JOIN teachers t ON t.id = s.teacher_id
+      WHERE s.scheduled_at >= ${earliest}
+        AND s.scheduled_at <= ${horizon}
+      ORDER BY s.scheduled_at ASC
+      LIMIT 500
+    `;
 
     return rows.map((r) => ({
       id: r.id,
       teacher_id: r.teacher_id,
-      teacher_nama: r.teachers?.nama ?? "—",
+      teacher_nama: r.teacher_nama ?? "—",
       kind: r.kind,
-      scheduled_at: r.scheduled_at,
+      scheduled_at: r.scheduled_at.toISOString(),
       duration_min: r.duration_min,
       capacity: r.capacity,
       reserved_count: r.reserved_count,

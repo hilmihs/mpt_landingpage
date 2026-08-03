@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 
 export const runtime = "nodejs";
@@ -51,37 +51,53 @@ interface TeacherCtx {
   authUserId: string;
 }
 
+function dbErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "unknown database error";
+}
+
 async function handleBookingAttendance(
   teacher: TeacherCtx,
   body: { booking_id: string; attended: boolean },
 ) {
-  const sb = supabaseService();
-
-  const { data: bookingRaw } = await sb
-    .from("bookings")
-    .select(
-      "id, submission_id, slot_id, status, slots:slot_id(teacher_id, kind)",
-    )
-    .eq("id", body.booking_id)
-    .maybeSingle();
-
-  const booking = bookingRaw as unknown as
+  let booking:
     | {
         id: string;
         submission_id: string;
         slot_id: string;
         status: string;
-        slots: { teacher_id: string; kind: string } | null;
+        teacher_id: string;
+        kind: string;
       }
-    | null;
+    | null = null;
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        submission_id: string;
+        slot_id: string;
+        status: string;
+        teacher_id: string;
+        kind: string;
+      }[]
+    >`
+      SELECT b.id, b.submission_id, b.slot_id, b.status,
+             s.teacher_id, s.kind
+        FROM bookings b
+        JOIN slots s ON s.id = b.slot_id
+       WHERE b.id = ${body.booking_id}
+       LIMIT 1`;
+    booking = rows[0] ?? null;
+  } catch {
+    booking = null;
+  }
 
-  if (!booking || !booking.slots) {
+  if (!booking) {
     return NextResponse.json({ error: "booking_not_found" }, { status: 404 });
   }
-  if (booking.slots.teacher_id !== teacher.teacherId) {
+  if (booking.teacher_id !== teacher.teacherId) {
     return NextResponse.json({ error: "not_your_slot" }, { status: 403 });
   }
-  if (booking.slots.kind !== "assessment") {
+  if (booking.kind !== "assessment") {
     return NextResponse.json(
       {
         error: "wrong_kind",
@@ -92,11 +108,14 @@ async function handleBookingAttendance(
     );
   }
 
-  const { data: existing } = await sb
-    .from("attendance")
-    .select("id")
-    .eq("booking_id", body.booking_id)
-    .maybeSingle();
+  let existing: { id: string } | null = null;
+  try {
+    const rows = await sql<{ id: string }[]>`
+      SELECT id FROM attendance WHERE booking_id = ${body.booking_id} LIMIT 1`;
+    existing = rows[0] ?? null;
+  } catch {
+    existing = null;
+  }
 
   const payload = {
     booking_id: body.booking_id,
@@ -106,31 +125,30 @@ async function handleBookingAttendance(
     source: "manual" as const,
     need_review: false,
     overridden_by: teacher.authUserId,
-    overridden_at: new Date().toISOString(),
+    overridden_at: new Date(),
   };
 
-  const write = existing
-    ? await sb
-        .from("attendance")
-        .update(payload)
-        .eq("id", (existing as { id: string }).id)
-    : await sb.from("attendance").insert(payload);
-
-  if (write.error) {
+  try {
+    if (existing) {
+      await sql`UPDATE attendance SET ${sql(payload)} WHERE id = ${existing.id}`;
+    } else {
+      await sql`INSERT INTO attendance ${sql(payload)}`;
+    }
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: write.error.message },
+      { error: "db_error", message: dbErrorMessage(err) },
       { status: 500 },
     );
   }
 
-  const { error: bookingErr } = await sb
-    .from("bookings")
-    .update({ status: body.attended ? "attended" : "no_show" })
-    .eq("id", body.booking_id);
-
-  if (bookingErr) {
+  try {
+    await sql`
+      UPDATE bookings
+         SET status = ${body.attended ? "attended" : "no_show"}
+       WHERE id = ${body.booking_id}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: bookingErr.message },
+      { error: "db_error", message: dbErrorMessage(err) },
       { status: 500 },
     );
   }
@@ -150,45 +168,60 @@ async function handleCohortSessionAttendance(
   teacher: TeacherCtx,
   body: { cohort_session_id: string; submission_id: string; attended: boolean },
 ) {
-  const sb = supabaseService();
-
   // Verify session belongs to a cohort owned by this teacher
-  const { data: sessionRaw } = await sb
-    .from("cohort_sessions")
-    .select(
-      `id, cohort_id, session_number,
-       cohorts:cohort_id(teacher_id, name),
-       slots:slot_id(scheduled_at, kind, teacher_id)`,
-    )
-    .eq("id", body.cohort_session_id)
-    .maybeSingle();
-
-  const session = sessionRaw as unknown as
+  let session:
     | {
         id: string;
         cohort_id: string;
         session_number: number;
-        cohorts: { teacher_id: string; name: string } | null;
-        slots: { scheduled_at: string; kind: string; teacher_id: string } | null;
+        cohort_teacher_id: string;
+        cohort_name: string;
       }
-    | null;
+    | null = null;
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        cohort_id: string;
+        session_number: number;
+        cohort_teacher_id: string;
+        cohort_name: string;
+      }[]
+    >`
+      SELECT cs.id, cs.cohort_id, cs.session_number,
+             c.teacher_id AS cohort_teacher_id,
+             c.name       AS cohort_name
+        FROM cohort_sessions cs
+        JOIN cohorts c ON c.id = cs.cohort_id
+        JOIN slots s ON s.id = cs.slot_id
+       WHERE cs.id = ${body.cohort_session_id}
+       LIMIT 1`;
+    session = rows[0] ?? null;
+  } catch {
+    session = null;
+  }
 
-  if (!session || !session.cohorts || !session.slots) {
+  if (!session) {
     return NextResponse.json({ error: "session_not_found" }, { status: 404 });
   }
-  if (session.cohorts.teacher_id !== teacher.teacherId) {
+  if (session.cohort_teacher_id !== teacher.teacherId) {
     return NextResponse.json({ error: "not_your_cohort" }, { status: 403 });
   }
 
   // Verify peserta is enrolled in this cohort (and not dropped)
-  const { data: enrollment } = await sb
-    .from("cohort_enrollments")
-    .select("id, status")
-    .eq("cohort_id", session.cohort_id)
-    .eq("submission_id", body.submission_id)
-    .maybeSingle();
+  let enrollRow: { id: string; status: string } | null = null;
+  try {
+    const rows = await sql<{ id: string; status: string }[]>`
+      SELECT id, status
+        FROM cohort_enrollments
+       WHERE cohort_id = ${session.cohort_id}
+         AND submission_id = ${body.submission_id}
+       LIMIT 1`;
+    enrollRow = rows[0] ?? null;
+  } catch {
+    enrollRow = null;
+  }
 
-  const enrollRow = enrollment as { id: string; status: string } | null;
   if (!enrollRow) {
     return NextResponse.json(
       {
@@ -208,12 +241,18 @@ async function handleCohortSessionAttendance(
     );
   }
 
-  const { data: existing } = await sb
-    .from("attendance")
-    .select("id")
-    .eq("cohort_session_id", body.cohort_session_id)
-    .eq("submission_id", body.submission_id)
-    .maybeSingle();
+  let existing: { id: string } | null = null;
+  try {
+    const rows = await sql<{ id: string }[]>`
+      SELECT id
+        FROM attendance
+       WHERE cohort_session_id = ${body.cohort_session_id}
+         AND submission_id = ${body.submission_id}
+       LIMIT 1`;
+    existing = rows[0] ?? null;
+  } catch {
+    existing = null;
+  }
 
   const payload = {
     booking_id: null,
@@ -223,19 +262,18 @@ async function handleCohortSessionAttendance(
     source: "manual" as const,
     need_review: false,
     overridden_by: teacher.authUserId,
-    overridden_at: new Date().toISOString(),
+    overridden_at: new Date(),
   };
 
-  const write = existing
-    ? await sb
-        .from("attendance")
-        .update(payload)
-        .eq("id", (existing as { id: string }).id)
-    : await sb.from("attendance").insert(payload);
-
-  if (write.error) {
+  try {
+    if (existing) {
+      await sql`UPDATE attendance SET ${sql(payload)} WHERE id = ${existing.id}`;
+    } else {
+      await sql`INSERT INTO attendance ${sql(payload)}`;
+    }
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: write.error.message },
+      { error: "db_error", message: dbErrorMessage(err) },
       { status: 500 },
     );
   }

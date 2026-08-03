@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 import { hitsClickRatelimit, getClientIp } from "@/lib/redis";
 
@@ -38,18 +38,18 @@ export async function POST(req: Request) {
     });
   }
 
-  // Record gate3=yes + emit click event
-  const sb = supabaseService();
-  await sb
-    .from("interest_responses")
-    .upsert(
-      {
-        submission_id: eligibility.submission_id,
-        gate: "gate3_post_tahsin",
-        response: "yes",
-      },
-      { onConflict: "submission_id,gate" },
-    );
+  // Record gate3=yes + emit click event.
+  // Kegagalan tulis tidak boleh menahan redirect ke HITS (sama seperti sebelumnya).
+  try {
+    await sql`
+      INSERT INTO interest_responses (submission_id, gate, response)
+      VALUES (${eligibility.submission_id}, ${"gate3_post_tahsin"}, ${"yes"})
+      ON CONFLICT (submission_id, gate)
+      DO UPDATE SET response = EXCLUDED.response
+    `;
+  } catch {
+    // fail-open
+  }
 
   await trackEvent({
     event_name: FUNNEL_EVENTS.HITS_CTA_CLICKED,

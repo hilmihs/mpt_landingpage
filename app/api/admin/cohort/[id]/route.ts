@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAdmin } from "@/lib/auth/admin";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +45,7 @@ export async function PATCH(
     );
   }
 
-  const updates: Record<string, unknown> = {};
+  const updates: Record<string, string | number> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.capacity !== undefined)
@@ -55,24 +55,25 @@ export async function PATCH(
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
 
-  const sb = supabaseService();
-
   // Capacity tightening: atomic check via conditional UPDATE
   if (updates.capacity !== undefined) {
-    const { data: rows, error: capErr } = await sb
-      .from("cohorts")
-      .update(updates)
-      .eq("id", id)
-      .lte("enrolled_count", updates.capacity as number)
-      .select("id");
-
-    if (capErr) {
+    let rows: { id: string }[];
+    try {
+      rows = await sql<{ id: string }[]>`
+        UPDATE cohorts SET ${sql(updates)}
+        WHERE id = ${id} AND enrolled_count <= ${updates.capacity as number}
+        RETURNING id
+      `;
+    } catch (err) {
       return NextResponse.json(
-        { error: "db_error", message: capErr.message },
+        {
+          error: "db_error",
+          message: err instanceof Error ? err.message : "db_error",
+        },
         { status: 500 },
       );
     }
-    if (!rows || rows.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json(
         {
           error: "capacity_too_low",
@@ -84,10 +85,14 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   }
 
-  const { error } = await sb.from("cohorts").update(updates).eq("id", id);
-  if (error) {
+  try {
+    await sql`UPDATE cohorts SET ${sql(updates)} WHERE id = ${id}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "db_error",
+      },
       { status: 500 },
     );
   }
@@ -108,17 +113,15 @@ export async function DELETE(
   if (!idSchema.safeParse(id).success) {
     return NextResponse.json({ error: "invalid_id" }, { status: 400 });
   }
-  const sb = supabaseService();
-
   // Soft-cancel: status='cancelled' so audit trail remains
-  const { error } = await sb
-    .from("cohorts")
-    .update({ status: "cancelled" })
-    .eq("id", id);
-
-  if (error) {
+  try {
+    await sql`UPDATE cohorts SET status = ${"cancelled"} WHERE id = ${id}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "db_error",
+      },
       { status: 500 },
     );
   }

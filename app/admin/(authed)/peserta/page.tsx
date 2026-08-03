@@ -1,6 +1,6 @@
 import { UserCheck } from "lucide-react";
 import Link from "next/link";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,14 +15,16 @@ interface Submission {
 }
 
 async function fetchSubmissions(): Promise<Submission[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("submissions")
-      .select("id, nama, jenis_kelamin, nomor_wa, status, created_at, rapot_slug")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    return (data ?? []) as Submission[];
+    const rows = await sql<
+      (Omit<Submission, "created_at"> & { created_at: Date })[]
+    >`
+      SELECT id, nama, jenis_kelamin, nomor_wa, status, created_at, rapot_slug
+      FROM submissions
+      ORDER BY created_at DESC
+      LIMIT 100
+    `;
+    return rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }));
   } catch {
     return [];
   }

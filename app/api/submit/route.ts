@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { supabaseService, STORAGE_BUCKET } from "@/lib/supabase";
+import { sql } from "@/lib/db";
+import { uploadAudio, removeAudio } from "@/lib/storage";
 import { submitRatelimit } from "@/lib/redis";
 import { enqueueJob } from "@/lib/queue";
 import { formSchema } from "@/lib/validation";
@@ -82,44 +83,48 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const sb = supabaseService();
   const submissionId = crypto.randomUUID();
   const rapotSlug = nanoid(12);
   const audioPath = `${submissionId}.webm`;
 
   // Upload audio
   const arrayBuf = await audio.arrayBuffer();
-  const { error: upErr } = await sb.storage
-    .from(STORAGE_BUCKET)
-    .upload(audioPath, arrayBuf, {
-      contentType: audio.type || "audio/webm",
-      upsert: false,
-    });
-  if (upErr) {
-    console.error("storage upload error", upErr);
+  try {
+    await uploadAudio(
+      audioPath,
+      Buffer.from(arrayBuf),
+      audio.type || "audio/webm",
+    );
+  } catch (err) {
+    console.error("storage upload error", err);
     return NextResponse.json(
-      { error: "storage_failed", details: upErr.message },
+      { error: "storage_failed", details: (err as Error).message },
       { status: 500 },
     );
   }
 
   // Insert row
-  const { error: insErr } = await sb.from("submissions").insert({
-    id: submissionId,
-    nama: parsed.data.nama,
-    jenis_kelamin: parsed.data.jenis_kelamin,
-    nomor_wa: parsed.data.nomor_wa,
-    audio_path: audioPath,
-    audio_duration_sec: audioDuration,
-    status: "pending",
-    rapot_slug: rapotSlug,
-  });
-  if (insErr) {
-    console.error("submission insert error", insErr);
+  try {
+    await sql`
+      INSERT INTO submissions
+        (id, nama, jenis_kelamin, nomor_wa, audio_path, audio_duration_sec, status, rapot_slug)
+      VALUES (
+        ${submissionId},
+        ${parsed.data.nama},
+        ${parsed.data.jenis_kelamin},
+        ${parsed.data.nomor_wa},
+        ${audioPath},
+        ${audioDuration},
+        ${"pending"},
+        ${rapotSlug}
+      )
+    `;
+  } catch (err) {
+    console.error("submission insert error", err);
     // cleanup uploaded audio
-    await sb.storage.from(STORAGE_BUCKET).remove([audioPath]);
+    await removeAudio([audioPath]);
     return NextResponse.json(
-      { error: "db_failed", details: insErr.message },
+      { error: "db_failed", details: (err as Error).message },
       { status: 500 },
     );
   }

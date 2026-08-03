@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
+import { uploadAudio } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,16 +40,21 @@ export async function POST(req: Request) {
 
   const durationSec = durationStr ? Number(durationStr) : null;
 
-  const sb = supabaseService();
-
   // Look up submission by rapot_slug
-  const { data: submission, error: subErr } = await sb
-    .from("submissions")
-    .select("id, jenis_kelamin")
-    .eq("rapot_slug", slug)
-    .maybeSingle();
+  let submission: { id: string; jenis_kelamin: string } | null = null;
+  try {
+    const rows = await sql<{ id: string; jenis_kelamin: string }[]>`
+      SELECT id, jenis_kelamin
+        FROM submissions
+       WHERE rapot_slug = ${slug}
+       LIMIT 1
+    `;
+    submission = rows[0] ?? null;
+  } catch {
+    submission = null;
+  }
 
-  if (subErr || !submission) {
+  if (!submission) {
     return NextResponse.json(
       { error: "submission_not_found", message: "Peserta tidak ditemukan." },
       { status: 404 },
@@ -56,12 +62,14 @@ export async function POST(req: Request) {
   }
 
   // Check for existing pending/classified recording
-  const { data: existing } = await sb
-    .from("hits_recordings")
-    .select("id, status")
-    .eq("submission_id", submission.id)
-    .in("status", ["pending", "classified"])
-    .maybeSingle();
+  const existingRows = await sql<{ id: string; status: string }[]>`
+    SELECT id, status
+      FROM hits_recordings
+     WHERE submission_id = ${submission.id}
+       AND status IN ('pending', 'classified')
+     LIMIT 1
+  `;
+  const existing = existingRows[0] ?? null;
 
   if (existing) {
     return NextResponse.json(
@@ -73,19 +81,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // Upload to Supabase Storage
+  // Upload ke object storage
   const timestamp = Date.now();
   const audioPath = `hits-recordings/${slug}/${timestamp}.webm`;
   const buf = Buffer.from(await audio.arrayBuffer());
 
-  const { error: uploadErr } = await sb.storage
-    .from("audio-submissions")
-    .upload(audioPath, buf, {
-      contentType: audio.type || "audio/webm",
-      upsert: false,
-    });
-
-  if (uploadErr) {
+  try {
+    await uploadAudio(audioPath, buf, audio.type || "audio/webm");
+  } catch {
     return NextResponse.json(
       { error: "upload_failed", message: "Gagal mengunggah file." },
       { status: 500 },
@@ -93,13 +96,12 @@ export async function POST(req: Request) {
   }
 
   // Insert recording row
-  const { error: insertErr } = await sb.from("hits_recordings").insert({
-    submission_id: submission.id,
-    audio_path: audioPath,
-    audio_duration_sec: durationSec,
-  });
-
-  if (insertErr) {
+  try {
+    await sql`
+      INSERT INTO hits_recordings (submission_id, audio_path, audio_duration_sec)
+      VALUES (${submission.id}, ${audioPath}, ${durationSec})
+    `;
+  } catch {
     return NextResponse.json(
       { error: "db_error", message: "Gagal menyimpan data rekaman." },
       { status: 500 },

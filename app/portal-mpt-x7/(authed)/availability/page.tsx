@@ -1,5 +1,5 @@
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { AvailabilityManager } from "@/components/portal/AvailabilityManager";
 
 export const dynamic = "force-dynamic";
@@ -14,16 +14,14 @@ interface Window {
 }
 
 async function fetchWindows(teacherId: string): Promise<Window[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("teacher_availability")
-      .select("id, day_of_week, start_time, end_time, kind, is_active")
-      .eq("teacher_id", teacherId)
-      .eq("is_active", true)
-      .order("day_of_week", { ascending: true })
-      .order("start_time", { ascending: true });
-    return (data ?? []) as Window[];
+    const rows = await sql<Window[]>`
+      SELECT id, day_of_week, start_time, end_time, kind, is_active
+        FROM teacher_availability
+       WHERE teacher_id = ${teacherId}
+         AND is_active = true
+       ORDER BY day_of_week ASC, start_time ASC`;
+    return rows;
   } catch {
     return [];
   }

@@ -7,7 +7,7 @@ import {
   SkipForward,
   AlertTriangle,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { fetchTeacherAssessment } from "@/lib/teacher-assessment";
 import { AssessmentScaleNote } from "@/components/rapot/AssessmentScaleNote";
 import { TeacherReport } from "@/components/rapot/TeacherReport";
@@ -26,19 +26,30 @@ export const metadata: Metadata = {
 };
 
 async function fetchPesertaWithRapot(slug: string) {
-  const sb = supabaseService();
-  const { data: submission } = await sb
-    .from("submissions")
-    .select("id, nama, jenis_kelamin, nomor_wa, rapot_slug")
-    .eq("rapot_slug", slug)
-    .maybeSingle();
+  const submissionRows = await sql<
+    {
+      id: string;
+      nama: string;
+      jenis_kelamin: string;
+      nomor_wa: string;
+      rapot_slug: string | null;
+    }[]
+  >`
+    SELECT id, nama, jenis_kelamin, nomor_wa, rapot_slug
+      FROM submissions
+     WHERE rapot_slug = ${slug}
+     LIMIT 1
+  `;
+  const submission = submissionRows[0];
   if (!submission) return null;
 
-  const { data: rapot } = await sb
-    .from("rapot")
-    .select("skor, status_label")
-    .eq("slug", slug)
-    .maybeSingle();
+  const rapotRows = await sql<{ skor: number; status_label: string }[]>`
+    SELECT skor, status_label
+      FROM rapot
+     WHERE slug = ${slug}
+     LIMIT 1
+  `;
+  const rapot = rapotRows[0] ?? null;
 
   return { submission, rapot };
 }

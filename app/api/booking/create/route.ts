@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 
 export const runtime = "nodejs";
@@ -29,52 +29,56 @@ export async function POST(req: Request) {
   }
 
   const { rapot_slug, slot_id, notes_from_user } = parsed.data;
-  const sb = supabaseService();
 
   // Look up submission via rapot slug
-  const { data: rapotRaw } = await sb
-    .from("rapot")
-    .select("submission_id, submissions(jenis_kelamin)")
-    .eq("slug", rapot_slug)
-    .maybeSingle();
+  const rapotRows = await sql<
+    { submission_id: string; jenis_kelamin: string | null }[]
+  >`
+    SELECT r.submission_id, s.jenis_kelamin
+    FROM rapot r
+    LEFT JOIN submissions s ON s.id = r.submission_id
+    WHERE r.slug = ${rapot_slug}
+    LIMIT 1
+  `;
 
-  const rapot = rapotRaw as
-    | { submission_id: string; submissions: { jenis_kelamin: string } | null }
-    | null;
+  const rapot = rapotRows[0] ?? null;
 
   if (!rapot) {
     return NextResponse.json({ error: "rapot_not_found" }, { status: 404 });
   }
 
   const submission_id = rapot.submission_id;
-  const userGender = rapot.submissions?.jenis_kelamin;
+  const userGender = rapot.jenis_kelamin;
   if (!userGender) {
     return NextResponse.json({ error: "missing_gender" }, { status: 400 });
   }
 
   // Atomic booking via RPC — holds row lock on slot, checks capacity,
   // enforces one active booking per submission per slot kind.
-  const { data: result, error: rpcErr } = await sb.rpc("create_booking", {
-    p_slot_id: slot_id,
-    p_submission_id: submission_id,
-    p_jenis_kelamin: userGender,
-    p_notes: notes_from_user ?? null,
-  });
-
-  if (rpcErr) {
-    return NextResponse.json(
-      { error: "db_error", message: rpcErr.message },
-      { status: 500 },
-    );
-  }
-
-  const rpcResult = result as {
+  let rpcResult: {
     ok: boolean;
     reason?: string;
     booking_id?: string;
     reused?: boolean;
     existing_booking_id?: string;
   };
+
+  try {
+    const [row] = await sql<{ result: typeof rpcResult }[]>`
+      SELECT create_booking(
+        ${slot_id},
+        ${submission_id},
+        ${userGender},
+        ${notes_from_user ?? null}
+      ) AS result
+    `;
+    rpcResult = row!.result;
+  } catch (err) {
+    return NextResponse.json(
+      { error: "db_error", message: (err as Error).message },
+      { status: 500 },
+    );
+  }
 
   if (!rpcResult.ok) {
     const statusMap: Record<string, { status: number; message: string }> = {

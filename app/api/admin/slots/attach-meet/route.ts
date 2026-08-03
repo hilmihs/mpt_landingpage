@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdmin } from "@/lib/auth/admin";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { createMeeting, isMeetConfigured } from "@/lib/google-meet/client";
 
 export const runtime = "nodejs";
@@ -35,30 +35,42 @@ export async function POST(req: Request) {
     // optional body
   }
 
-  const sb = supabaseService();
-  let query = sb
-    .from("slots")
-    .select(
-      `id, kind, scheduled_at, duration_min, meet_calendar_event_id,
-       teachers:teacher_id(nama, email_meet)`,
-    )
-    .is("meet_calendar_event_id", null)
-    .eq("status", "scheduled")
-    .gt("scheduled_at", new Date().toISOString());
+  const slotIds =
+    body.slot_ids && body.slot_ids.length > 0 ? body.slot_ids : null;
 
-  if (body.slot_ids && body.slot_ids.length > 0) {
-    query = query.in("id", body.slot_ids);
-  }
+  const slotsRaw = await sql<
+    {
+      id: string;
+      kind: "assessment" | "tahsin";
+      scheduled_at: Date;
+      duration_min: number;
+      meet_calendar_event_id: string | null;
+      teacher_nama: string | null;
+      teacher_email_meet: string | null;
+    }[]
+  >`
+    SELECT s.id, s.kind, s.scheduled_at, s.duration_min,
+           s.meet_calendar_event_id,
+           t.nama AS teacher_nama, t.email_meet AS teacher_email_meet
+    FROM slots s
+    LEFT JOIN teachers t ON t.id = s.teacher_id
+    WHERE s.meet_calendar_event_id IS NULL
+      AND s.status = ${"scheduled"}
+      AND s.scheduled_at > ${new Date()}
+      ${slotIds ? sql`AND s.id = ANY(${slotIds}::uuid[])` : sql``}
+  `;
 
-  const { data: slotsRaw } = await query;
-  const slots = (slotsRaw ?? []) as unknown as {
-    id: string;
-    kind: "assessment" | "tahsin";
-    scheduled_at: string;
-    duration_min: number;
-    meet_calendar_event_id: string | null;
-    teachers: { nama: string; email_meet: string | null } | null;
-  }[];
+  const slots = slotsRaw.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    scheduled_at: r.scheduled_at.toISOString(),
+    duration_min: r.duration_min,
+    meet_calendar_event_id: r.meet_calendar_event_id,
+    teachers:
+      r.teacher_nama === null
+        ? null
+        : { nama: r.teacher_nama, email_meet: r.teacher_email_meet },
+  }));
 
   const summary = {
     total: slots.length,
@@ -81,15 +93,14 @@ export async function POST(req: Request) {
         duration_min: s.duration_min,
       });
 
-      await sb
-        .from("slots")
-        .update({
-          meet_calendar_event_id: meeting.calendar_event_id,
-          meet_join_url: meeting.join_url,
-          meet_conference_id: meeting.conference_id,
-          meet_host_email: meeting.host_email,
-        })
-        .eq("id", s.id);
+      await sql`
+        UPDATE slots SET
+          meet_calendar_event_id = ${meeting.calendar_event_id},
+          meet_join_url = ${meeting.join_url},
+          meet_conference_id = ${meeting.conference_id},
+          meet_host_email = ${meeting.host_email}
+        WHERE id = ${s.id}
+      `;
 
       summary.created++;
     } catch (err) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAdmin } from "@/lib/auth/admin";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ export async function PATCH(
     );
   }
 
-  const updates: Record<string, unknown> = {};
+  const updates: Record<string, string | null> = {};
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.nama !== undefined) updates.nama = parsed.data.nama;
   if (parsed.data.bio !== undefined) updates.bio = parsed.data.bio || null;
@@ -55,12 +55,14 @@ export async function PATCH(
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
 
-  const sb = supabaseService();
-  const { error } = await sb.from("teachers").update(updates).eq("id", id);
-
-  if (error) {
+  try {
+    await sql`UPDATE teachers SET ${sql(updates)} WHERE id = ${id}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "db_error",
+      },
       { status: 500 },
     );
   }

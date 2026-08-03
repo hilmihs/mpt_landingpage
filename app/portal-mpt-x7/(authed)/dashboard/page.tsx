@@ -1,7 +1,7 @@
 import { Calendar, Users, ClipboardCheck, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { startOfJakartaDay, endOfJakartaDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -13,31 +13,29 @@ interface Stats {
 }
 
 async function fetchStats(teacherId: string): Promise<Stats> {
-  const sb = supabaseService();
-
   try {
     const [slots, pendingAttendance, availability] = await Promise.all([
-      sb
-        .from("slots")
-        .select("id", { count: "exact", head: true })
-        .eq("teacher_id", teacherId)
-        .gt("scheduled_at", new Date().toISOString())
-        .eq("status", "scheduled"),
-      sb
-        .from("attendance")
-        .select("id", { count: "exact", head: true })
-        .eq("need_review", true),
-      sb
-        .from("teacher_availability")
-        .select("id", { count: "exact", head: true })
-        .eq("teacher_id", teacherId)
-        .eq("is_active", true),
+      sql<{ count: number }[]>`
+        SELECT count(*)::int AS count
+          FROM slots
+         WHERE teacher_id = ${teacherId}
+           AND scheduled_at > ${new Date()}
+           AND status = 'scheduled'`,
+      sql<{ count: number }[]>`
+        SELECT count(*)::int AS count
+          FROM attendance
+         WHERE need_review = true`,
+      sql<{ count: number }[]>`
+        SELECT count(*)::int AS count
+          FROM teacher_availability
+         WHERE teacher_id = ${teacherId}
+           AND is_active = true`,
     ]);
 
     return {
-      upcomingSlots: slots.count ?? 0,
-      pendingAttendance: pendingAttendance.count ?? 0,
-      activeAvailabilityWindows: availability.count ?? 0,
+      upcomingSlots: slots[0]?.count ?? 0,
+      pendingAttendance: pendingAttendance[0]?.count ?? 0,
+      activeAvailabilityWindows: availability[0]?.count ?? 0,
     };
   } catch {
     return {
@@ -58,19 +56,27 @@ interface TodaySlot {
 }
 
 async function fetchTodaySlots(teacherId: string): Promise<TodaySlot[]> {
-  const sb = supabaseService();
   const startWIB = startOfJakartaDay();
   const endWIB = endOfJakartaDay();
 
   try {
-    const { data } = await sb
-      .from("slots")
-      .select("id, scheduled_at, duration_min, reserved_count, capacity, meet_join_url")
-      .eq("teacher_id", teacherId)
-      .gte("scheduled_at", startWIB.toISOString())
-      .lte("scheduled_at", endWIB.toISOString())
-      .order("scheduled_at", { ascending: true });
-    return (data ?? []) as TodaySlot[];
+    const rows = await sql<
+      {
+        id: string;
+        scheduled_at: Date;
+        duration_min: number;
+        reserved_count: number;
+        capacity: number;
+        meet_join_url: string | null;
+      }[]
+    >`
+      SELECT id, scheduled_at, duration_min, reserved_count, capacity, meet_join_url
+        FROM slots
+       WHERE teacher_id = ${teacherId}
+         AND scheduled_at >= ${startWIB}
+         AND scheduled_at <= ${endWIB}
+       ORDER BY scheduled_at ASC`;
+    return rows.map((r) => ({ ...r, scheduled_at: r.scheduled_at.toISOString() }));
   } catch {
     return [];
   }

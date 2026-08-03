@@ -9,7 +9,7 @@ import {
   CircleHelp,
 } from "lucide-react";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import {
   SessionAttendanceEditor,
   type SessionRow,
@@ -41,80 +41,95 @@ interface EnrollmentRow {
 }
 
 async function fetchCohort(id: string): Promise<CohortDetail | null> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohorts")
-    .select("id, name, status, start_date, end_date, capacity, enrolled_count, teacher_id")
-    .eq("id", id)
-    .maybeSingle();
-  return (data as CohortDetail | null) ?? null;
+  try {
+    const rows = await sql<CohortDetail[]>`
+      SELECT id, name, status,
+             start_date::text AS start_date,
+             end_date::text AS end_date,
+             capacity, enrolled_count, teacher_id
+        FROM cohorts
+       WHERE id = ${id}
+       LIMIT 1`;
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohort_sessions")
-    .select(
-      `id, session_number,
-       slots:slot_id(scheduled_at, duration_min, status, meet_join_url)`,
-    )
-    .eq("cohort_id", cohortId)
-    .order("session_number", { ascending: true });
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        session_number: number;
+        scheduled_at: Date;
+        duration_min: number;
+        status: string;
+        meet_join_url: string | null;
+      }[]
+    >`
+      SELECT cs.id,
+             cs.session_number,
+             s.scheduled_at,
+             s.duration_min,
+             s.status,
+             s.meet_join_url
+        FROM cohort_sessions cs
+        JOIN slots s ON s.id = cs.slot_id
+       WHERE cs.cohort_id = ${cohortId}
+       ORDER BY cs.session_number ASC`;
 
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    session_number: number;
-    slots: {
-      scheduled_at: string;
-      duration_min: number;
-      status: string;
-      meet_join_url: string | null;
-    } | null;
-  }[];
-
-  return rows
-    .filter((r) => r.slots)
-    .map((r) => ({
+    return rows.map((r) => ({
       id: r.id,
       session_number: r.session_number,
-      scheduled_at: r.slots!.scheduled_at,
-      duration_min: r.slots!.duration_min,
-      status: r.slots!.status,
-      meet_join_url: r.slots!.meet_join_url,
+      scheduled_at: r.scheduled_at.toISOString(),
+      duration_min: r.duration_min,
+      status: r.status,
+      meet_join_url: r.meet_join_url,
     }));
+  } catch {
+    return [];
+  }
 }
 
 async function fetchEnrollments(cohortId: string): Promise<EnrollmentRow[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohort_enrollments")
-    .select(
-      `id, status, completed_sessions, qualified_for_hits, submission_id,
-       submissions:submission_id(nama, nomor_wa)`,
-    )
-    .eq("cohort_id", cohortId);
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        status: string;
+        completed_sessions: number;
+        qualified_for_hits: boolean;
+        submission_id: string;
+        nama: string;
+        nomor_wa: string;
+      }[]
+    >`
+      SELECT ce.id,
+             ce.status,
+             ce.completed_sessions,
+             ce.qualified_for_hits,
+             ce.submission_id,
+             sub.nama,
+             sub.nomor_wa
+        FROM cohort_enrollments ce
+        JOIN submissions sub ON sub.id = ce.submission_id
+       WHERE ce.cohort_id = ${cohortId}`;
 
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    status: string;
-    completed_sessions: number;
-    qualified_for_hits: boolean;
-    submission_id: string;
-    submissions: { nama: string; nomor_wa: string } | null;
-  }[];
-
-  return rows
-    .filter((r) => r.submissions)
-    .map((r) => ({
-      id: r.id,
-      status: r.status,
-      completed_sessions: r.completed_sessions,
-      qualified_for_hits: r.qualified_for_hits,
-      submission_id: r.submission_id,
-      participant_nama: r.submissions!.nama,
-      participant_wa: r.submissions!.nomor_wa,
-    }))
-    .sort((a, b) => a.participant_nama.localeCompare(b.participant_nama));
+    return rows
+      .map((r) => ({
+        id: r.id,
+        status: r.status,
+        completed_sessions: r.completed_sessions,
+        qualified_for_hits: r.qualified_for_hits,
+        submission_id: r.submission_id,
+        participant_nama: r.nama,
+        participant_wa: r.nomor_wa,
+      }))
+      .sort((a, b) => a.participant_nama.localeCompare(b.participant_nama));
+  } catch {
+    return [];
+  }
 }
 
 async function fetchAttendanceMap(
@@ -122,20 +137,26 @@ async function fetchAttendanceMap(
   submissionIds: string[],
 ): Promise<AttendanceMap> {
   if (sessionIds.length === 0 || submissionIds.length === 0) return {};
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("attendance")
-    .select("cohort_session_id, submission_id, attended")
-    .in("cohort_session_id", sessionIds)
-    .in("submission_id", submissionIds);
 
   const map: AttendanceMap = {};
-  for (const row of (data ?? []) as {
-    cohort_session_id: string;
-    submission_id: string;
-    attended: boolean;
-  }[]) {
-    map[`${row.cohort_session_id}:${row.submission_id}`] = row.attended;
+  try {
+    const rows = await sql<
+      {
+        cohort_session_id: string;
+        submission_id: string;
+        attended: boolean;
+      }[]
+    >`
+      SELECT cohort_session_id, submission_id, attended
+        FROM attendance
+       WHERE cohort_session_id = ANY(${sessionIds}::uuid[])
+         AND submission_id = ANY(${submissionIds}::uuid[])`;
+
+    for (const row of rows) {
+      map[`${row.cohort_session_id}:${row.submission_id}`] = row.attended;
+    }
+  } catch {
+    return map;
   }
   return map;
 }

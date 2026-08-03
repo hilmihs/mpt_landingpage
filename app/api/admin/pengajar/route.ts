@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAdmin } from "@/lib/auth/admin";
+import { sql } from "@/lib/db";
 import { supabaseService } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -64,14 +65,14 @@ export async function POST(req: Request) {
     );
   }
 
+  // Auth-only client — dipakai untuk sb.auth.admin.* saja. Diganti Auth.js di fase berikutnya.
   const sb = supabaseService();
 
   // Check uniqueness on WA
-  const { data: dup } = await sb
-    .from("teachers")
-    .select("id")
-    .eq("nomor_wa", phoneDB)
-    .maybeSingle();
+  const dupRows = await sql<{ id: string }[]>`
+    SELECT id FROM teachers WHERE nomor_wa = ${phoneDB} LIMIT 1
+  `;
+  const dup = dupRows[0] ?? null;
   if (dup) {
     return NextResponse.json(
       {
@@ -104,32 +105,39 @@ export async function POST(req: Request) {
   }
 
   // Insert teachers row
-  const { data: teacher, error: teacherErr } = await sb
-    .from("teachers")
-    .insert({
-      auth_user_id: authUser.user.id,
-      nama: parsed.data.nama,
-      jenis_kelamin: parsed.data.jenis_kelamin,
-      nomor_wa: phoneDB,
-      email_meet: parsed.data.email_meet || null,
-      bio: parsed.data.bio || null,
-      status: "active",
-      activated_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (teacherErr || !teacher) {
+  let teacherId: string;
+  try {
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO teachers
+        (auth_user_id, nama, jenis_kelamin, nomor_wa, email_meet, bio, status, activated_at)
+      VALUES (
+        ${authUser.user.id},
+        ${parsed.data.nama},
+        ${parsed.data.jenis_kelamin},
+        ${phoneDB},
+        ${parsed.data.email_meet || null},
+        ${parsed.data.bio || null},
+        ${"active"},
+        ${new Date()}
+      )
+      RETURNING id
+    `;
+    if (!inserted[0]) throw new Error("Gagal menyimpan data pengajar.");
+    teacherId = inserted[0].id;
+  } catch (err) {
     // Rollback auth user if teachers insert failed
     await sb.auth.admin.deleteUser(authUser.user.id).catch(() => {});
     return NextResponse.json(
       {
         error: "db_error",
-        message: teacherErr?.message ?? "Gagal menyimpan data pengajar.",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Gagal menyimpan data pengajar.",
       },
       { status: 500 },
     );
   }
 
-  return NextResponse.json({ ok: true, teacher_id: teacher.id });
+  return NextResponse.json({ ok: true, teacher_id: teacherId });
 }

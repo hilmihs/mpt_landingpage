@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { listMeetingParticipants } from "@/lib/google-meet/client";
 import {
   matchParticipants,
@@ -27,7 +27,6 @@ export interface ReconcileResult {
 export async function reconcileSlotAttendance(
   slotId: string,
 ): Promise<ReconcileResult> {
-  const sb = supabaseService();
   const result: ReconcileResult = {
     slot_id: slotId,
     slot_kind: null,
@@ -39,22 +38,36 @@ export async function reconcileSlotAttendance(
     errors: [],
   };
 
-  const { data: slot } = await sb
-    .from("slots")
-    .select("id, kind, scheduled_at, meet_conference_id, meet_host_email")
-    .eq("id", slotId)
-    .maybeSingle();
+  let slotRow:
+    | {
+        id: string;
+        kind: "assessment" | "tahsin";
+        meet_conference_id: string | null;
+        meet_host_email: string | null;
+      }
+    | null = null;
+  try {
+    const rows = await sql<
+      {
+        id: string;
+        kind: "assessment" | "tahsin";
+        meet_conference_id: string | null;
+        meet_host_email: string | null;
+      }[]
+    >`
+      SELECT id, kind, scheduled_at, meet_conference_id, meet_host_email
+        FROM slots
+       WHERE id = ${slotId}
+       LIMIT 1`;
+    slotRow = rows[0] ?? null;
+  } catch {
+    slotRow = null;
+  }
 
-  if (!slot) {
+  if (!slotRow) {
     result.errors.push("Slot tidak ditemukan.");
     return result;
   }
-  const slotRow = slot as {
-    id: string;
-    kind: "assessment" | "tahsin";
-    meet_conference_id: string | null;
-    meet_host_email: string | null;
-  };
   result.slot_kind = slotRow.kind;
 
   if (!slotRow.meet_conference_id || !slotRow.meet_host_email) {
@@ -135,10 +148,7 @@ export async function reconcileSlotAttendance(
     if (!wrote) continue;
 
     if (slotRow.kind === "assessment") {
-      await sb
-        .from("bookings")
-        .update({ status: "attended" })
-        .eq("id", m.key);
+      await sql`UPDATE bookings SET status = ${"attended"} WHERE id = ${m.key}`;
     }
 
     if (isConfident) result.attended_auto++;
@@ -177,7 +187,6 @@ async function loadCandidates(
   slotId: string,
   kind: "assessment" | "tahsin",
 ): Promise<CandidateContext> {
-  const sb = supabaseService();
   const ctx: CandidateContext = {
     candidates: [],
     cohortSessionId: null,
@@ -185,61 +194,70 @@ async function loadCandidates(
   };
 
   if (kind === "assessment") {
-    const { data } = await sb
-      .from("bookings")
-      .select("id, submission_id, status, submissions:submission_id(nama)")
-      .eq("slot_id", slotId)
-      .neq("status", "cancelled");
+    let rows: { id: string; submission_id: string; nama: string }[];
+    try {
+      rows = await sql`
+        SELECT b.id, b.submission_id, sub.nama
+          FROM bookings b
+          JOIN submissions sub ON sub.id = b.submission_id
+         WHERE b.slot_id = ${slotId}
+           AND b.status <> 'cancelled'`;
+    } catch {
+      rows = [];
+    }
 
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      submission_id: string;
-      submissions: { nama: string } | null;
-    }[];
-
-    ctx.candidates = rows
-      .filter((r) => r.submissions)
-      .map((r) => ({
-        key: r.id,
-        submission_id: r.submission_id,
-        nama: r.submissions!.nama,
-      }));
+    ctx.candidates = rows.map((r) => ({
+      key: r.id,
+      submission_id: r.submission_id,
+      nama: r.nama,
+    }));
     return ctx;
   }
 
-  const { data: sessionRaw } = await sb
-    .from("cohort_sessions")
-    .select("id, cohort_id")
-    .eq("slot_id", slotId)
-    .maybeSingle();
+  let session: { id: string; cohort_id: string } | null = null;
+  try {
+    const rows = await sql<{ id: string; cohort_id: string }[]>`
+      SELECT id, cohort_id
+        FROM cohort_sessions
+       WHERE slot_id = ${slotId}
+       LIMIT 1`;
+    session = rows[0] ?? null;
+  } catch {
+    session = null;
+  }
 
-  if (!sessionRaw) {
+  if (!session) {
     ctx.errors.push("Tahsin slot tidak terikat ke cohort_session.");
     return ctx;
   }
-  const session = sessionRaw as { id: string; cohort_id: string };
   ctx.cohortSessionId = session.id;
 
-  const { data: enrollData } = await sb
-    .from("cohort_enrollments")
-    .select("submission_id, status, submissions:submission_id(nama)")
-    .eq("cohort_id", session.cohort_id)
-    .neq("status", "dropped");
+  let enrollRows: { submission_id: string; nama: string }[];
+  try {
+    enrollRows = await sql`
+      SELECT ce.submission_id, sub.nama
+        FROM cohort_enrollments ce
+        JOIN submissions sub ON sub.id = ce.submission_id
+       WHERE ce.cohort_id = ${session.cohort_id}
+         AND ce.status <> 'dropped'`;
+  } catch {
+    enrollRows = [];
+  }
 
-  const enrollRows = (enrollData ?? []) as unknown as {
-    submission_id: string;
-    submissions: { nama: string } | null;
-  }[];
-
-  ctx.candidates = enrollRows
-    .filter((r) => r.submissions)
-    .map((r) => ({
-      key: r.submission_id,
-      submission_id: r.submission_id,
-      nama: r.submissions!.nama,
-    }));
+  ctx.candidates = enrollRows.map((r) => ({
+    key: r.submission_id,
+    submission_id: r.submission_id,
+    nama: r.nama,
+  }));
 
   return ctx;
+}
+
+/** Baris attendance yang sudah ada — dipakai untuk cek override manual. */
+interface ExistingAttendance {
+  id: string;
+  source: string;
+  overridden_by: string | null;
 }
 
 async function upsertAttendance(
@@ -249,22 +267,28 @@ async function upsertAttendance(
   cohortSessionId: string | null,
   payload: Record<string, unknown>,
 ): Promise<boolean> {
-  const sb = supabaseService();
+  if (kind !== "assessment" && !cohortSessionId) return false;
 
-  let query = sb.from("attendance").select("id, source, overridden_by");
-  if (kind === "assessment") {
-    query = query.eq("booking_id", key);
-  } else {
-    if (!cohortSessionId) return false;
-    query = query
-      .eq("cohort_session_id", cohortSessionId)
-      .eq("submission_id", submission_id);
+  let existingRow: ExistingAttendance | null = null;
+  try {
+    const rows =
+      kind === "assessment"
+        ? await sql<ExistingAttendance[]>`
+            SELECT id, source, overridden_by
+              FROM attendance
+             WHERE booking_id = ${key}
+             LIMIT 1`
+        : await sql<ExistingAttendance[]>`
+            SELECT id, source, overridden_by
+              FROM attendance
+             WHERE cohort_session_id = ${cohortSessionId}
+               AND submission_id = ${submission_id}
+             LIMIT 1`;
+    existingRow = rows[0] ?? null;
+  } catch {
+    existingRow = null;
   }
-  const { data: existing } = await query.maybeSingle();
 
-  const existingRow = existing as
-    | { id: string; source: string; overridden_by: string | null }
-    | null;
   if (existingRow && (existingRow.source === "manual" || existingRow.overridden_by)) {
     return false;
   }
@@ -277,9 +301,9 @@ async function upsertAttendance(
   const fullPayload: Record<string, unknown> = { ...payload, ...fkFields };
 
   if (existingRow) {
-    await sb.from("attendance").update(fullPayload).eq("id", existingRow.id);
+    await sql`UPDATE attendance SET ${sql(fullPayload)} WHERE id = ${existingRow.id}`;
   } else {
-    await sb.from("attendance").insert(fullPayload);
+    await sql`INSERT INTO attendance ${sql(fullPayload)}`;
   }
   return true;
 }
@@ -289,22 +313,27 @@ async function writeNoShow(
   kind: "assessment" | "tahsin",
   cohortSessionId: string | null,
 ): Promise<void> {
-  const sb = supabaseService();
+  if (kind !== "assessment" && !cohortSessionId) return;
 
-  let query = sb.from("attendance").select("id, source, overridden_by");
-  if (kind === "assessment") {
-    query = query.eq("booking_id", candidate.key);
-  } else {
-    if (!cohortSessionId) return;
-    query = query
-      .eq("cohort_session_id", cohortSessionId)
-      .eq("submission_id", candidate.submission_id);
+  let existingRow: ExistingAttendance | null = null;
+  try {
+    const rows =
+      kind === "assessment"
+        ? await sql<ExistingAttendance[]>`
+            SELECT id, source, overridden_by
+              FROM attendance
+             WHERE booking_id = ${candidate.key}
+             LIMIT 1`
+        : await sql<ExistingAttendance[]>`
+            SELECT id, source, overridden_by
+              FROM attendance
+             WHERE cohort_session_id = ${cohortSessionId}
+               AND submission_id = ${candidate.submission_id}
+             LIMIT 1`;
+    existingRow = rows[0] ?? null;
+  } catch {
+    existingRow = null;
   }
-  const { data: existing } = await query.maybeSingle();
-
-  const existingRow = existing as
-    | { id: string; source: string; overridden_by: string | null }
-    | null;
 
   if (existingRow && (existingRow.source === "manual" || existingRow.overridden_by)) {
     return;
@@ -320,15 +349,12 @@ async function writeNoShow(
   };
 
   if (existingRow) {
-    await sb.from("attendance").update(payload).eq("id", existingRow.id);
+    await sql`UPDATE attendance SET ${sql(payload)} WHERE id = ${existingRow.id}`;
   } else {
-    await sb.from("attendance").insert(payload);
+    await sql`INSERT INTO attendance ${sql(payload)}`;
   }
 
   if (kind === "assessment") {
-    await sb
-      .from("bookings")
-      .update({ status: "no_show" })
-      .eq("id", candidate.key);
+    await sql`UPDATE bookings SET status = ${"no_show"} WHERE id = ${candidate.key}`;
   }
 }

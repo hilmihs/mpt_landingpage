@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
 
 export const runtime = "nodejs";
@@ -14,40 +14,60 @@ export async function GET(req: NextRequest) {
 
   const status = req.nextUrl.searchParams.get("status") ?? "pending";
 
-  const sb = supabaseService();
-  const { data, error } = await sb
-    .from("hits_recordings")
-    .select(
-      `id, audio_path, audio_duration_sec, status, assigned_tier, reviewer_notes,
-       reviewed_at, created_at,
-       submissions:submission_id(id, nama, jenis_kelamin, rapot_slug)`,
-    )
-    .eq("status", status)
-    .order("created_at", { ascending: status === "pending" });
+  let data: {
+    id: string;
+    audio_path: string;
+    audio_duration_sec: number | null;
+    status: string;
+    assigned_tier: string | null;
+    reviewer_notes: string | null;
+    reviewed_at: Date | null;
+    created_at: Date;
+    nama: string | null;
+    jenis_kelamin: string | null;
+    rapot_slug: string | null;
+  }[];
 
-  if (error) {
+  try {
+    data = await sql`
+      SELECT r.id,
+             r.audio_path,
+             r.audio_duration_sec::float8 AS audio_duration_sec,
+             r.status,
+             r.assigned_tier,
+             r.reviewer_notes,
+             r.reviewed_at,
+             r.created_at,
+             sub.nama,
+             sub.jenis_kelamin,
+             sub.rapot_slug
+        FROM hits_recordings r
+        LEFT JOIN submissions sub ON sub.id = r.submission_id
+       WHERE r.status = ${status}
+       ORDER BY r.created_at ${status === "pending" ? sql`ASC` : sql`DESC`}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "unknown database error",
+      },
       { status: 500 },
     );
   }
 
-  const rows = (data ?? []).map((r: Record<string, unknown>) => {
-    const sub = r.submissions as Record<string, unknown> | null;
-    return {
-      id: r.id,
-      audio_path: r.audio_path,
-      audio_duration_sec: r.audio_duration_sec,
-      status: r.status,
-      assigned_tier: r.assigned_tier,
-      reviewer_notes: r.reviewer_notes,
-      reviewed_at: r.reviewed_at,
-      created_at: r.created_at,
-      peserta_nama: sub?.nama ?? "—",
-      peserta_gender: sub?.jenis_kelamin ?? "—",
-      peserta_slug: sub?.rapot_slug ?? null,
-    };
-  });
+  const rows = data.map((r) => ({
+    id: r.id,
+    audio_path: r.audio_path,
+    audio_duration_sec: r.audio_duration_sec,
+    status: r.status,
+    assigned_tier: r.assigned_tier,
+    reviewer_notes: r.reviewer_notes,
+    reviewed_at: r.reviewed_at,
+    created_at: r.created_at,
+    peserta_nama: r.nama ?? "—",
+    peserta_gender: r.jenis_kelamin ?? "—",
+    peserta_slug: r.rapot_slug ?? null,
+  }));
 
   return NextResponse.json({ recordings: rows });
 }
@@ -85,22 +105,22 @@ export async function PATCH(req: Request) {
 
   const { recording_id, assigned_tier, reviewer_notes } = parsed.data;
 
-  const sb = supabaseService();
-  const { error } = await sb
-    .from("hits_recordings")
-    .update({
-      status: "classified",
-      assigned_tier,
-      reviewer_notes: reviewer_notes ?? null,
-      reviewed_by: teacher.teacherId,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq("id", recording_id)
-    .eq("status", "pending");
-
-  if (error) {
+  try {
+    await sql`
+      UPDATE hits_recordings
+         SET status = ${"classified"},
+             assigned_tier = ${assigned_tier},
+             reviewer_notes = ${reviewer_notes ?? null},
+             reviewed_by = ${teacher.teacherId},
+             reviewed_at = ${new Date()}
+       WHERE id = ${recording_id}
+         AND status = ${"pending"}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "unknown database error",
+      },
       { status: 500 },
     );
   }

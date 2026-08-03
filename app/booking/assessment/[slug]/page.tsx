@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { SlotPicker } from "@/components/booking/SlotPicker";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import type { Metadata } from "next";
@@ -32,36 +32,46 @@ interface Slot {
 async function fetchSlots(
   gender: "ikhwan" | "akhwat",
 ): Promise<{ slots: Slot[]; systemReady: boolean }> {
-  const sb = supabaseService();
-  const { data, error } = await sb
-    .from("v_slots_availability")
-    .select(
-      "id, scheduled_at, duration_min, capacity, reserved_count, available_capacity, teacher_nama, kind, gender_target, status",
-    )
-    .eq("kind", "assessment")
-    .eq("gender_target", gender)
-    .gt("scheduled_at", new Date().toISOString())
-    .order("scheduled_at", { ascending: true })
-    .limit(60);
+  let data: {
+    id: string;
+    scheduled_at: Date;
+    duration_min: number;
+    capacity: number;
+    reserved_count: number;
+    available_capacity: number;
+    teacher_nama: string;
+  }[];
 
-  if (error) {
+  try {
+    data = await sql`
+      SELECT id, scheduled_at, duration_min, capacity, reserved_count,
+             available_capacity, teacher_nama, kind, gender_target, status
+      FROM v_slots_availability
+      WHERE kind = ${"assessment"}
+        AND gender_target = ${gender}
+        AND scheduled_at > ${new Date()}
+      ORDER BY scheduled_at ASC
+      LIMIT 60
+    `;
+  } catch (err) {
+    const message = (err as Error).message;
     const isMissing =
-      error.message.toLowerCase().includes("does not exist") ||
-      error.message.toLowerCase().includes("relation");
+      message.toLowerCase().includes("does not exist") ||
+      message.toLowerCase().includes("relation");
     return { slots: [], systemReady: !isMissing };
   }
 
   return {
-    slots: (data ?? [])
+    slots: data
       .filter((s) => s.available_capacity > 0)
       .map((s) => ({
-        id: s.id as string,
-        scheduled_at: s.scheduled_at as string,
-        duration_min: s.duration_min as number,
-        capacity: s.capacity as number,
-        reserved_count: s.reserved_count as number,
-        available_capacity: s.available_capacity as number,
-        teacher_nama: s.teacher_nama as string,
+        id: s.id,
+        scheduled_at: s.scheduled_at.toISOString(),
+        duration_min: s.duration_min,
+        capacity: s.capacity,
+        reserved_count: s.reserved_count,
+        available_capacity: s.available_capacity,
+        teacher_nama: s.teacher_nama,
       })),
     systemReady: true,
   };
@@ -69,26 +79,31 @@ async function fetchSlots(
 
 export default async function BookingAssessmentPage({ params }: Props) {
   const { slug } = await params;
-  const sb = supabaseService();
 
-  const { data: rapotRaw } = await sb
-    .from("rapot")
-    .select("slug, skor, status_label, submissions(nama, jenis_kelamin)")
-    .eq("slug", slug)
-    .maybeSingle();
+  const rapotRows = await sql<
+    {
+      slug: string;
+      skor: number;
+      status_label: string;
+      nama: string | null;
+      jenis_kelamin: "ikhwan" | "akhwat" | null;
+    }[]
+  >`
+    SELECT r.slug, r.skor, r.status_label, s.nama, s.jenis_kelamin
+    FROM rapot r
+    LEFT JOIN submissions s ON s.id = r.submission_id
+    WHERE r.slug = ${slug}
+    LIMIT 1
+  `;
 
-  const rapot = rapotRaw as
-    | {
-        slug: string;
-        skor: number;
-        status_label: string;
-        submissions: { nama: string; jenis_kelamin: "ikhwan" | "akhwat" } | null;
-      }
-    | null;
+  const rapot = rapotRows[0] ?? null;
 
   if (!rapot) notFound();
 
-  const submission = rapot.submissions;
+  const submission =
+    rapot.nama !== null && rapot.jenis_kelamin !== null
+      ? { nama: rapot.nama, jenis_kelamin: rapot.jenis_kelamin }
+      : null;
   if (!submission) notFound();
 
   const { slots, systemReady } = await fetchSlots(submission.jenis_kelamin);

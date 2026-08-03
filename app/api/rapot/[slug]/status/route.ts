@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,15 +9,21 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
-  const sb = supabaseService();
 
-  const { data, error } = await sb
-    .from("submissions")
-    .select("status, error_message, rapot_slug")
-    .eq("rapot_slug", slug)
-    .maybeSingle();
-
-  if (error) {
+  let data: {
+    status: string;
+    error_message: string | null;
+    rapot_slug: string | null;
+  } | null;
+  try {
+    const rows = await sql`
+      SELECT status, error_message, rapot_slug
+      FROM submissions
+      WHERE rapot_slug = ${slug}
+      LIMIT 1
+    `;
+    data = (rows[0] as typeof data) ?? null;
+  } catch {
     return NextResponse.json({ error: "db_failed" }, { status: 500 });
   }
   if (!data) {

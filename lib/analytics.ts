@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import type { AnalyticsEventPayload } from "@/types";
 
 export const FUNNEL_EVENTS = {
@@ -28,13 +28,15 @@ export const FUNNEL_EVENTS = {
 
 export async function trackEvent(payload: AnalyticsEventPayload): Promise<void> {
   try {
-    const sb = supabaseService();
-    await sb.from("analytics_events").insert({
-      event_name: payload.event_name,
-      submission_id: payload.submission_id ?? null,
-      session_id: payload.session_id ?? null,
-      metadata: payload.metadata ?? {},
-    });
+    await sql`
+      INSERT INTO analytics_events (event_name, submission_id, session_id, metadata)
+      VALUES (
+        ${payload.event_name},
+        ${payload.submission_id ?? null},
+        ${payload.session_id ?? null},
+        ${sql.json((payload.metadata ?? {}) as Parameters<typeof sql.json>[0])}
+      )
+    `;
   } catch (err) {
     // Analytics must never break the user flow.
     console.error("[analytics] track failed:", (err as Error).message);

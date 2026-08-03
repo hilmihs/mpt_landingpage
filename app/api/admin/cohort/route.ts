@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAdmin } from "@/lib/auth/admin";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,21 +46,20 @@ export async function POST(req: Request) {
     );
   }
 
-  const sb = supabaseService();
-
   // Validate teacher
-  const { data: teacher } = await sb
-    .from("teachers")
-    .select("id, jenis_kelamin, status")
-    .eq("id", teacher_id)
-    .maybeSingle();
+  const teacherRows = await sql<
+    { id: string; jenis_kelamin: "ikhwan" | "akhwat"; status: string }[]
+  >`
+    SELECT id, jenis_kelamin, status FROM teachers WHERE id = ${teacher_id} LIMIT 1
+  `;
+  const teacher = teacherRows[0] ?? null;
   if (!teacher) {
     return NextResponse.json(
       { error: "teacher_not_found" },
       { status: 404 },
     );
   }
-  const t = teacher as { jenis_kelamin: "ikhwan" | "akhwat"; status: string };
+  const t = teacher;
   if (t.status !== "active") {
     return NextResponse.json(
       { error: "teacher_inactive", message: "Pengajar tidak aktif." },
@@ -69,18 +68,24 @@ export async function POST(req: Request) {
   }
 
   // Validate 4 slots: all tahsin, same teacher, not already bound to cohort
-  const { data: slotsRaw } = await sb
-    .from("slots")
-    .select("id, kind, teacher_id, scheduled_at, gender_target, status")
-    .in("id", slot_ids);
-  const slots = (slotsRaw ?? []) as {
-    id: string;
-    kind: "assessment" | "tahsin";
-    teacher_id: string;
-    scheduled_at: string;
-    gender_target: string;
-    status: string;
-  }[];
+  const slotsRaw = await sql<
+    {
+      id: string;
+      kind: "assessment" | "tahsin";
+      teacher_id: string;
+      scheduled_at: Date;
+      gender_target: string;
+      status: string;
+    }[]
+  >`
+    SELECT id, kind, teacher_id, scheduled_at, gender_target, status
+    FROM slots
+    WHERE id = ANY(${slot_ids}::uuid[])
+  `;
+  const slots = slotsRaw.map((s) => ({
+    ...s,
+    scheduled_at: s.scheduled_at.toISOString(),
+  }));
 
   if (slots.length !== 4) {
     return NextResponse.json(
@@ -129,12 +134,11 @@ export async function POST(req: Request) {
   }
 
   // Check no slot is already in a cohort
-  const { data: existingBindings } = await sb
-    .from("cohort_sessions")
-    .select("slot_id")
-    .in("slot_id", slot_ids);
+  const existingBindings = await sql<{ slot_id: string }[]>`
+    SELECT slot_id FROM cohort_sessions WHERE slot_id = ANY(${slot_ids}::uuid[])
+  `;
 
-  if (existingBindings && existingBindings.length > 0) {
+  if (existingBindings.length > 0) {
     return NextResponse.json(
       {
         error: "slot_already_bound",
@@ -150,25 +154,20 @@ export async function POST(req: Request) {
   );
 
   // Insert cohort
-  const { data: cohort, error: cohortErr } = await sb
-    .from("cohorts")
-    .insert({
-      teacher_id,
-      name,
-      gender_target: t.jenis_kelamin,
-      start_date,
-      end_date,
-      capacity,
-      status: "open",
-    })
-    .select("id")
-    .single();
-
-  if (cohortErr || !cohort) {
+  let cohortId: string;
+  try {
+    const inserted = await sql<{ id: string }[]>`
+      INSERT INTO cohorts (teacher_id, name, gender_target, start_date, end_date, capacity, status)
+      VALUES (${teacher_id}, ${name}, ${t.jenis_kelamin}, ${start_date}, ${end_date}, ${capacity}, ${"open"})
+      RETURNING id
+    `;
+    if (!inserted[0]) throw new Error("Gagal membuat cohort.");
+    cohortId = inserted[0].id;
+  } catch (err) {
     return NextResponse.json(
       {
         error: "db_error",
-        message: cohortErr?.message ?? "Gagal membuat cohort.",
+        message: err instanceof Error ? err.message : "Gagal membuat cohort.",
       },
       { status: 500 },
     );
@@ -176,29 +175,32 @@ export async function POST(req: Request) {
 
   // Insert 4 cohort_sessions
   const sessionRows = sortedSlots.map((s, i) => ({
-    cohort_id: (cohort as { id: string }).id,
+    cohort_id: cohortId,
     slot_id: s.id,
     session_number: i + 1,
   }));
 
-  const { error: sessionErr } = await sb
-    .from("cohort_sessions")
-    .insert(sessionRows);
-
-  if (sessionErr) {
+  try {
+    await sql`INSERT INTO cohort_sessions ${sql(
+      sessionRows,
+      "cohort_id",
+      "slot_id",
+      "session_number",
+    )}`;
+  } catch (err) {
     // Rollback cohort
-    await sb
-      .from("cohorts")
-      .delete()
-      .eq("id", (cohort as { id: string }).id);
+    await sql`DELETE FROM cohorts WHERE id = ${cohortId}`;
     return NextResponse.json(
-      { error: "session_bind_failed", message: sessionErr.message },
+      {
+        error: "session_bind_failed",
+        message: err instanceof Error ? err.message : "Gagal mengikat sesi.",
+      },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     ok: true,
-    cohort_id: (cohort as { id: string }).id,
+    cohort_id: cohortId,
   });
 }

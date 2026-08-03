@@ -12,7 +12,7 @@ import {
   XCircle,
   CircleHelp,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -66,92 +66,57 @@ const SLOT_STATUS_COLOR: Record<string, string> = {
 };
 
 async function fetchCohort(id: string): Promise<CohortDetail | null> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohorts")
-    .select(
-      `id, name, status, gender_target, start_date, end_date, capacity, enrolled_count, teacher_id,
-       teachers:teacher_id(nama)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const rows = await sql<(Omit<CohortDetail, "teacher_nama"> & {
+    teacher_nama: string | null;
+  })[]>`
+    SELECT c.id, c.name, c.status, c.gender_target,
+           to_char(c.start_date, 'YYYY-MM-DD') AS start_date,
+           to_char(c.end_date, 'YYYY-MM-DD') AS end_date,
+           c.capacity, c.enrolled_count, c.teacher_id,
+           t.nama AS teacher_nama
+    FROM cohorts c
+    LEFT JOIN teachers t ON t.id = c.teacher_id
+    WHERE c.id = ${id}
+    LIMIT 1
+  `;
 
-  if (!data) return null;
-  const row = data as unknown as CohortDetail & {
-    teachers: { nama: string } | null;
-  };
-  return { ...row, teacher_nama: row.teachers?.nama ?? "—" };
+  const row = rows[0] ?? null;
+  if (!row) return null;
+  return { ...row, teacher_nama: row.teacher_nama ?? "—" };
 }
 
 async function fetchSessions(cohortId: string): Promise<SessionRow[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohort_sessions")
-    .select(
-      `id, session_number, slot_id,
-       slots:slot_id(scheduled_at, duration_min, status, meet_join_url, reserved_count)`,
-    )
-    .eq("cohort_id", cohortId)
-    .order("session_number", { ascending: true });
+  const rows = await sql<(Omit<SessionRow, "scheduled_at"> & {
+    scheduled_at: Date;
+  })[]>`
+    SELECT cs.id, cs.session_number, cs.slot_id,
+           s.scheduled_at, s.duration_min, s.status, s.meet_join_url,
+           s.reserved_count
+    FROM cohort_sessions cs
+    JOIN slots s ON s.id = cs.slot_id
+    WHERE cs.cohort_id = ${cohortId}
+    ORDER BY cs.session_number ASC
+  `;
 
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    session_number: number;
-    slot_id: string;
-    slots: {
-      scheduled_at: string;
-      duration_min: number;
-      status: string;
-      meet_join_url: string | null;
-      reserved_count: number;
-    } | null;
-  }[];
-
-  return rows
-    .filter((r) => r.slots)
-    .map((r) => ({
-      id: r.id,
-      session_number: r.session_number,
-      slot_id: r.slot_id,
-      scheduled_at: r.slots!.scheduled_at,
-      duration_min: r.slots!.duration_min,
-      status: r.slots!.status,
-      meet_join_url: r.slots!.meet_join_url,
-      reserved_count: r.slots!.reserved_count,
-    }));
+  return rows.map((r) => ({
+    ...r,
+    scheduled_at: r.scheduled_at.toISOString(),
+  }));
 }
 
 async function fetchEnrollments(cohortId: string): Promise<EnrollmentRow[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("cohort_enrollments")
-    .select(
-      `id, status, completed_sessions, qualified_for_hits, submission_id,
-       submissions:submission_id(nama, nomor_wa)`,
-    )
-    .eq("cohort_id", cohortId)
-    .order("created_at", { ascending: true });
+  const rows = await sql<EnrollmentRow[]>`
+    SELECT ce.id, ce.status, ce.completed_sessions, ce.qualified_for_hits,
+           ce.submission_id,
+           sub.nama AS participant_nama,
+           sub.nomor_wa AS participant_wa
+    FROM cohort_enrollments ce
+    JOIN submissions sub ON sub.id = ce.submission_id
+    WHERE ce.cohort_id = ${cohortId}
+    ORDER BY ce.created_at ASC
+  `;
 
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    status: string;
-    completed_sessions: number;
-    qualified_for_hits: boolean;
-    submission_id: string;
-    submissions: { nama: string; nomor_wa: string } | null;
-  }[];
-
-  return rows
-    .filter((r) => r.submissions)
-    .map((r) => ({
-      id: r.id,
-      status: r.status,
-      completed_sessions: r.completed_sessions,
-      qualified_for_hits: r.qualified_for_hits,
-      submission_id: r.submission_id,
-      participant_nama: r.submissions!.nama,
-      participant_wa: r.submissions!.nomor_wa,
-    }));
+  return rows;
 }
 
 export default async function CohortDetailPage({

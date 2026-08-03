@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { CohortManager } from "@/components/admin/CohortManager";
 
 export const dynamic = "force-dynamic";
@@ -24,30 +24,33 @@ interface Teacher {
 }
 
 async function fetchCohorts(): Promise<CohortRow[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("cohorts")
-      .select(
-        `id, name, status, gender_target, start_date, end_date, capacity, enrolled_count, teacher_id,
-         teachers:teacher_id(nama),
-         cohort_sessions(count)`,
-      )
-      .order("start_date", { ascending: false });
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      name: string;
-      status: string;
-      gender_target: string;
-      start_date: string;
-      end_date: string;
-      capacity: number;
-      enrolled_count: number;
-      teacher_id: string;
-      teachers: { nama: string } | null;
-      cohort_sessions: { count: number }[];
-    }[];
+    const rows = await sql<
+      {
+        id: string;
+        name: string;
+        status: string;
+        gender_target: string;
+        start_date: string;
+        end_date: string;
+        capacity: number;
+        enrolled_count: number;
+        teacher_id: string;
+        teacher_nama: string | null;
+        session_count: number;
+      }[]
+    >`
+      SELECT c.id, c.name, c.status, c.gender_target,
+             to_char(c.start_date, 'YYYY-MM-DD') AS start_date,
+             to_char(c.end_date, 'YYYY-MM-DD') AS end_date,
+             c.capacity, c.enrolled_count, c.teacher_id,
+             t.nama AS teacher_nama,
+             (SELECT count(*) FROM cohort_sessions cs WHERE cs.cohort_id = c.id)::int
+               AS session_count
+      FROM cohorts c
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+      ORDER BY c.start_date DESC
+    `;
 
     return rows.map((r) => ({
       id: r.id,
@@ -59,8 +62,8 @@ async function fetchCohorts(): Promise<CohortRow[]> {
       capacity: r.capacity,
       enrolled_count: r.enrolled_count,
       teacher_id: r.teacher_id,
-      teacher_nama: r.teachers?.nama ?? "—",
-      session_count: r.cohort_sessions?.[0]?.count ?? 0,
+      teacher_nama: r.teacher_nama ?? "—",
+      session_count: r.session_count ?? 0,
     }));
   } catch {
     return [];
@@ -68,14 +71,14 @@ async function fetchCohorts(): Promise<CohortRow[]> {
 }
 
 async function fetchActiveTeachers(): Promise<Teacher[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("teachers")
-      .select("id, nama, jenis_kelamin")
-      .eq("status", "active")
-      .order("nama", { ascending: true });
-    return (data ?? []) as Teacher[];
+    const rows = await sql<Teacher[]>`
+      SELECT id, nama, jenis_kelamin
+      FROM teachers
+      WHERE status = ${"active"}
+      ORDER BY nama ASC
+    `;
+    return rows;
   } catch {
     return [];
   }

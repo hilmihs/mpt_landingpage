@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { createMeeting, deleteMeeting, isMeetConfigured } from "@/lib/google-meet/client";
 
 const DURATION_BY_KIND: Record<"assessment" | "tahsin", number> = {
@@ -41,7 +41,6 @@ export async function generateSlotsForTeacher(
   teacherId: string,
   weeksAhead = 4,
 ): Promise<SlotGenerationResult> {
-  const sb = supabaseService();
   const result: SlotGenerationResult = {
     teacher_id: teacherId,
     windows_processed: 0,
@@ -52,31 +51,39 @@ export async function generateSlotsForTeacher(
     errors: [],
   };
 
-  const { data: teacherData, error: teacherErr } = await sb
-    .from("teachers")
-    .select("id, nama, jenis_kelamin, status, email_meet")
-    .eq("id", teacherId)
-    .maybeSingle();
+  let teacherData: Teacher | null = null;
+  try {
+    const rows = await sql<Teacher[]>`
+      SELECT id, nama, jenis_kelamin, status, email_meet
+      FROM teachers
+      WHERE id = ${teacherId}
+      LIMIT 1
+    `;
+    teacherData = rows[0] ?? null;
+  } catch {
+    teacherData = null;
+  }
 
-  if (teacherErr || !teacherData) {
+  if (!teacherData) {
     result.errors.push("Pengajar tidak ditemukan.");
     return result;
   }
-  const teacher = teacherData as Teacher;
+  const teacher = teacherData;
   if (teacher.status !== "active") {
     result.errors.push(`Status pengajar bukan active (${teacher.status}).`);
     return result;
   }
 
-  const { data: windowsData } = await sb
-    .from("teacher_availability")
-    .select(
-      "id, teacher_id, day_of_week, start_time, end_time, kind, effective_from, effective_until",
-    )
-    .eq("teacher_id", teacherId)
-    .eq("is_active", true);
-
-  const windows = (windowsData ?? []) as AvailabilityWindow[];
+  // effective_from/until di-cast ke text supaya tetap 'YYYY-MM-DD' seperti
+  // sebelumnya (dipakai lewat new Date(...) di bawah).
+  const windows = await sql<AvailabilityWindow[]>`
+    SELECT id, teacher_id, day_of_week, start_time, end_time, kind,
+           effective_from::text AS effective_from,
+           effective_until::text AS effective_until
+    FROM teacher_availability
+    WHERE teacher_id = ${teacherId}
+      AND is_active = ${true}
+  `;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -108,46 +115,54 @@ export async function generateSlotsForTeacher(
       const durationMin = DURATION_BY_KIND[w.kind];
       const scheduledAtISO = scheduledAt.toISOString();
 
-      const { data: existing } = await sb
-        .from("slots")
-        .select("id, meet_calendar_event_id")
-        .eq("teacher_id", teacherId)
-        .eq("scheduled_at", scheduledAtISO)
-        .maybeSingle();
+      const existingRows = await sql<
+        { id: string; meet_calendar_event_id: string | null }[]
+      >`
+        SELECT id, meet_calendar_event_id
+        FROM slots
+        WHERE teacher_id = ${teacherId}
+          AND scheduled_at = ${scheduledAt}
+        LIMIT 1
+      `;
+      const existing = existingRows[0] ?? null;
 
       let slotId: string;
       if (existing) {
-        const existingRow = existing as {
-          id: string;
-          meet_calendar_event_id: string | null;
-        };
-        if (existingRow.meet_calendar_event_id) {
+        if (existing.meet_calendar_event_id) {
           result.slots_skipped++;
           continue;
         }
-        slotId = existingRow.id;
+        slotId = existing.id;
       } else {
-        const { data: insertedSlot, error: insertErr } = await sb
-          .from("slots")
-          .insert({
-            teacher_id: teacherId,
-            kind: w.kind,
-            scheduled_at: scheduledAtISO,
-            duration_min: durationMin,
-            capacity: DEFAULT_CAPACITY,
-            gender_target: teacher.jenis_kelamin,
-            status: "scheduled",
-          })
-          .select("id")
-          .single();
-
-        if (insertErr || !insertedSlot) {
+        let insertedSlot: { id: string } | null = null;
+        try {
+          const inserted = await sql<{ id: string }[]>`
+            INSERT INTO slots
+              (teacher_id, kind, scheduled_at, duration_min, capacity, gender_target, status)
+            VALUES (
+              ${teacherId},
+              ${w.kind},
+              ${scheduledAt},
+              ${durationMin},
+              ${DEFAULT_CAPACITY},
+              ${teacher.jenis_kelamin},
+              ${"scheduled"}
+            )
+            RETURNING id
+          `;
+          insertedSlot = inserted[0] ?? null;
+        } catch (insertErr) {
           result.errors.push(
-            `${scheduledAtISO}: ${insertErr?.message.slice(0, 100) ?? "insert failed"}`,
+            `${scheduledAtISO}: ${(insertErr as Error).message.slice(0, 100)}`,
           );
           continue;
         }
-        slotId = (insertedSlot as { id: string }).id;
+
+        if (!insertedSlot) {
+          result.errors.push(`${scheduledAtISO}: insert failed`);
+          continue;
+        }
+        slotId = insertedSlot.id;
         result.slots_created++;
       }
 
@@ -174,21 +189,20 @@ export async function generateSlotsForTeacher(
           });
           createdEventId = meeting.calendar_event_id;
 
-          const { error: updateErr } = await sb
-            .from("slots")
-            .update({
-              meet_calendar_event_id: meeting.calendar_event_id,
-              meet_join_url: meeting.join_url,
-              meet_conference_id: meeting.conference_id,
-              meet_host_email: meeting.host_email,
-            })
-            .eq("id", slotId);
-
-          if (updateErr) {
+          try {
+            await sql`
+              UPDATE slots
+              SET meet_calendar_event_id = ${meeting.calendar_event_id},
+                  meet_join_url = ${meeting.join_url},
+                  meet_conference_id = ${meeting.conference_id},
+                  meet_host_email = ${meeting.host_email}
+              WHERE id = ${slotId}
+            `;
+          } catch (updateErr) {
             await deleteMeeting(teacher.email_meet, meeting.calendar_event_id).catch(() => {});
             result.meet_errors++;
             result.errors.push(
-              `Meet (${scheduledAtISO}): slot update failed (${updateErr.message.slice(0, 80)}), calendar event deleted`,
+              `Meet (${scheduledAtISO}): slot update failed (${(updateErr as Error).message.slice(0, 80)}), calendar event deleted`,
             );
             continue;
           }
@@ -213,14 +227,12 @@ export async function generateSlotsForTeacher(
 export async function generateSlotsForAllTeachers(
   weeksAhead = 4,
 ): Promise<SlotGenerationResult[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("teachers")
-    .select("id")
-    .eq("status", "active");
+  const data = await sql<{ id: string }[]>`
+    SELECT id FROM teachers WHERE status = ${"active"}
+  `;
 
   const results: SlotGenerationResult[] = [];
-  for (const t of (data ?? []) as { id: string }[]) {
+  for (const t of data) {
     results.push(await generateSlotsForTeacher(t.id, weeksAhead));
   }
   return results;

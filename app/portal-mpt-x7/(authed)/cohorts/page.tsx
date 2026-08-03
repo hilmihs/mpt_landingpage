@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { GraduationCap, Users, Calendar, Trophy } from "lucide-react";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -34,42 +34,26 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 async function fetchTeacherCohorts(teacherId: string): Promise<CohortRow[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("cohorts")
-      .select(
-        `id, name, status, start_date, end_date, capacity, enrolled_count,
-         cohort_sessions(count),
-         cohort_enrollments(qualified_for_hits)`,
-      )
-      .eq("teacher_id", teacherId)
-      .order("start_date", { ascending: false });
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      name: string;
-      status: string;
-      start_date: string;
-      end_date: string;
-      capacity: number;
-      enrolled_count: number;
-      cohort_sessions: { count: number }[];
-      cohort_enrollments: { qualified_for_hits: boolean }[];
-    }[];
-
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      status: r.status,
-      start_date: r.start_date,
-      end_date: r.end_date,
-      capacity: r.capacity,
-      enrolled_count: r.enrolled_count,
-      session_count: r.cohort_sessions?.[0]?.count ?? 0,
-      qualified_count:
-        r.cohort_enrollments?.filter((e) => e.qualified_for_hits).length ?? 0,
-    }));
+    const rows = await sql<CohortRow[]>`
+      SELECT c.id,
+             c.name,
+             c.status,
+             c.start_date::text AS start_date,
+             c.end_date::text AS end_date,
+             c.capacity,
+             c.enrolled_count,
+             (SELECT count(*)::int
+                FROM cohort_sessions cs
+               WHERE cs.cohort_id = c.id) AS session_count,
+             (SELECT count(*)::int
+                FROM cohort_enrollments ce
+               WHERE ce.cohort_id = c.id
+                 AND ce.qualified_for_hits) AS qualified_count
+        FROM cohorts c
+       WHERE c.teacher_id = ${teacherId}
+       ORDER BY c.start_date DESC`;
+    return rows;
   } catch {
     return [];
   }

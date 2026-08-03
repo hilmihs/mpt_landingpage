@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseService, STORAGE_BUCKET } from "@/lib/supabase";
+import { sql } from "@/lib/db";
+import { removeAudio } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,42 +24,40 @@ async function handleRun(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(
-    Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const sb = supabaseService();
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
   // Find submissions older than cutoff with non-empty audio_path
-  const { data: rows, error } = await sb
-    .from("submissions")
-    .select("id, audio_path")
-    .lt("created_at", cutoff)
-    .not("audio_path", "is", null)
-    .neq("audio_path", "")
-    .limit(BATCH_SIZE);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  let rows: { id: string; audio_path: string | null }[];
+  try {
+    rows = await sql`
+      SELECT id, audio_path
+      FROM submissions
+      WHERE created_at < ${cutoff}
+        AND audio_path IS NOT NULL
+        AND audio_path <> ${""}
+      LIMIT ${BATCH_SIZE}
+    `;
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
-  if (!rows || rows.length === 0) {
+  if (rows.length === 0) {
     return NextResponse.json({ deleted: 0, message: "Nothing to clean" });
   }
 
   const paths = rows.map((r) => r.audio_path).filter((p): p is string => !!p);
-  const { error: rmErr } = await sb.storage.from(STORAGE_BUCKET).remove(paths);
-  if (rmErr) {
-    return NextResponse.json({ error: rmErr.message }, { status: 500 });
+  try {
+    await removeAudio(paths);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
   // Mark audio_path empty so we don't re-attempt (keep rapot rows intact)
-  await sb
-    .from("submissions")
-    .update({ audio_path: "" })
-    .in(
-      "id",
-      rows.map((r) => r.id),
-    );
+  await sql`
+    UPDATE submissions
+    SET audio_path = ${""}
+    WHERE id = ANY(${rows.map((r) => r.id)}::uuid[])
+  `;
 
   return NextResponse.json({ deleted: paths.length, paths });
 }

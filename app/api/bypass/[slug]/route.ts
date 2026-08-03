@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { mockMLPredict } from "@/lib/mock-ml";
 import { computeScore } from "@/lib/scoring";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Bungkus nilai untuk kolom jsonb. Tipe JSONValue milik postgres.js menolak
+ * interface dengan properti opsional (mis. ErrorItem.note), padahal di runtime
+ * nilainya JSON valid — jadi cast-nya dipusatkan di sini.
+ */
+function jsonb(value: unknown) {
+  return sql.json(value as Parameters<typeof sql.json>[0]);
+}
 
 function bypassAllowed(): boolean {
   return (
@@ -22,25 +31,29 @@ export async function POST(
   }
 
   const { slug } = await ctx.params;
-  const sb = supabaseService();
 
-  const { data: sub, error: subErr } = await sb
-    .from("submissions")
-    .select("id, rapot_slug, status")
-    .eq("rapot_slug", slug)
-    .single();
+  let sub: { id: string; rapot_slug: string | null; status: string } | null;
+  try {
+    const rows = await sql`
+      SELECT id, rapot_slug, status
+      FROM submissions
+      WHERE rapot_slug = ${slug}
+      LIMIT 1
+    `;
+    sub = (rows[0] as typeof sub) ?? null;
+  } catch {
+    sub = null;
+  }
 
-  if (subErr || !sub) {
+  if (!sub) {
     return NextResponse.json({ error: "submission_not_found" }, { status: 404 });
   }
 
   if (sub.status === "completed") {
-    const { data: existing } = await sb
-      .from("rapot")
-      .select("slug")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (existing) {
+    const existing = await sql`
+      SELECT slug FROM rapot WHERE slug = ${slug} LIMIT 1
+    `;
+    if (existing[0]) {
       return NextResponse.json({ ok: true, already: true });
     }
   }
@@ -51,43 +64,62 @@ export async function POST(
   );
   const score = computeScore(result);
 
-  const { error: rapotErr } = await sb.from("rapot").upsert(
-    {
-      slug,
-      submission_id: sub.id,
-      skor: score.skor,
-      status_label: score.status_label,
-      errors_harakat: result.errors_harakat,
-      errors_huruf: result.errors_huruf,
-      errors_panjang_pendek: result.errors_panjang_pendek,
-      errors_syaddah: result.errors_syaddah,
-      total_errors_major: score.total_errors_major,
-      total_errors_minor: score.total_errors_minor,
-      weighted_score: score.weighted_score,
-      ml_model_version: result.ml_model_version,
-      ml_confidence: result.ml_confidence,
-      ml_raw_output: result.ml_raw_output ?? null,
-    },
-    { onConflict: "slug" },
-  );
-  if (rapotErr) {
+  try {
+    await sql`
+      INSERT INTO rapot (
+        slug, submission_id, skor, status_label,
+        errors_harakat, errors_huruf, errors_panjang_pendek, errors_syaddah,
+        total_errors_major, total_errors_minor, weighted_score,
+        ml_model_version, ml_confidence, ml_raw_output
+      ) VALUES (
+        ${slug},
+        ${sub.id},
+        ${score.skor},
+        ${score.status_label},
+        ${jsonb(result.errors_harakat)},
+        ${jsonb(result.errors_huruf)},
+        ${jsonb(result.errors_panjang_pendek)},
+        ${jsonb(result.errors_syaddah)},
+        ${score.total_errors_major},
+        ${score.total_errors_minor},
+        ${score.weighted_score},
+        ${result.ml_model_version},
+        ${result.ml_confidence},
+        ${result.ml_raw_output == null ? null : jsonb(result.ml_raw_output)}
+      )
+      ON CONFLICT (slug) DO UPDATE SET
+        submission_id = EXCLUDED.submission_id,
+        skor = EXCLUDED.skor,
+        status_label = EXCLUDED.status_label,
+        errors_harakat = EXCLUDED.errors_harakat,
+        errors_huruf = EXCLUDED.errors_huruf,
+        errors_panjang_pendek = EXCLUDED.errors_panjang_pendek,
+        errors_syaddah = EXCLUDED.errors_syaddah,
+        total_errors_major = EXCLUDED.total_errors_major,
+        total_errors_minor = EXCLUDED.total_errors_minor,
+        weighted_score = EXCLUDED.weighted_score,
+        ml_model_version = EXCLUDED.ml_model_version,
+        ml_confidence = EXCLUDED.ml_confidence,
+        ml_raw_output = EXCLUDED.ml_raw_output
+    `;
+  } catch (err) {
     return NextResponse.json(
-      { error: `rapot_upsert_failed: ${rapotErr.message}` },
+      { error: `rapot_upsert_failed: ${(err as Error).message}` },
       { status: 500 },
     );
   }
 
-  const { error: updErr } = await sb
-    .from("submissions")
-    .update({
-      status: "completed",
-      processed_at: new Date().toISOString(),
-      error_message: null,
-    })
-    .eq("id", sub.id);
-  if (updErr) {
+  try {
+    await sql`
+      UPDATE submissions SET
+        status = ${"completed"},
+        processed_at = ${new Date()},
+        error_message = ${null}
+      WHERE id = ${sub.id}
+    `;
+  } catch (err) {
     return NextResponse.json(
-      { error: `submission_update_failed: ${updErr.message}` },
+      { error: `submission_update_failed: ${(err as Error).message}` },
       { status: 500 },
     );
   }

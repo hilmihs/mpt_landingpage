@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { PengajarManager } from "@/components/admin/PengajarManager";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +15,16 @@ interface Teacher {
 }
 
 async function fetchTeachers(): Promise<Teacher[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("teachers")
-      .select(
-        "id, nama, jenis_kelamin, nomor_wa, status, bio, email_meet, created_at",
-      )
-      .order("created_at", { ascending: false });
-    return (data ?? []) as Teacher[];
+    const rows = await sql<
+      (Omit<Teacher, "created_at"> & { created_at: Date })[]
+    >`
+      SELECT id, nama, jenis_kelamin, nomor_wa, status, bio, email_meet,
+             created_at
+      FROM teachers
+      ORDER BY created_at DESC
+    `;
+    return rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }));
   } catch {
     return [];
   }

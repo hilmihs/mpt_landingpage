@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { todayJakartaISO } from "@/lib/time";
 
@@ -33,29 +33,11 @@ export async function GET(req: Request) {
     );
   }
 
-  const sb = supabaseService();
   const todayStr = todayJakartaISO();
 
-  const { data, error } = await sb
-    .from("cohorts")
-    .select(
-      `id, name, status, gender_target, start_date, end_date, capacity, enrolled_count,
-       teachers:teacher_id(nama),
-       cohort_sessions(slot_id, slots:slot_id(scheduled_at, duration_min))`,
-    )
-    .eq("status", "open")
-    .eq("gender_target", eligibility.jenis_kelamin)
-    .gte("start_date", todayStr)
-    .order("start_date", { ascending: true });
-
-  if (error) {
-    return NextResponse.json(
-      { error: "db_error", message: error.message },
-      { status: 500 },
-    );
-  }
-
-  const rows = (data ?? []) as unknown as {
+  // Sessions are aggregated in-query (already sorted by scheduled_at) so the
+  // shape stays identical to the old nested-select response.
+  let rows: {
     id: string;
     name: string;
     status: string;
@@ -64,12 +46,43 @@ export async function GET(req: Request) {
     end_date: string;
     capacity: number;
     enrolled_count: number;
-    teachers: { nama: string } | null;
-    cohort_sessions: {
-      slot_id: string;
-      slots: { scheduled_at: string; duration_min: number } | null;
-    }[];
+    teacher_nama: string | null;
+    sessions: { scheduled_at: string; duration_min: number }[];
   }[];
+
+  try {
+    rows = await sql`
+      SELECT c.id, c.name, c.status, c.gender_target,
+             c.start_date::text AS start_date,
+             c.end_date::text AS end_date,
+             c.capacity, c.enrolled_count,
+             t.nama AS teacher_nama,
+             COALESCE(
+               (SELECT json_agg(
+                         json_build_object(
+                           'scheduled_at', sl.scheduled_at,
+                           'duration_min', sl.duration_min
+                         )
+                         ORDER BY sl.scheduled_at
+                       )
+                FROM cohort_sessions cs
+                JOIN slots sl ON sl.id = cs.slot_id
+                WHERE cs.cohort_id = c.id),
+               '[]'::json
+             ) AS sessions
+      FROM cohorts c
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+      WHERE c.status = ${"open"}
+        AND c.gender_target = ${eligibility.jenis_kelamin}
+        AND c.start_date >= ${todayStr}
+      ORDER BY c.start_date ASC
+    `;
+  } catch (err) {
+    return NextResponse.json(
+      { error: "db_error", message: (err as Error).message },
+      { status: 500 },
+    );
+  }
 
   const cohorts = rows
     .filter((c) => c.enrolled_count < c.capacity)
@@ -80,14 +93,8 @@ export async function GET(req: Request) {
       end_date: c.end_date,
       capacity: c.capacity,
       enrolled_count: c.enrolled_count,
-      teacher_nama: c.teachers?.nama ?? "—",
-      sessions: c.cohort_sessions
-        .filter((s) => s.slots)
-        .map((s) => ({
-          scheduled_at: s.slots!.scheduled_at,
-          duration_min: s.slots!.duration_min,
-        }))
-        .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
+      teacher_nama: c.teacher_nama ?? "—",
+      sessions: c.sessions,
     }));
 
   return NextResponse.json({ cohorts });

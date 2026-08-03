@@ -10,12 +10,15 @@
  *   pnpm seed:reset        # delete existing dummies first, then seed
  *
  * Prerequisites:
- *   1. .env.local set with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
- *   2. All migrations (0001–0005) applied to the target Supabase project
+ *   1. .env.local set with DATABASE_URL (data) + NEXT_PUBLIC_SUPABASE_URL +
+ *      SUPABASE_SERVICE_ROLE_KEY (masih dipakai untuk auth sampai Fase 4)
+ *   2. Semua migrasi sudah jalan: `pnpm db:migrate`
  *   3. Supabase Auth phone provider enabled (for pengajar phone login)
  */
 
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 
 // ============================================================
 // 1. Admin & Teacher data
@@ -388,34 +391,117 @@ function requireEnv(name: string): string {
   return v;
 }
 
+const DATABASE_URL = requireEnv("DATABASE_URL");
 const SUPABASE_URL = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
+/**
+ * Klien Supabase ini HANYA dipakai untuk `sb.auth.admin.*`. Semua query data
+ * sudah pindah ke postgres.js (`sql`). Auth menyusul di Fase 4 (Auth.js).
+ */
 const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
 const isReset = process.argv.includes("--reset");
 
+function dbTarget(): string {
+  try {
+    const u = new URL(DATABASE_URL);
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return "(DATABASE_URL tidak bisa di-parse)";
+  }
+}
+
 // ============================================================
 // 4. Helpers
 // ============================================================
 
+/**
+ * Supabase Auth belum diganti (Fase 4). Tapi proyek Supabase-nya sudah dimatikan,
+ * jadi setiap panggilan `sb.auth.admin.*` bisa gagal di level jaringan. Semua
+ * pemanggilnya dibungkus supaya seed data tetap jalan: kalau auth tidak bisa
+ * dihubungi, akun dicatat di tabel lokal `auth_users` saja (lihat mirrorAuthUser).
+ * Login pengajar/admin memang belum berfungsi sampai Auth.js masuk.
+ */
+let authOffline = false;
+
+async function tryAuth<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+  if (authOffline) return null;
+  try {
+    return await fn();
+  } catch (err) {
+    authOffline = true;
+    console.warn(`  ! Supabase Auth tidak bisa dihubungi (${label}): ${(err as Error).message}`);
+    console.warn("    Lanjut pakai auth_users lokal. Login belum aktif sampai Fase 4 (Auth.js).");
+    return null;
+  }
+}
+
 async function findAuthUserByEmail(email: string): Promise<string | null> {
-  const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-  if (error) throw error;
-  return data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id ?? null;
+  return tryAuth("listUsers", async () => {
+    const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (error) throw error;
+    return data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id ?? null;
+  });
 }
 
 async function findAuthUserByPhone(phoneE164: string): Promise<string | null> {
-  const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-  if (error) throw error;
-  return data.users.find((u) => u.phone === phoneE164.replace(/^\+/, ""))?.id ?? null;
+  return tryAuth("listUsers", async () => {
+    const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (error) throw error;
+    return data.users.find((u) => u.phone === phoneE164.replace(/^\+/, ""))?.id ?? null;
+  });
 }
 
 async function deleteAuthUser(userId: string): Promise<void> {
-  const { error } = await sb.auth.admin.deleteUser(userId);
-  if (error && !error.message.includes("not found")) throw error;
+  await tryAuth("deleteUser", async () => {
+    const { error } = await sb.auth.admin.deleteUser(userId);
+    if (error && !error.message.includes("not found")) throw error;
+  });
+}
+
+/** id auth_users lokal yang stabil per identitas, dipakai saat Supabase Auth offline. */
+function localAuthId(identifier: string): string {
+  const hex = createHash("sha256").update(identifier).digest("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    `4${hex.slice(13, 16)}`,
+    `8${hex.slice(17, 20)}`,
+    hex.slice(20, 32),
+  ].join("-");
+}
+
+/**
+ * Jembatan sementara: `teachers.auth_user_id` / `admins.auth_user_id` sekarang
+ * FK ke tabel lokal `auth_users`, sementara akun auth-nya masih dibuat di
+ * Supabase. Baris cermin ini dibuat supaya FK tidak menolak insert. Hilang
+ * di Fase 4 saat Auth.js jadi satu-satunya sumber akun.
+ */
+async function mirrorAuthUser(
+  authId: string,
+  identity: { email?: string; phone?: string },
+): Promise<void> {
+  if (identity.email) {
+    await sql`DELETE FROM auth_users WHERE email = ${identity.email} AND id <> ${authId}`;
+  }
+  if (identity.phone) {
+    await sql`DELETE FROM auth_users WHERE phone = ${identity.phone} AND id <> ${authId}`;
+  }
+  await sql`
+    INSERT INTO auth_users (id, email, phone)
+    VALUES (${authId}, ${identity.email ?? null}, ${identity.phone ?? null})
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone
+  `;
+}
+
+/** sql.json() dengan tipe longgar — ErrorItem punya field opsional, JSONValue tidak menerimanya. */
+function jsonb(value: unknown) {
+  return sql.json(value as Parameters<typeof sql.json>[0]);
 }
 
 function daysAgo(n: number): Date {
@@ -457,37 +543,38 @@ const DEMO_WA_PATTERN = "08990000%";
 async function resetFunnelData() {
   console.log("\n⟲ Reset: deleting funnel demo data...");
 
-  const { data: subs } = await sb
-    .from("submissions").select("id").like("nomor_wa", DEMO_WA_PATTERN);
-  const subIds = (subs ?? []).map((r: { id: string }) => r.id);
+  const subs = await sql<{ id: string }[]>`
+    SELECT id FROM submissions WHERE nomor_wa LIKE ${DEMO_WA_PATTERN}
+  `;
+  const subIds = subs.map((r) => r.id);
 
   if (subIds.length > 0) {
-    await sb.from("analytics_events").delete().in("submission_id", subIds);
-    await sb.from("interest_responses").delete().in("submission_id", subIds);
-    await sb.from("attendance").delete().in("submission_id", subIds);
+    await sql`DELETE FROM analytics_events WHERE submission_id = ANY(${subIds}::uuid[])`;
+    await sql`DELETE FROM interest_responses WHERE submission_id = ANY(${subIds}::uuid[])`;
+    await sql`DELETE FROM attendance WHERE submission_id = ANY(${subIds}::uuid[])`;
     console.log("  ✓ Cleared attendance, interest, analytics");
   }
 
   if (ALL_COHORT_IDS.length > 0) {
-    await sb.from("cohort_enrollments").delete().in("cohort_id", ALL_COHORT_IDS);
-    await sb.from("cohort_sessions").delete().in("cohort_id", ALL_COHORT_IDS);
-    await sb.from("cohorts").delete().in("id", ALL_COHORT_IDS);
+    await sql`DELETE FROM cohort_enrollments WHERE cohort_id = ANY(${ALL_COHORT_IDS}::uuid[])`;
+    await sql`DELETE FROM cohort_sessions WHERE cohort_id = ANY(${ALL_COHORT_IDS}::uuid[])`;
+    await sql`DELETE FROM cohorts WHERE id = ANY(${ALL_COHORT_IDS}::uuid[])`;
     console.log("  ✓ Cleared cohorts + sessions + enrollments");
   }
 
   if (subIds.length > 0) {
-    await sb.from("bookings").delete().in("submission_id", subIds);
+    await sql`DELETE FROM bookings WHERE submission_id = ANY(${subIds}::uuid[])`;
     console.log("  ✓ Cleared bookings");
   }
 
   if (ALL_SLOT_IDS.length > 0) {
-    await sb.from("slots").delete().in("id", ALL_SLOT_IDS);
+    await sql`DELETE FROM slots WHERE id = ANY(${ALL_SLOT_IDS}::uuid[])`;
     console.log("  ✓ Cleared slots");
   }
 
-  await sb.from("rapot").delete().like("slug", "demo-%");
+  await sql`DELETE FROM rapot WHERE slug LIKE ${"demo-%"}`;
   if (subIds.length > 0) {
-    await sb.from("submissions").delete().in("id", subIds);
+    await sql`DELETE FROM submissions WHERE id = ANY(${subIds}::uuid[])`;
   }
   console.log("  ✓ Cleared submissions + rapot");
 }
@@ -495,11 +582,12 @@ async function resetFunnelData() {
 async function reset() {
   console.log("⟲ Reset: deleting existing dummy admin + pengajar...");
   for (const t of TEACHERS) {
-    await sb.from("teacher_availability").delete().in(
-      "teacher_id",
-      (await sb.from("teachers").select("id").eq("nomor_wa", t.phone_db)).data?.map((r) => r.id) ?? [],
-    );
-    await sb.from("teachers").delete().eq("nomor_wa", t.phone_db);
+    await sql`
+      DELETE FROM teacher_availability
+      WHERE teacher_id IN (SELECT id FROM teachers WHERE nomor_wa = ${t.phone_db})
+    `;
+    await sql`DELETE FROM teachers WHERE nomor_wa = ${t.phone_db}`;
+    await sql`DELETE FROM auth_users WHERE phone = ${t.phone_e164}`;
     const authId = await findAuthUserByPhone(t.phone_e164);
     if (authId) {
       await deleteAuthUser(authId);
@@ -507,7 +595,8 @@ async function reset() {
     console.log(`  ✓ Removed pengajar ${t.nama} + auth user`);
   }
   const adminAuthId = await findAuthUserByEmail(ADMIN_EMAIL);
-  await sb.from("admins").delete().eq("email", ADMIN_EMAIL.toLowerCase());
+  await sql`DELETE FROM admins WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
+  await sql`DELETE FROM auth_users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
   if (adminAuthId) {
     await deleteAuthUser(adminAuthId);
   }
@@ -524,19 +613,36 @@ async function seedAdmin() {
   if (authId) {
     console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
   } else {
-    const { data, error } = await sb.auth.admin.createUser({
-      email: ADMIN_EMAIL, email_confirm: true,
-      user_metadata: { role: "admin", nama: ADMIN_NAMA },
+    const created = await tryAuth("createUser", async () => {
+      const { data, error } = await sb.auth.admin.createUser({
+        email: ADMIN_EMAIL, email_confirm: true,
+        user_metadata: { role: "admin", nama: ADMIN_NAMA },
+      });
+      if (error) throw error;
+      return data.user.id;
     });
-    if (error) { console.error(`  ✗ Failed to create auth user: ${error.message}`); return; }
-    authId = data.user.id;
-    console.log(`  ✓ Auth user created (${authId.slice(0, 8)}...)`);
+    authId = created ?? localAuthId(`admin:${ADMIN_EMAIL.toLowerCase()}`);
+    console.log(
+      created
+        ? `  ✓ Auth user created (${authId.slice(0, 8)}...)`
+        : `  · Auth user lokal saja (${authId.slice(0, 8)}...)`,
+    );
   }
-  const { error: dbError } = await sb.from("admins").upsert(
-    { auth_user_id: authId, nama: ADMIN_NAMA, email: ADMIN_EMAIL.toLowerCase(), role: ADMIN_ROLE, is_active: true },
-    { onConflict: "auth_user_id" },
-  );
-  if (dbError) { console.error(`  ✗ Failed to upsert admins row: ${dbError.message}`); return; }
+  try {
+    await mirrorAuthUser(authId, { email: ADMIN_EMAIL.toLowerCase() });
+    await sql`
+      INSERT INTO admins (auth_user_id, nama, email, role, is_active)
+      VALUES (${authId}, ${ADMIN_NAMA}, ${ADMIN_EMAIL.toLowerCase()}, ${ADMIN_ROLE}, ${true})
+      ON CONFLICT (auth_user_id) DO UPDATE SET
+        nama = EXCLUDED.nama,
+        email = EXCLUDED.email,
+        role = EXCLUDED.role,
+        is_active = EXCLUDED.is_active
+    `;
+  } catch (err) {
+    console.error(`  ✗ Failed to upsert admins row: ${(err as Error).message}`);
+    return;
+  }
   console.log(`  ✓ admins row ready (role=${ADMIN_ROLE})`);
 }
 
@@ -550,40 +656,69 @@ async function seedTeacher(t: TeacherSeed) {
   if (authId) {
     console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
   } else {
-    const { data, error } = await sb.auth.admin.createUser({
-      phone: t.phone_e164, password: DUMMY_PASSWORD, phone_confirm: true,
-      user_metadata: { role: "teacher", nama: t.nama },
+    const created = await tryAuth("createUser", async () => {
+      const { data, error } = await sb.auth.admin.createUser({
+        phone: t.phone_e164, password: DUMMY_PASSWORD, phone_confirm: true,
+        user_metadata: { role: "teacher", nama: t.nama },
+      });
+      if (error) {
+        if (error.message.toLowerCase().includes("phone provider"))
+          console.error("    Hint: enable Phone provider at Supabase Dashboard → Authentication → Providers");
+        throw error;
+      }
+      return data.user.id;
     });
-    if (error) {
-      console.error(`  ✗ Failed to create auth user: ${error.message}`);
-      if (error.message.toLowerCase().includes("phone provider"))
-        console.error("    Hint: enable Phone provider at Supabase Dashboard → Authentication → Providers");
-      return;
-    }
-    authId = data.user.id;
-    console.log(`  ✓ Auth user created (${authId.slice(0, 8)}...)`);
+    authId = created ?? localAuthId(`teacher:${t.phone_e164}`);
+    console.log(
+      created
+        ? `  ✓ Auth user created (${authId.slice(0, 8)}...)`
+        : `  · Auth user lokal saja (${authId.slice(0, 8)}...)`,
+    );
   }
 
-  const { data: teacher, error: dbError } = await sb.from("teachers").upsert(
-    {
-      auth_user_id: authId, nama: t.nama, jenis_kelamin: t.jenis_kelamin,
-      nomor_wa: t.phone_db, email_meet: t.email_meet, bio: t.bio,
-      status: "active", activated_at: new Date().toISOString(),
-    },
-    { onConflict: "nomor_wa" },
-  ).select("id").single();
-
-  if (dbError || !teacher) { console.error(`  ✗ Failed to upsert teachers row: ${dbError?.message}`); return; }
-  console.log(`  ✓ teachers row ready (id=${teacher.id.slice(0, 8)}...)`);
+  let teacherId: string;
+  try {
+    await mirrorAuthUser(authId, { phone: t.phone_e164 });
+    const rows = await sql<{ id: string }[]>`
+      INSERT INTO teachers
+        (auth_user_id, nama, jenis_kelamin, nomor_wa, email_meet, bio, status, activated_at)
+      VALUES (
+        ${authId}, ${t.nama}, ${t.jenis_kelamin}, ${t.phone_db},
+        ${t.email_meet}, ${t.bio}, ${"active"}, ${new Date()}
+      )
+      ON CONFLICT (nomor_wa) DO UPDATE SET
+        auth_user_id = EXCLUDED.auth_user_id,
+        nama = EXCLUDED.nama,
+        jenis_kelamin = EXCLUDED.jenis_kelamin,
+        email_meet = EXCLUDED.email_meet,
+        bio = EXCLUDED.bio,
+        status = EXCLUDED.status,
+        activated_at = EXCLUDED.activated_at
+      RETURNING id
+    `;
+    if (!rows[0]) throw new Error("no row returned");
+    teacherId = rows[0].id;
+  } catch (err) {
+    console.error(`  ✗ Failed to upsert teachers row: ${(err as Error).message}`);
+    return;
+  }
+  console.log(`  ✓ teachers row ready (id=${teacherId.slice(0, 8)}...)`);
   console.log(`    → Login: /portal-mpt-x7/login  WA: ${t.phone_db}  Pwd: ${DUMMY_PASSWORD}`);
 
-  await sb.from("teacher_availability").delete().eq("teacher_id", teacher.id);
+  await sql`DELETE FROM teacher_availability WHERE teacher_id = ${teacherId}`;
   const windowRows = t.windows.map((w) => ({
-    teacher_id: teacher.id, day_of_week: w.day_of_week,
+    teacher_id: teacherId, day_of_week: w.day_of_week,
     start_time: w.start_time, end_time: w.end_time, kind: w.kind, is_active: true,
   }));
-  const { error: availErr } = await sb.from("teacher_availability").insert(windowRows);
-  if (availErr) { console.error(`  ✗ Failed to insert availability: ${availErr.message}`); return; }
+  try {
+    await sql`INSERT INTO teacher_availability ${sql(
+      windowRows,
+      "teacher_id", "day_of_week", "start_time", "end_time", "kind", "is_active",
+    )}`;
+  } catch (err) {
+    console.error(`  ✗ Failed to insert availability: ${(err as Error).message}`);
+    return;
+  }
   console.log(`  ✓ ${windowRows.length} availability window(s) set`);
 }
 
@@ -597,17 +732,20 @@ async function seedFunnelData() {
   console.log("═══════════════════════════════════════════════════════");
 
   // ---- Look up teacher IDs ----
-  const { data: tRows } = await sb
-    .from("teachers").select("id, nomor_wa, jenis_kelamin")
-    .in("nomor_wa", TEACHERS.map((t) => t.phone_db));
+  const tRows = await sql<
+    { id: string; nomor_wa: string; jenis_kelamin: string }[]
+  >`
+    SELECT id, nomor_wa, jenis_kelamin FROM teachers
+    WHERE nomor_wa = ANY(${TEACHERS.map((t) => t.phone_db)}::text[])
+  `;
 
-  if (!tRows || tRows.length < 4) {
+  if (tRows.length < 4) {
     console.error("  ✗ Could not find all 4 teachers. Run teacher seed first.");
     return;
   }
 
   const tMap: Record<string, { id: string; g: string }> = {};
-  for (const r of tRows as { id: string; nomor_wa: string; jenis_kelamin: string }[]) {
+  for (const r of tRows) {
     tMap[r.nomor_wa] = { id: r.id, g: r.jenis_kelamin };
   }
   const ahmad = tMap["081200000001"]!;
@@ -620,14 +758,36 @@ async function seedFunnelData() {
   const subData = PESERTA.map((p) => ({
     nama: p.nama, jenis_kelamin: p.jenis_kelamin, nomor_wa: p.nomor_wa,
     audio_path: "demo/placeholder.webm", audio_duration_sec: p.audio_duration_sec,
-    status: "completed" as const, processed_at: daysAgo(42).toISOString(),
+    status: "completed" as const, processed_at: daysAgo(42),
     rapot_slug: p.rapot_slug,
   }));
-  const { data: subRows, error: subErr } = await sb
-    .from("submissions").upsert(subData, { onConflict: "rapot_slug" }).select("id, rapot_slug");
-  if (subErr || !subRows) { console.error(`  ✗ submissions: ${subErr?.message}`); return; }
+  let subRows: { id: string; rapot_slug: string }[];
+  try {
+    // Insert dan SELECT dipisah: menggabungkan generic baris hasil dengan
+    // helper sql(rows, ...cols) di satu query bikin inferensi tipe postgres.js
+    // runtuh (helper-nya jadi tidak cocok dengan ParameterOrFragment<never>).
+    await sql`
+      INSERT INTO submissions ${sql(
+        subData,
+        "nama", "jenis_kelamin", "nomor_wa", "audio_path",
+        "audio_duration_sec", "status", "processed_at", "rapot_slug",
+      )}
+      ON CONFLICT (rapot_slug) DO UPDATE SET
+        nama = EXCLUDED.nama,
+        jenis_kelamin = EXCLUDED.jenis_kelamin,
+        nomor_wa = EXCLUDED.nomor_wa,
+        audio_path = EXCLUDED.audio_path,
+        audio_duration_sec = EXCLUDED.audio_duration_sec,
+        status = EXCLUDED.status,
+        processed_at = EXCLUDED.processed_at
+    `;
+    subRows = await sql<{ id: string; rapot_slug: string }[]>`
+      SELECT id, rapot_slug FROM submissions
+      WHERE rapot_slug IN ${sql(PESERTA.map((p) => p.rapot_slug))}
+    `;
+  } catch (err) { console.error(`  ✗ submissions: ${(err as Error).message}`); return; }
   const slugToId: Record<string, string> = {};
-  for (const r of subRows as { id: string; rapot_slug: string }[]) slugToId[r.rapot_slug] = r.id;
+  for (const r of subRows) slugToId[r.rapot_slug] = r.id;
   console.log(`  ✓ ${subRows.length} submissions`);
 
   // ---- 2. Rapot ----
@@ -636,18 +796,45 @@ async function seedFunnelData() {
     const errors = errorsBySkor(p.target_skor);
     const score = computeScoreInline(errors);
     return {
-      slug: p.rapot_slug, submission_id: slugToId[p.rapot_slug],
+      slug: p.rapot_slug, submission_id: slugToId[p.rapot_slug]!,
       skor: score.skor, status_label: score.status_label,
-      errors_harakat: errors.errors_harakat, errors_huruf: errors.errors_huruf,
-      errors_panjang_pendek: errors.errors_panjang_pendek, errors_syaddah: errors.errors_syaddah,
+      // Kolom jsonb — harus lewat sql.json(), kalau tidak dikirim sebagai array Postgres.
+      errors_harakat: jsonb(errors.errors_harakat),
+      errors_huruf: jsonb(errors.errors_huruf),
+      errors_panjang_pendek: jsonb(errors.errors_panjang_pendek),
+      errors_syaddah: jsonb(errors.errors_syaddah),
       total_errors_major: score.total_errors_major, total_errors_minor: score.total_errors_minor,
       weighted_score: score.weighted_score,
       ml_model_version: "muaalem-v3_2", ml_confidence: 0.82 + i * 0.015,
       ai_narrative: narrativeBySkor(p.target_skor), ai_narrative_model: "claude-sonnet-4-6",
     };
   });
-  const { error: rapotErr } = await sb.from("rapot").upsert(rapotData, { onConflict: "slug" });
-  if (rapotErr) { console.error(`  ✗ rapot: ${rapotErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO rapot ${sql(
+        rapotData,
+        "slug", "submission_id", "skor", "status_label",
+        "errors_harakat", "errors_huruf", "errors_panjang_pendek", "errors_syaddah",
+        "total_errors_major", "total_errors_minor", "weighted_score",
+        "ml_model_version", "ml_confidence", "ai_narrative", "ai_narrative_model",
+      )}
+      ON CONFLICT (slug) DO UPDATE SET
+        submission_id = EXCLUDED.submission_id,
+        skor = EXCLUDED.skor,
+        status_label = EXCLUDED.status_label,
+        errors_harakat = EXCLUDED.errors_harakat,
+        errors_huruf = EXCLUDED.errors_huruf,
+        errors_panjang_pendek = EXCLUDED.errors_panjang_pendek,
+        errors_syaddah = EXCLUDED.errors_syaddah,
+        total_errors_major = EXCLUDED.total_errors_major,
+        total_errors_minor = EXCLUDED.total_errors_minor,
+        weighted_score = EXCLUDED.weighted_score,
+        ml_model_version = EXCLUDED.ml_model_version,
+        ml_confidence = EXCLUDED.ml_confidence,
+        ai_narrative = EXCLUDED.ai_narrative,
+        ai_narrative_model = EXCLUDED.ai_narrative_model
+    `;
+  } catch (err) { console.error(`  ✗ rapot: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${rapotData.length} rapot`);
 
   // ---- 3. Slots ----
@@ -673,8 +860,10 @@ async function seedFunnelData() {
   function mkSlot(id: string, teacherId: string, kind: "assessment" | "tahsin", at: Date, gender: Gender, past: boolean) {
     return {
       id, teacher_id: teacherId, kind,
-      created_at: past ? new Date(at.getTime() - 86_400_000).toISOString() : undefined,
-      scheduled_at: at.toISOString(), duration_min: kind === "assessment" ? 60 : 90,
+      // Slot lampau butuh created_at sebelum scheduled_at supaya CHECK slot_future
+      // tidak menolak. Slot mendatang cukup now() — sama dengan DEFAULT kolomnya.
+      created_at: past ? new Date(at.getTime() - 86_400_000) : new Date(),
+      scheduled_at: at, duration_min: kind === "assessment" ? 60 : 90,
       capacity: 12, gender_target: gender,
       status: past ? "completed" : "scheduled",
       meet_join_url: `https://meet.google.com/demo-${id.slice(0, 8)}-${id.slice(9, 13)}`,
@@ -697,8 +886,26 @@ async function seedFunnelData() {
     ...tahsinAkhFutDates.map((dt, i) => mkSlot(D.slots.tahsin_akh_fut[i]!, fatimah.id, "tahsin", dt, "akhwat", false)),
   ];
 
-  const { error: slotErr } = await sb.from("slots").upsert(slotRows, { onConflict: "id" });
-  if (slotErr) { console.error(`  ✗ slots: ${slotErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO slots ${sql(
+        slotRows,
+        "id", "teacher_id", "kind", "created_at", "scheduled_at", "duration_min",
+        "capacity", "gender_target", "status", "meet_join_url", "meet_calendar_event_id",
+      )}
+      ON CONFLICT (id) DO UPDATE SET
+        teacher_id = EXCLUDED.teacher_id,
+        kind = EXCLUDED.kind,
+        created_at = EXCLUDED.created_at,
+        scheduled_at = EXCLUDED.scheduled_at,
+        duration_min = EXCLUDED.duration_min,
+        capacity = EXCLUDED.capacity,
+        gender_target = EXCLUDED.gender_target,
+        status = EXCLUDED.status,
+        meet_join_url = EXCLUDED.meet_join_url,
+        meet_calendar_event_id = EXCLUDED.meet_calendar_event_id
+    `;
+  } catch (err) { console.error(`  ✗ slots: ${(err as Error).message}`); return; }
   const pastCount = slotRows.filter((s) => s.status === "completed").length;
   console.log(`  ✓ ${slotRows.length} slots (${pastCount} past, ${slotRows.length - pastCount} future)`);
 
@@ -726,8 +933,23 @@ async function seedFunnelData() {
       end_date: daysFromNow(32).toISOString().slice(0, 10), capacity: 12, status: "open",
     },
   ];
-  const { error: cohortErr } = await sb.from("cohorts").upsert(cohortRows, { onConflict: "id" });
-  if (cohortErr) { console.error(`  ✗ cohorts: ${cohortErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO cohorts ${sql(
+        cohortRows,
+        "id", "teacher_id", "name", "gender_target",
+        "start_date", "end_date", "capacity", "status",
+      )}
+      ON CONFLICT (id) DO UPDATE SET
+        teacher_id = EXCLUDED.teacher_id,
+        name = EXCLUDED.name,
+        gender_target = EXCLUDED.gender_target,
+        start_date = EXCLUDED.start_date,
+        end_date = EXCLUDED.end_date,
+        capacity = EXCLUDED.capacity,
+        status = EXCLUDED.status
+    `;
+  } catch (err) { console.error(`  ✗ cohorts: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${cohortRows.length} cohorts`);
 
   // ---- 5. Cohort sessions ----
@@ -738,8 +960,15 @@ async function seedFunnelData() {
     ...D.cs.ikh_fut.map((id, i) => ({ id, cohort_id: D.cohorts.ikh_fut, slot_id: D.slots.tahsin_ikh_fut[i]!, session_number: i + 1 })),
     ...D.cs.akh_fut.map((id, i) => ({ id, cohort_id: D.cohorts.akh_fut, slot_id: D.slots.tahsin_akh_fut[i]!, session_number: i + 1 })),
   ];
-  const { error: csErr } = await sb.from("cohort_sessions").upsert(csRows, { onConflict: "id" });
-  if (csErr) { console.error(`  ✗ cohort_sessions: ${csErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO cohort_sessions ${sql(csRows, "id", "cohort_id", "slot_id", "session_number")}
+      ON CONFLICT (id) DO UPDATE SET
+        cohort_id = EXCLUDED.cohort_id,
+        slot_id = EXCLUDED.slot_id,
+        session_number = EXCLUDED.session_number
+    `;
+  } catch (err) { console.error(`  ✗ cohort_sessions: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${csRows.length} cohort sessions`);
 
   // ---- 6. Bookings ----
@@ -752,22 +981,31 @@ async function seedFunnelData() {
       : (isPast ? D.slots.assess_akh_past : D.slots.assess_akh_fut);
     return {
       slot_id: slotId,
-      submission_id: slugToId[p.rapot_slug],
-      status: p.booking_status,
-      reserved_until: isPast ? daysAgo(20).toISOString() : daysFromNow(7).toISOString(),
+      submission_id: slugToId[p.rapot_slug]!,
+      status: p.booking_status!,
+      reserved_until: isPast ? daysAgo(20) : daysFromNow(7),
     };
   });
-  const { error: bookErr } = await sb
-    .from("bookings").upsert(bookingRows, { onConflict: "slot_id,submission_id", ignoreDuplicates: false });
-  if (bookErr) { console.error(`  ✗ bookings: ${bookErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO bookings ${sql(bookingRows, "slot_id", "submission_id", "status", "reserved_until")}
+      ON CONFLICT (slot_id, submission_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        reserved_until = EXCLUDED.reserved_until
+    `;
+  } catch (err) { console.error(`  ✗ bookings: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${bookingRows.length} bookings`);
 
   // Look up booking IDs for attendance
   const demoSubIds = Object.values(slugToId);
-  const { data: bookingLookup } = await sb
-    .from("bookings").select("id, slot_id, submission_id").in("submission_id", demoSubIds);
+  const bookingLookup = await sql<
+    { id: string; slot_id: string; submission_id: string }[]
+  >`
+    SELECT id, slot_id, submission_id FROM bookings
+    WHERE submission_id = ANY(${demoSubIds}::uuid[])
+  `;
   const bookingMap: Record<string, string> = {};
-  for (const b of (bookingLookup ?? []) as { id: string; slot_id: string; submission_id: string }[]) {
+  for (const b of bookingLookup) {
     bookingMap[`${b.slot_id}:${b.submission_id}`] = b.id;
   }
 
@@ -776,16 +1014,28 @@ async function seedFunnelData() {
   const enrolledPeserta = PESERTA.filter((p) => p.tahsin_sessions_attended !== undefined);
   const enrollRows = enrolledPeserta.map((p) => ({
     cohort_id: p.jenis_kelamin === "ikhwan" ? D.cohorts.ikh_past : D.cohorts.akh_past,
-    submission_id: slugToId[p.rapot_slug],
+    submission_id: slugToId[p.rapot_slug]!,
   }));
-  const { error: enrollErr } = await sb
-    .from("cohort_enrollments").upsert(enrollRows, { onConflict: "cohort_id,submission_id", ignoreDuplicates: true });
-  if (enrollErr) { console.error(`  ✗ cohort_enrollments: ${enrollErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO cohort_enrollments ${sql(enrollRows, "cohort_id", "submission_id")}
+      ON CONFLICT (cohort_id, submission_id) DO NOTHING
+    `;
+  } catch (err) { console.error(`  ✗ cohort_enrollments: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${enrollRows.length} enrollments`);
 
   // ---- 8. Attendance ----
   console.log("→ Seeding attendance...");
-  const attendanceRows: Record<string, unknown>[] = [];
+  const attendanceRows: {
+    id: string;
+    booking_id: string | null;
+    cohort_session_id: string | null;
+    submission_id: string;
+    attended: boolean;
+    source: string;
+    joined_at: Date;
+    duration_min: number;
+  }[] = [];
   let attIdx = 0;
 
   // Assessment attendance (P5–P10: status='attended')
@@ -801,7 +1051,7 @@ async function seedFunnelData() {
       id: demoId("dddddddd", attIdx),
       booking_id: bookingId, cohort_session_id: null,
       submission_id: subId, attended: true,
-      source: "manual", joined_at: joinedAt.toISOString(), duration_min: 55,
+      source: "manual", joined_at: joinedAt, duration_min: 55,
     });
   }
 
@@ -816,15 +1066,30 @@ async function seedFunnelData() {
       joinedAt.setMinutes(joinedAt.getMinutes() + 3);
       attendanceRows.push({
         id: demoId("dddddddd", 100 + attIdx),
-        booking_id: null, cohort_session_id: sessions[s],
+        booking_id: null, cohort_session_id: sessions[s]!,
         submission_id: subId, attended: true,
-        source: "manual", joined_at: joinedAt.toISOString(), duration_min: 85,
+        source: "manual", joined_at: joinedAt, duration_min: 85,
       });
     }
   }
 
-  const { error: attErr } = await sb.from("attendance").upsert(attendanceRows, { onConflict: "id" });
-  if (attErr) { console.error(`  ✗ attendance: ${attErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO attendance ${sql(
+        attendanceRows,
+        "id", "booking_id", "cohort_session_id", "submission_id",
+        "attended", "source", "joined_at", "duration_min",
+      )}
+      ON CONFLICT (id) DO UPDATE SET
+        booking_id = EXCLUDED.booking_id,
+        cohort_session_id = EXCLUDED.cohort_session_id,
+        submission_id = EXCLUDED.submission_id,
+        attended = EXCLUDED.attended,
+        source = EXCLUDED.source,
+        joined_at = EXCLUDED.joined_at,
+        duration_min = EXCLUDED.duration_min
+    `;
+  } catch (err) { console.error(`  ✗ attendance: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${attendanceRows.length} attendance records`);
 
   // ---- 9. Interest responses ----
@@ -835,35 +1100,41 @@ async function seedFunnelData() {
       gateRows.push({ submission_id: slugToId[p.rapot_slug]!, gate: g.gate, response: g.response });
     }
   }
-  const { error: gateErr } = await sb
-    .from("interest_responses").upsert(gateRows, { onConflict: "submission_id,gate", ignoreDuplicates: true });
-  if (gateErr) { console.error(`  ✗ interest_responses: ${gateErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO interest_responses ${sql(gateRows, "submission_id", "gate", "response")}
+      ON CONFLICT (submission_id, gate) DO NOTHING
+    `;
+  } catch (err) { console.error(`  ✗ interest_responses: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${gateRows.length} gate responses`);
 
   // ---- 10. Analytics events ----
   console.log("→ Seeding analytics events...");
-  await sb.from("analytics_events").delete().in("submission_id", demoSubIds);
-  const eventRows: { event_name: string; submission_id: string; occurred_at: string }[] = [];
+  await sql`DELETE FROM analytics_events WHERE submission_id = ANY(${demoSubIds}::uuid[])`;
+  const eventRows: { event_name: string; submission_id: string; occurred_at: Date }[] = [];
   for (const p of PESERTA) {
     const subId = slugToId[p.rapot_slug]!;
     const base = daysAgo(42);
-    eventRows.push({ event_name: "submission_created", submission_id: subId, occurred_at: base.toISOString() });
-    eventRows.push({ event_name: "rapot_viewed", submission_id: subId, occurred_at: new Date(base.getTime() + 60_000).toISOString() });
+    eventRows.push({ event_name: "submission_created", submission_id: subId, occurred_at: base });
+    eventRows.push({ event_name: "rapot_viewed", submission_id: subId, occurred_at: new Date(base.getTime() + 60_000) });
     if (p.booking_status) {
-      eventRows.push({ event_name: "booking_created", submission_id: subId, occurred_at: new Date(base.getTime() + 120_000).toISOString() });
+      eventRows.push({ event_name: "booking_created", submission_id: subId, occurred_at: new Date(base.getTime() + 120_000) });
     }
     if (p.booking_status === "attended") {
-      eventRows.push({ event_name: "assessment_attended", submission_id: subId, occurred_at: daysAgo(21).toISOString() });
+      eventRows.push({ event_name: "assessment_attended", submission_id: subId, occurred_at: daysAgo(21) });
     }
     if (p.tahsin_sessions_attended !== undefined) {
-      eventRows.push({ event_name: "tahsin_enrolled", submission_id: subId, occurred_at: daysAgo(35).toISOString() });
+      eventRows.push({ event_name: "tahsin_enrolled", submission_id: subId, occurred_at: daysAgo(35) });
     }
     if (p.gates.some((g) => g.gate === "gate3_post_tahsin" && g.response === "yes")) {
-      eventRows.push({ event_name: "hits_cta_clicked", submission_id: subId, occurred_at: daysAgo(3).toISOString() });
+      eventRows.push({ event_name: "hits_cta_clicked", submission_id: subId, occurred_at: daysAgo(3) });
     }
   }
-  const { error: evtErr } = await sb.from("analytics_events").insert(eventRows);
-  if (evtErr) { console.error(`  ✗ analytics_events: ${evtErr.message}`); return; }
+  try {
+    await sql`
+      INSERT INTO analytics_events ${sql(eventRows, "event_name", "submission_id", "occurred_at")}
+    `;
+  } catch (err) { console.error(`  ✗ analytics_events: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${eventRows.length} analytics events`);
 
   // ---- Summary ----
@@ -886,17 +1157,18 @@ async function seedFunnelData() {
 async function main() {
   console.log("═══════════════════════════════════════════════════════");
   console.log("  Muhajir Project Tilawah — Development Seed");
-  console.log(`  Target: ${SUPABASE_URL}`);
+  console.log(`  Target: ${dbTarget()}`);
+  console.log(`  Auth:   ${SUPABASE_URL}`);
   console.log(`  Mode:   ${isReset ? "RESET + SEED" : "SEED (idempotent)"}`);
   console.log("═══════════════════════════════════════════════════════");
 
-  const { error: sanityErr } = await sb
-    .from("teachers").select("id", { count: "exact", head: true });
-  if (sanityErr) {
+  try {
+    await sql`SELECT id FROM teachers LIMIT 1`;
+  } catch (err) {
     console.error("\n✗ Cannot query teachers table:");
-    console.error(`  ${sanityErr.message}`);
+    console.error(`  ${(err as Error).message}`);
     console.error("\n  Likely cause: migrations not applied yet.");
-    console.error("  Run migrations at Supabase Dashboard → SQL Editor, then retry seed.");
+    console.error("  Run `pnpm db:migrate`, then retry seed.");
     process.exit(1);
   }
 
@@ -927,8 +1199,11 @@ async function main() {
   console.log("  5. Admin → /admin/cohort untuk lihat tahsin cohorts");
 }
 
-main().catch((err) => {
-  console.error("\n✗ Seed failed with unhandled error:");
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("\n✗ Seed failed with unhandled error:");
+    console.error(err);
+    process.exitCode = 1;
+  })
+  // Tanpa ini pool postgres.js menahan proses tetap hidup setelah seed selesai.
+  .finally(() => sql.end());

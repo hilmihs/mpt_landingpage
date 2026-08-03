@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,27 +48,25 @@ export async function POST(req: Request) {
     );
   }
 
-  const sb = supabaseService();
-  const { data, error } = await sb
-    .from("teacher_availability")
-    .insert({
-      teacher_id: teacher.teacherId,
-      day_of_week,
-      start_time,
-      end_time,
-      kind,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
+  try {
+    const rows = await sql<{ id: string }[]>`
+      INSERT INTO teacher_availability
+        (teacher_id, day_of_week, start_time, end_time, kind)
+      VALUES
+        (${teacher.teacherId}, ${day_of_week}, ${start_time}, ${end_time}, ${kind})
+      RETURNING id`;
+    // INSERT ... RETURNING selalu mengembalikan tepat satu baris.
+    const [row] = rows;
+    return NextResponse.json({ ok: true, id: row!.id });
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "unknown database error",
+      },
       { status: 500 },
     );
   }
-
-  return NextResponse.json({ ok: true, id: data.id });
 }
 
 export async function DELETE(req: Request) {
@@ -83,17 +81,19 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "missing_id" }, { status: 400 });
   }
 
-  const sb = supabaseService();
   // Soft-delete via is_active=false to preserve referential history
-  const { error } = await sb
-    .from("teacher_availability")
-    .update({ is_active: false })
-    .eq("id", id)
-    .eq("teacher_id", teacher.teacherId);
-
-  if (error) {
+  try {
+    await sql`
+      UPDATE teacher_availability
+         SET is_active = false
+       WHERE id = ${id}
+         AND teacher_id = ${teacher.teacherId}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "unknown database error",
+      },
       { status: 500 },
     );
   }

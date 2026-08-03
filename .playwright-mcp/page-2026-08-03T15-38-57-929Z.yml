@@ -1,0 +1,26 @@
+- generic [ref=f2e1]:
+  - main [ref=f2e4]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - generic [ref=f2e8]: Assessment-Tilawah
+        - heading "Sign in" [level=1] [ref=f2e9]
+      - generic [ref=f2e13]:
+        - generic [ref=f2e17]:
+          - generic [ref=f2e20]:
+            - generic [ref=f2e24]:
+              - text: Email address
+              - superscript [ref=f2e25]: "*"
+            - textbox "Email address*" [active] [ref=f2e29]
+          - generic [ref=f2e32]:
+            - generic [ref=f2e36]:
+              - text: Password
+              - superscript [ref=f2e37]: "*"
+            - generic [ref=f2e39]:
+              - textbox "Password*" [ref=f2e41]
+              - button "Show password" [ref=f2e44] [cursor=pointer]
+          - generic [ref=f2e53]:
+            - checkbox "Remember me" [ref=f2e54]
+            - generic [ref=f2e55]: Remember me
+        - button "Sign in" [ref=f2e61] [cursor=pointer]
+  - generic:
+    - status

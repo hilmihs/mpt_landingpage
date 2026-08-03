@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,15 +46,14 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
 
-  const sb = supabaseService();
-  const { error } = await sb
-    .from("teachers")
-    .update(updates)
-    .eq("id", teacher.teacherId);
-
-  if (error) {
+  try {
+    await sql`UPDATE teachers SET ${sql(updates)} WHERE id = ${teacher.teacherId}`;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      {
+        error: "db_error",
+        message: err instanceof Error ? err.message : "unknown database error",
+      },
       { status: 500 },
     );
   }

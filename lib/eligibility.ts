@@ -1,4 +1,4 @@
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export interface ParticipantEligibility {
   submission_id: string;
@@ -42,82 +42,75 @@ export interface ParticipantEligibility {
 export async function getParticipantEligibility(
   submissionId: string,
 ): Promise<ParticipantEligibility | null> {
-  const sb = supabaseService();
-
-  const { data: subRaw } = await sb
-    .from("submissions")
-    .select("id, nama, jenis_kelamin")
-    .eq("id", submissionId)
-    .maybeSingle();
-  if (!subRaw) return null;
-  const sub = subRaw as {
-    id: string;
-    nama: string;
-    jenis_kelamin: "ikhwan" | "akhwat";
-  };
+  const subRows = await sql<
+    { id: string; nama: string; jenis_kelamin: "ikhwan" | "akhwat" }[]
+  >`
+    SELECT id, nama, jenis_kelamin
+      FROM submissions
+     WHERE id = ${submissionId}
+     LIMIT 1
+  `;
+  const sub = subRows[0];
+  if (!sub) return null;
 
   // 1. Attendance: did peserta attend an assessment session?
-  const { data: attendedRaw } = await sb
-    .from("attendance")
-    .select(
-      `id, attended, created_at,
-       bookings:booking_id(slot_id, slots:slot_id(kind))`,
-    )
-    .eq("submission_id", submissionId)
-    .eq("attended", true)
-    .order("created_at", { ascending: false });
-
-  const attendedAssessments = (attendedRaw ?? []) as unknown as {
-    id: string;
-    attended: boolean;
-    created_at: string;
-    bookings: {
-      slot_id: string;
-      slots: { kind: "assessment" | "tahsin" } | null;
-    } | null;
-  }[];
+  const attendedAssessments = await sql<
+    {
+      id: string;
+      attended: boolean;
+      created_at: Date | null;
+      kind: "assessment" | "tahsin" | null;
+    }[]
+  >`
+    SELECT a.id, a.attended, a.created_at, s.kind
+      FROM attendance a
+      LEFT JOIN bookings b ON b.id = a.booking_id
+      LEFT JOIN slots s ON s.id = b.slot_id
+     WHERE a.submission_id = ${submissionId}
+       AND a.attended = true
+     ORDER BY a.created_at DESC
+  `;
 
   const assessmentAttendance = attendedAssessments.find(
-    (a) => a.bookings?.slots?.kind === "assessment",
+    (a) => a.kind === "assessment",
   );
 
   // 2. Gate 1/2/3 responses
-  const { data: interestRaw } = await sb
-    .from("interest_responses")
-    .select("gate, response")
-    .eq("submission_id", submissionId);
+  const interestRows = await sql<{ gate: string; response: string }[]>`
+    SELECT gate, response
+      FROM interest_responses
+     WHERE submission_id = ${submissionId}
+  `;
 
   const responses = new Map<string, "yes" | "no" | "later">();
-  for (const r of (interestRaw ?? []) as { gate: string; response: string }[]) {
+  for (const r of interestRows) {
     responses.set(r.gate, r.response as "yes" | "no" | "later");
   }
 
   // 3. ALL non-dropped enrollments — needed to compute ever_qualified.
   // We separately pick the most-recent one as the "current" cohort for UI.
-  const { data: enrollRaw } = await sb
-    .from("cohort_enrollments")
-    .select(
-      `id, created_at, status, completed_sessions, qualified_for_hits,
-       cohorts:cohort_id(id, name, status, start_date, end_date)`,
-    )
-    .eq("submission_id", submissionId)
-    .neq("status", "dropped")
-    .order("created_at", { ascending: false });
-
-  const enrollments = (enrollRaw ?? []) as unknown as {
-    id: string;
-    created_at: string;
-    status: string;
-    completed_sessions: number;
-    qualified_for_hits: boolean;
-    cohorts: {
+  const enrollments = await sql<
+    {
       id: string;
-      name: string;
       status: string;
-      start_date: string;
-      end_date: string;
-    } | null;
-  }[];
+      completed_sessions: number;
+      qualified_for_hits: boolean;
+      cohort_id: string | null;
+      cohort_name: string | null;
+      cohort_status: string | null;
+      start_date: string | null;
+      end_date: string | null;
+    }[]
+  >`
+    SELECT e.id, e.status, e.completed_sessions, e.qualified_for_hits,
+           c.id AS cohort_id, c.name AS cohort_name, c.status AS cohort_status,
+           c.start_date::text AS start_date, c.end_date::text AS end_date
+      FROM cohort_enrollments e
+      LEFT JOIN cohorts c ON c.id = e.cohort_id
+     WHERE e.submission_id = ${submissionId}
+       AND e.status <> 'dropped'
+     ORDER BY e.created_at DESC
+  `;
 
   const ever_qualified_for_hits = enrollments.some(
     (e) => e.qualified_for_hits,
@@ -128,13 +121,13 @@ export async function getParticipantEligibility(
   // cohort after graduating).
   const current = enrollments[0];
   const enrolled_cohort =
-    current && current.cohorts
+    current && current.cohort_id
       ? {
-          id: current.cohorts.id,
-          name: current.cohorts.name,
-          status: current.cohorts.status,
-          start_date: current.cohorts.start_date,
-          end_date: current.cohorts.end_date,
+          id: current.cohort_id,
+          name: current.cohort_name as string,
+          status: current.cohort_status as string,
+          start_date: current.start_date as string,
+          end_date: current.end_date as string,
           completed_sessions: current.completed_sessions,
           qualified_for_hits: current.qualified_for_hits,
           enrollment_status: current.status,
@@ -169,7 +162,8 @@ export async function getParticipantEligibility(
     jenis_kelamin: sub.jenis_kelamin,
     gate2_eligible,
     gate2_response: gate2Response,
-    attended_assessment_at: assessmentAttendance?.created_at ?? null,
+    attended_assessment_at:
+      assessmentAttendance?.created_at?.toISOString() ?? null,
     enrolled_cohort,
     ever_qualified_for_hits,
     gate3_eligible,
@@ -180,14 +174,13 @@ export async function getParticipantEligibility(
 export async function getParticipantEligibilityBySlug(
   rapotSlug: string,
 ): Promise<ParticipantEligibility | null> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("rapot")
-    .select("submission_id")
-    .eq("slug", rapotSlug)
-    .maybeSingle();
-  if (!data) return null;
-  return getParticipantEligibility(
-    (data as { submission_id: string }).submission_id,
-  );
+  const rows = await sql<{ submission_id: string }[]>`
+    SELECT submission_id
+      FROM rapot
+     WHERE slug = ${rapotSlug}
+     LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return getParticipantEligibility(row.submission_id);
 }

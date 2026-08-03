@@ -8,7 +8,7 @@ import {
   Trophy,
   ExternalLink,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +24,23 @@ interface FunnelMetrics {
 }
 
 async function fetchMetrics(): Promise<FunnelMetrics> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("v_funnel_metrics")
-      .select("*")
-      .maybeSingle();
-    if (data) return data as FunnelMetrics;
+    // Kolom view bertipe bigint; postgres.js mengembalikannya sebagai string,
+    // jadi di-cast ke int supaya tetap number seperti sebelumnya.
+    const rows = await sql<FunnelMetrics[]>`
+      SELECT total_submissions::int,
+             completed_assessments::int,
+             gate1_yes::int,
+             total_bookings::int,
+             attended_assessments::int,
+             tahsin_enrollments::int,
+             tahsin_completed::int,
+             hits_clicked::int
+      FROM v_funnel_metrics
+      LIMIT 1
+    `;
+    const data = rows[0] ?? null;
+    if (data) return data;
   } catch {
     // view not present — fall through to zeros
   }

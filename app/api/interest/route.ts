@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
 import { interestRatelimit, getClientIp } from "@/lib/redis";
 
@@ -45,35 +45,29 @@ export async function POST(req: Request) {
   }
 
   const { rapot_slug, gate, response, optional_note } = parsed.data;
-  const sb = supabaseService();
 
-  const { data: rapot } = await sb
-    .from("rapot")
-    .select("submission_id")
-    .eq("slug", rapot_slug)
-    .maybeSingle();
+  const rapotRows = await sql<{ submission_id: string }[]>`
+    SELECT submission_id FROM rapot WHERE slug = ${rapot_slug} LIMIT 1
+  `;
+  const rapot = rapotRows[0] ?? null;
 
   if (!rapot) {
     return NextResponse.json({ error: "rapot_not_found" }, { status: 404 });
   }
 
-  const submission_id = rapot.submission_id as string;
+  const submission_id = rapot.submission_id;
 
-  const { error: upsertErr } = await sb
-    .from("interest_responses")
-    .upsert(
-      {
-        submission_id,
-        gate,
-        response,
-        optional_note: optional_note ?? null,
-      },
-      { onConflict: "submission_id,gate" },
-    );
-
-  if (upsertErr) {
+  try {
+    await sql`
+      INSERT INTO interest_responses (submission_id, gate, response, optional_note)
+      VALUES (${submission_id}, ${gate}, ${response}, ${optional_note ?? null})
+      ON CONFLICT (submission_id, gate)
+      DO UPDATE SET response = EXCLUDED.response,
+                    optional_note = EXCLUDED.optional_note
+    `;
+  } catch (err) {
     return NextResponse.json(
-      { error: "db_error", message: upsertErr.message },
+      { error: "db_error", message: (err as Error).message },
       { status: 500 },
     );
   }

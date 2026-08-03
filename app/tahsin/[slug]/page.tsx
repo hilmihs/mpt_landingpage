@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, GraduationCap, SkipForward } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { getParticipantEligibilityBySlug } from "@/lib/eligibility";
 import { CohortPicker } from "@/components/tahsin/CohortPicker";
 import { trackEvent, FUNNEL_EVENTS } from "@/lib/analytics";
@@ -22,34 +22,44 @@ interface CohortListItem {
 async function fetchAvailableCohorts(
   gender: "ikhwan" | "akhwat",
 ): Promise<CohortListItem[]> {
-  const sb = supabaseService();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const { data } = await sb
-    .from("cohorts")
-    .select(
-      `id, name, status, gender_target, start_date, end_date, capacity, enrolled_count,
-       teachers:teacher_id(nama),
-       cohort_sessions(slot_id, slots:slot_id(scheduled_at, duration_min))`,
-    )
-    .eq("status", "open")
-    .eq("gender_target", gender)
-    .gte("start_date", todayStr)
-    .order("start_date", { ascending: true });
-
-  const rows = (data ?? []) as unknown as {
-    id: string;
-    name: string;
-    capacity: number;
-    enrolled_count: number;
-    start_date: string;
-    end_date: string;
-    teachers: { nama: string } | null;
-    cohort_sessions: {
-      slot_id: string;
-      slots: { scheduled_at: string; duration_min: number } | null;
-    }[];
-  }[];
+  const rows = await sql<
+    {
+      id: string;
+      name: string;
+      capacity: number;
+      enrolled_count: number;
+      start_date: string;
+      end_date: string;
+      teacher_nama: string | null;
+      sessions: { scheduled_at: string; duration_min: number }[];
+    }[]
+  >`
+    SELECT c.id, c.name, c.capacity, c.enrolled_count,
+           c.start_date::text AS start_date, c.end_date::text AS end_date,
+           t.nama AS teacher_nama,
+           COALESCE(
+             (
+               SELECT json_agg(
+                        json_build_object(
+                          'scheduled_at', s.scheduled_at,
+                          'duration_min', s.duration_min
+                        )
+                      )
+                 FROM cohort_sessions cs
+                 JOIN slots s ON s.id = cs.slot_id
+                WHERE cs.cohort_id = c.id
+             ),
+             '[]'::json
+           ) AS sessions
+      FROM cohorts c
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+     WHERE c.status = 'open'
+       AND c.gender_target = ${gender}
+       AND c.start_date >= ${todayStr}
+     ORDER BY c.start_date ASC
+  `;
 
   return rows
     .filter((c) => c.enrolled_count < c.capacity)
@@ -60,12 +70,11 @@ async function fetchAvailableCohorts(
       end_date: c.end_date,
       capacity: c.capacity,
       enrolled_count: c.enrolled_count,
-      teacher_nama: c.teachers?.nama ?? "—",
-      sessions: c.cohort_sessions
-        .filter((s) => s.slots)
+      teacher_nama: c.teacher_nama ?? "—",
+      sessions: c.sessions
         .map((s) => ({
-          scheduled_at: s.slots!.scheduled_at,
-          duration_min: s.slots!.duration_min,
+          scheduled_at: s.scheduled_at,
+          duration_min: s.duration_min,
         }))
         .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
     }));

@@ -8,9 +8,9 @@ import {
   ArrowRight,
   SkipForward,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { INDIKATOR_META, computeScore } from "@/lib/scoring";
-import type { IndikatorKey } from "@/types";
+import type { ErrorItem, IndikatorKey } from "@/types";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -27,39 +27,60 @@ export const metadata: Metadata = {
 
 
 async function fetchReportData(slug: string) {
-  const sb = supabaseService();
-
-  const { data: rapot } = await sb
-    .from("rapot")
-    .select(
-      `slug, skor, status_label, weighted_score,
-       total_errors_major, total_errors_minor,
-       errors_harakat, errors_huruf, errors_panjang_pendek, errors_syaddah,
-       submissions:submission_id(id, nama, rapot_slug, jenis_kelamin)`,
-    )
-    .eq("slug", slug)
-    .maybeSingle();
+  const rapotRows = await sql<
+    {
+      slug: string;
+      skor: number;
+      status_label: string;
+      weighted_score: string | null;
+      total_errors_major: number;
+      total_errors_minor: number;
+      errors_harakat: ErrorItem[] | null;
+      errors_huruf: ErrorItem[] | null;
+      errors_panjang_pendek: ErrorItem[] | null;
+      errors_syaddah: ErrorItem[] | null;
+      submission_id: string;
+      nama: string;
+      rapot_slug: string;
+      jenis_kelamin: "ikhwan" | "akhwat";
+    }[]
+  >`
+    SELECT r.slug, r.skor, r.status_label, r.weighted_score,
+           r.total_errors_major, r.total_errors_minor,
+           r.errors_harakat, r.errors_huruf, r.errors_panjang_pendek,
+           r.errors_syaddah,
+           s.id AS submission_id, s.nama, s.rapot_slug, s.jenis_kelamin
+      FROM rapot r
+      JOIN submissions s ON s.id = r.submission_id
+     WHERE r.slug = ${slug}
+     LIMIT 1
+  `;
+  const rapot = rapotRows[0];
 
   if (!rapot) return null;
 
-  const submission = rapot.submissions as unknown as {
-    id: string;
-    nama: string;
-    rapot_slug: string;
-    jenis_kelamin: "ikhwan" | "akhwat";
+  const submission = {
+    id: rapot.submission_id,
+    nama: rapot.nama,
+    rapot_slug: rapot.rapot_slug,
+    jenis_kelamin: rapot.jenis_kelamin,
   };
 
-  const { data: enrollment } = await sb
-    .from("cohort_enrollments")
-    .select("completed_sessions, qualified_for_hits")
-    .eq("submission_id", submission.id)
-    .maybeSingle();
+  const enrollmentRows = await sql<
+    { completed_sessions: number; qualified_for_hits: boolean }[]
+  >`
+    SELECT completed_sessions, qualified_for_hits
+      FROM cohort_enrollments
+     WHERE submission_id = ${submission.id}
+     LIMIT 1
+  `;
+  const enrollment = enrollmentRows[0] ?? null;
 
   const aiErrors: Record<IndikatorKey, number> = {
-    harakat: (rapot.errors_harakat as unknown[])?.length ?? 0,
-    huruf: (rapot.errors_huruf as unknown[])?.length ?? 0,
-    panjang_pendek: (rapot.errors_panjang_pendek as unknown[])?.length ?? 0,
-    syaddah: (rapot.errors_syaddah as unknown[])?.length ?? 0,
+    harakat: rapot.errors_harakat?.length ?? 0,
+    huruf: rapot.errors_huruf?.length ?? 0,
+    panjang_pendek: rapot.errors_panjang_pendek?.length ?? 0,
+    syaddah: rapot.errors_syaddah?.length ?? 0,
   };
 
   const improvementRate: Record<IndikatorKey, number> = {
@@ -77,8 +98,8 @@ async function fetchReportData(slug: string) {
   const aiTotal = Object.values(aiErrors).reduce((a, b) => a + b, 0);
 
   const postErrorItems = (cat: IndikatorKey) =>
-    ((rapot[`errors_${cat}` as keyof typeof rapot] as unknown[]) ?? [])
-      .slice(0, postErrors[cat]) as import("@/types").ErrorItem[];
+    ((rapot[`errors_${cat}` as keyof typeof rapot] as ErrorItem[] | null) ?? [])
+      .slice(0, postErrors[cat]);
   const postScoreResult = computeScore({
     errors_harakat: postErrorItems("harakat"),
     errors_huruf: postErrorItems("huruf"),

@@ -11,7 +11,7 @@ import {
   Clock,
   CheckCircle2,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -27,52 +27,124 @@ export const metadata: Metadata = {
 };
 
 async function fetchDashboardData(slug: string) {
-  const sb = supabaseService();
+  const submissionRows = await sql<
+    {
+      id: string;
+      nama: string;
+      jenis_kelamin: string;
+      nomor_wa: string;
+      rapot_slug: string | null;
+      created_at: Date | null;
+    }[]
+  >`
+    SELECT id, nama, jenis_kelamin, nomor_wa, rapot_slug, created_at
+      FROM submissions
+     WHERE rapot_slug = ${slug}
+     LIMIT 1
+  `;
+  const submissionRow = submissionRows[0];
+  if (!submissionRow) return null;
 
-  const { data: submission } = await sb
-    .from("submissions")
-    .select("id, nama, jenis_kelamin, nomor_wa, rapot_slug, created_at")
-    .eq("rapot_slug", slug)
-    .maybeSingle();
-  if (!submission) return null;
+  const rapotRows = await sql<
+    {
+      slug: string;
+      skor: number;
+      status_label: string;
+      weighted_score: string | null;
+    }[]
+  >`
+    SELECT slug, skor, status_label, weighted_score
+      FROM rapot
+     WHERE slug = ${slug}
+     LIMIT 1
+  `;
+  const rapot = rapotRows[0] ?? null;
 
-  const { data: rapot } = await sb
-    .from("rapot")
-    .select("slug, skor, status_label, weighted_score")
-    .eq("slug", slug)
-    .maybeSingle();
+  const bookingRows = await sql<
+    {
+      id: string;
+      status: string;
+      scheduled_at: Date | null;
+      duration_min: number | null;
+      kind: string | null;
+      meet_join_url: string | null;
+      teacher_nama: string | null;
+    }[]
+  >`
+    SELECT b.id, b.status,
+           s.scheduled_at, s.duration_min, s.kind, s.meet_join_url,
+           t.nama AS teacher_nama
+      FROM bookings b
+      LEFT JOIN slots s ON s.id = b.slot_id
+      LEFT JOIN teachers t ON t.id = s.teacher_id
+     WHERE b.submission_id = ${submissionRow.id}
+     ORDER BY b.created_at DESC
+  `;
 
-  const { data: bookings } = await sb
-    .from("bookings")
-    .select(
-      `id, status, created_at,
-       slots:slot_id(scheduled_at, duration_min, kind, meet_join_url,
-         teachers:teacher_id(nama))`,
-    )
-    .eq("submission_id", submission.id)
-    .order("created_at", { ascending: false });
+  const enrollmentRows = await sql<
+    {
+      id: string;
+      status: string;
+      completed_sessions: number;
+      qualified_for_hits: boolean;
+      cohort_name: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      teacher_nama: string | null;
+    }[]
+  >`
+    SELECT e.id, e.status, e.completed_sessions, e.qualified_for_hits,
+           c.name AS cohort_name,
+           c.start_date::text AS start_date, c.end_date::text AS end_date,
+           t.nama AS teacher_nama
+      FROM cohort_enrollments e
+      LEFT JOIN cohorts c ON c.id = e.cohort_id
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+     WHERE e.submission_id = ${submissionRow.id}
+  `;
 
-  const { data: enrollments } = await sb
-    .from("cohort_enrollments")
-    .select(
-      `id, status, completed_sessions, qualified_for_hits,
-       cohorts:cohort_id(name, start_date, end_date,
-         teachers:teacher_id(nama))`,
-    )
-    .eq("submission_id", submission.id);
-
-  const { data: attendance } = await sb
-    .from("attendance")
-    .select("id, attended, joined_at")
-    .eq("submission_id", submission.id)
-    .eq("attended", true);
+  const attendanceRows = await sql<{ count: number }[]>`
+    SELECT count(*)::int AS count
+      FROM attendance
+     WHERE submission_id = ${submissionRow.id}
+       AND attended = true
+  `;
 
   return {
-    submission,
+    submission: {
+      ...submissionRow,
+      created_at: submissionRow.created_at?.toISOString() ?? "",
+    },
     rapot,
-    bookings: bookings ?? [],
-    enrollments: enrollments ?? [],
-    attendanceCount: attendance?.length ?? 0,
+    // Bentuk bersarang dipertahankan supaya render di bawah tidak berubah.
+    bookings: bookingRows.map((b) => ({
+      id: b.id,
+      status: b.status,
+      slots: b.scheduled_at
+        ? {
+            scheduled_at: b.scheduled_at.toISOString(),
+            duration_min: b.duration_min,
+            kind: b.kind,
+            meet_join_url: b.meet_join_url,
+            teachers: b.teacher_nama ? { nama: b.teacher_nama } : null,
+          }
+        : null,
+    })),
+    enrollments: enrollmentRows.map((e) => ({
+      id: e.id,
+      status: e.status,
+      completed_sessions: e.completed_sessions,
+      qualified_for_hits: e.qualified_for_hits,
+      cohorts: e.cohort_name
+        ? {
+            name: e.cohort_name,
+            start_date: e.start_date,
+            end_date: e.end_date,
+            teachers: e.teacher_nama ? { nama: e.teacher_nama } : null,
+          }
+        : null,
+    })),
+    attendanceCount: attendanceRows[0]?.count ?? 0,
   };
 }
 

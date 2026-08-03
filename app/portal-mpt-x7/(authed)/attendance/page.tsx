@@ -1,5 +1,5 @@
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { AttendanceManager } from "@/components/portal/AttendanceManager";
 
 export const dynamic = "force-dynamic";
@@ -17,55 +17,60 @@ interface AttendanceRow {
 }
 
 async function fetchPastBookings(teacherId: string): Promise<AttendanceRow[]> {
-  const sb = supabaseService();
   const horizonPast = new Date();
   horizonPast.setDate(horizonPast.getDate() - 30);
 
   try {
-    const { data } = await sb
-      .from("bookings")
-      .select(
-        `id,
-         slots:slot_id!inner(teacher_id, scheduled_at, duration_min, kind),
-         submissions:submission_id(nama, nomor_wa),
-         attendance(attended, source, need_review)`,
-      )
-      .eq("slots.teacher_id", teacherId)
-      .lte("slots.scheduled_at", new Date().toISOString())
-      .gte("slots.scheduled_at", horizonPast.toISOString())
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: false })
-      .limit(80);
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      slots: {
-        scheduled_at: string;
+    const rows = await sql<
+      {
+        id: string;
+        scheduled_at: Date;
         duration_min: number;
         kind: string;
-      } | null;
-      submissions: { nama: string; nomor_wa: string } | null;
-      attendance:
-        | { attended: boolean | null; source: string | null; need_review: boolean }[]
-        | null;
-    }[];
+        nama: string;
+        nomor_wa: string;
+        attended: boolean | null;
+        source: string | null;
+        need_review: boolean | null;
+      }[]
+    >`
+      SELECT b.id,
+             s.scheduled_at,
+             s.duration_min,
+             s.kind,
+             sub.nama,
+             sub.nomor_wa,
+             a.attended,
+             a.source,
+             a.need_review
+        FROM bookings b
+        JOIN slots s ON s.id = b.slot_id
+        JOIN submissions sub ON sub.id = b.submission_id
+        LEFT JOIN LATERAL (
+          SELECT attended, source, need_review
+            FROM attendance
+           WHERE booking_id = b.id
+           LIMIT 1
+        ) a ON true
+       WHERE s.teacher_id = ${teacherId}
+         AND s.scheduled_at <= ${new Date()}
+         AND s.scheduled_at >= ${horizonPast}
+         AND b.status <> 'cancelled'
+       ORDER BY b.created_at DESC
+       LIMIT 80`;
 
     return rows
-      .filter((r) => r.slots && r.submissions)
-      .map((r) => {
-        const att = r.attendance?.[0] ?? null;
-        return {
-          booking_id: r.id,
-          participant_nama: r.submissions!.nama,
-          participant_wa: r.submissions!.nomor_wa,
-          scheduled_at: r.slots!.scheduled_at,
-          duration_min: r.slots!.duration_min,
-          kind: r.slots!.kind,
-          attended: att?.attended ?? null,
-          source: att?.source ?? null,
-          need_review: att?.need_review ?? false,
-        };
-      })
+      .map((r) => ({
+        booking_id: r.id,
+        participant_nama: r.nama,
+        participant_wa: r.nomor_wa,
+        scheduled_at: r.scheduled_at.toISOString(),
+        duration_min: r.duration_min,
+        kind: r.kind,
+        attended: r.attended ?? null,
+        source: r.source ?? null,
+        need_review: r.need_review ?? false,
+      }))
       .sort((a, b) => {
         // Need review first, then by date desc
         if (a.need_review && !b.need_review) return -1;

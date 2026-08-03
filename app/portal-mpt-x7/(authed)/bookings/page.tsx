@@ -1,6 +1,6 @@
 import { Users, Calendar, Clock } from "lucide-react";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -15,42 +15,42 @@ interface BookingItem {
 }
 
 async function fetchBookings(teacherId: string): Promise<BookingItem[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("bookings")
-      .select(
-        `id, status,
-         slots:slot_id!inner(scheduled_at, duration_min, kind, teacher_id),
-         submissions:submission_id(nama, nomor_wa)`,
-      )
-      .eq("slots.teacher_id", teacherId)
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: false })
-      .limit(60);
-
-    const rows = (data ?? []) as unknown as {
-      id: string;
-      status: string;
-      slots: {
-        scheduled_at: string;
+    const rows = await sql<
+      {
+        id: string;
+        status: string;
+        scheduled_at: Date;
         duration_min: number;
         kind: string;
-      } | null;
-      submissions: { nama: string; nomor_wa: string } | null;
-    }[];
+        nama: string;
+        nomor_wa: string;
+      }[]
+    >`
+      SELECT b.id,
+             b.status,
+             s.scheduled_at,
+             s.duration_min,
+             s.kind,
+             sub.nama,
+             sub.nomor_wa
+        FROM bookings b
+        JOIN slots s ON s.id = b.slot_id
+        JOIN submissions sub ON sub.id = b.submission_id
+       WHERE s.teacher_id = ${teacherId}
+         AND b.status <> 'cancelled'
+       ORDER BY b.created_at DESC
+       LIMIT 60`;
 
-    return rows
-      .filter((r) => r.slots && r.submissions)
-      .map((r) => ({
-        id: r.id,
-        status: r.status,
-        scheduled_at: r.slots!.scheduled_at,
-        duration_min: r.slots!.duration_min,
-        participant_nama: r.submissions!.nama,
-        participant_wa: r.submissions!.nomor_wa,
-        kind: r.slots!.kind,
-      }));
+    return rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      scheduled_at: r.scheduled_at.toISOString(),
+      duration_min: r.duration_min,
+      participant_nama: r.nama,
+      participant_wa: r.nomor_wa,
+      kind: r.kind,
+    }));
   } catch {
     return [];
   }

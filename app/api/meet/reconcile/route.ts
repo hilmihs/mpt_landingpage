@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { reconcileSlotAttendance } from "@/lib/google-meet/reconcile";
 import { isMeetConfigured } from "@/lib/google-meet/auth";
 
@@ -36,33 +36,34 @@ async function handleReconcile(req: Request) {
     return NextResponse.json({ ok: true, skipped: "meet_not_configured" });
   }
 
-  const sb = supabaseService();
-
   // Find slots where the meeting should have ended:
   // scheduled_at + duration_min + 15min buffer < now()
   // AND status is not yet 'completed'
   // AND has a Google Meet conference ID
-  const { data: slotsRaw } = await sb
-    .from("slots")
-    .select("id, kind, scheduled_at, duration_min, meet_conference_id, status")
-    .not("meet_conference_id", "is", null)
-    .in("status", ["scheduled", "in_progress"])
-    .lt("scheduled_at", new Date(Date.now() - 15 * 60_000).toISOString());
-
-  const slots = (slotsRaw ?? []) as {
+  let slots: {
     id: string;
     kind: "assessment" | "tahsin";
-    scheduled_at: string;
+    scheduled_at: Date;
     duration_min: number;
     meet_conference_id: string;
     status: string;
   }[];
 
+  try {
+    slots = await sql`
+      SELECT id, kind, scheduled_at, duration_min, meet_conference_id, status
+        FROM slots
+       WHERE meet_conference_id IS NOT NULL
+         AND status IN ('scheduled', 'in_progress')
+         AND scheduled_at < ${new Date(Date.now() - 15 * 60_000)}`;
+  } catch {
+    slots = [];
+  }
+
   // Filter: only process slots where scheduled_at + duration + 15min buffer has passed
   const now = Date.now();
   const eligible = slots.filter((s) => {
-    const endTime =
-      new Date(s.scheduled_at).getTime() + s.duration_min * 60_000;
+    const endTime = s.scheduled_at.getTime() + s.duration_min * 60_000;
     return endTime + 15 * 60_000 < now;
   });
 
@@ -76,15 +77,13 @@ async function handleReconcile(req: Request) {
 
   for (const s of eligible) {
     // Mark slot as completed (meeting has ended based on schedule)
-    await sb
-      .from("slots")
-      .update({
-        status: "completed",
-        meeting_ended_at: new Date(
-          new Date(s.scheduled_at).getTime() + s.duration_min * 60_000,
-        ).toISOString(),
-      })
-      .eq("id", s.id);
+    await sql`
+      UPDATE slots
+         SET status = ${"completed"},
+             meeting_ended_at = ${new Date(
+               s.scheduled_at.getTime() + s.duration_min * 60_000,
+             )}
+       WHERE id = ${s.id}`;
 
     const r = await reconcileSlotAttendance(s.id);
     results.push({

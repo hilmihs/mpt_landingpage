@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   SkipForward,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { MeetNameReminder } from "@/components/booking/MeetNameReminder";
 import type { Metadata } from "next";
 
@@ -46,52 +46,64 @@ interface BookingDetail {
 }
 
 async function fetchBooking(id: string): Promise<BookingDetail | null> {
-  const sb = supabaseService();
-  const { data, error } = await sb
-    .from("bookings")
-    .select(
-      `id, status, notes_from_user,
-       slots:slot_id(scheduled_at, duration_min, meet_join_url, gender_target, teachers:teacher_id(nama)),
-       submissions:submission_id(nama, jenis_kelamin, nomor_wa, rapot_slug)`,
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error || !data) return null;
-
-  const row = data as unknown as {
+  let rows: {
     id: string;
     status: string;
     notes_from_user: string | null;
-    slots: {
-      scheduled_at: string;
-      duration_min: number;
-      meet_join_url: string | null;
-      gender_target: string;
-      teachers: { nama: string } | null;
-    } | null;
-    submissions: {
-      nama: string;
-      jenis_kelamin: string;
-      nomor_wa: string;
-      rapot_slug: string | null;
-    } | null;
-  };
+    slot_id: string | null;
+    scheduled_at: Date | null;
+    duration_min: number | null;
+    meet_join_url: string | null;
+    gender_target: string | null;
+    teacher_nama: string | null;
+    sub_id: string | null;
+    nama: string | null;
+    jenis_kelamin: string | null;
+    nomor_wa: string | null;
+    rapot_slug: string | null;
+  }[];
 
-  if (!row.slots || !row.submissions) return null;
+  try {
+    rows = await sql`
+      SELECT b.id, b.status, b.notes_from_user,
+             sl.id AS slot_id, sl.scheduled_at, sl.duration_min,
+             sl.meet_join_url, sl.gender_target,
+             t.nama AS teacher_nama,
+             sub.id AS sub_id, sub.nama, sub.jenis_kelamin, sub.nomor_wa,
+             sub.rapot_slug
+      FROM bookings b
+      LEFT JOIN slots sl ON sl.id = b.slot_id
+      LEFT JOIN teachers t ON t.id = sl.teacher_id
+      LEFT JOIN submissions sub ON sub.id = b.submission_id
+      WHERE b.id = ${id}
+      LIMIT 1
+    `;
+  } catch {
+    return null;
+  }
+
+  const row = rows[0];
+  if (!row) return null;
+
+  if (!row.slot_id || !row.sub_id) return null;
 
   return {
     id: row.id,
     status: row.status,
     notes_from_user: row.notes_from_user,
     slot: {
-      scheduled_at: row.slots.scheduled_at,
-      duration_min: row.slots.duration_min,
-      meet_join_url: row.slots.meet_join_url,
-      gender_target: row.slots.gender_target,
-      teacher_nama: row.slots.teachers?.nama ?? "Pengajar MPT",
+      scheduled_at: row.scheduled_at!.toISOString(),
+      duration_min: row.duration_min!,
+      meet_join_url: row.meet_join_url,
+      gender_target: row.gender_target!,
+      teacher_nama: row.teacher_nama ?? "Pengajar MPT",
     },
-    submission: row.submissions,
+    submission: {
+      nama: row.nama!,
+      jenis_kelamin: row.jenis_kelamin!,
+      nomor_wa: row.nomor_wa!,
+      rapot_slug: row.rapot_slug,
+    },
   };
 }
 

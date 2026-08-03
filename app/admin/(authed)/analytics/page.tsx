@@ -1,5 +1,5 @@
 import { Activity } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -9,20 +9,16 @@ interface EventCount {
 }
 
 async function fetchEventCounts(): Promise<EventCount[]> {
-  const sb = supabaseService();
   try {
-    const { data } = await sb
-      .from("analytics_events")
-      .select("event_name")
-      .gte(
-        "occurred_at",
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      );
+    const data = await sql<{ event_name: string }[]>`
+      SELECT event_name
+      FROM analytics_events
+      WHERE occurred_at >= ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}
+    `;
 
-    if (!data) return [];
     const counts = new Map<string, number>();
     for (const e of data) {
-      const name = e.event_name as string;
+      const name = e.event_name;
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return Array.from(counts.entries())

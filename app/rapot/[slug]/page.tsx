@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { ScoreCircle } from "@/components/assessment/ScoreCircle";
 import { AyatCard } from "@/components/rapot/AyatCard";
 import { IndikatorCard } from "@/components/rapot/IndikatorCard";
@@ -28,14 +28,60 @@ interface RapotWithSubmission extends RapotRow {
 }
 
 async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
-  const sb = supabaseService();
-  const { data, error } = await sb
-    .from("rapot")
-    .select("*, submissions(id, nama, jenis_kelamin, audio_duration_sec)")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data as RapotWithSubmission;
+  try {
+    // Relasi rapot -> submissions dulu di-embed PostgREST; di SQL cukup LEFT
+    // JOIN lalu dirakit jadi objek bersarang seperti bentuk lamanya.
+    // Kolom numeric di-cast ke float8 supaya driver mengembalikan number.
+    const rows = await sql`
+      SELECT
+        r.slug, r.submission_id, r.created_at, r.skor, r.status_label,
+        r.errors_harakat, r.errors_huruf, r.errors_panjang_pendek, r.errors_syaddah,
+        r.total_errors_major, r.total_errors_minor,
+        r.weighted_score::float8 AS weighted_score,
+        r.ml_model_version,
+        r.ml_confidence::float8 AS ml_confidence,
+        r.ai_narrative, r.ai_narrative_model,
+        s.id AS sub_id,
+        s.nama AS sub_nama,
+        s.jenis_kelamin AS sub_jenis_kelamin,
+        s.audio_duration_sec::float8 AS sub_audio_duration_sec
+      FROM rapot r
+      LEFT JOIN submissions s ON s.id = r.submission_id
+      WHERE r.slug = ${slug}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      slug: row.slug,
+      submission_id: row.submission_id,
+      created_at: (row.created_at as Date | null)?.toISOString() ?? "",
+      skor: row.skor,
+      status_label: row.status_label,
+      errors_harakat: row.errors_harakat ?? [],
+      errors_huruf: row.errors_huruf ?? [],
+      errors_panjang_pendek: row.errors_panjang_pendek ?? [],
+      errors_syaddah: row.errors_syaddah ?? [],
+      total_errors_major: row.total_errors_major,
+      total_errors_minor: row.total_errors_minor,
+      weighted_score: row.weighted_score,
+      ml_model_version: row.ml_model_version,
+      ml_confidence: row.ml_confidence,
+      ai_narrative: row.ai_narrative,
+      ai_narrative_model: row.ai_narrative_model,
+      submissions: row.sub_id
+        ? {
+            id: row.sub_id,
+            nama: row.sub_nama,
+            jenis_kelamin: row.sub_jenis_kelamin,
+            audio_duration_sec: row.sub_audio_duration_sec,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

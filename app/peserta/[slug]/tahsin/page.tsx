@@ -8,7 +8,7 @@ import {
   Video,
   ArrowRight,
 } from "lucide-react";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { SkipSessionButton } from "@/components/tahsin/SkipSessionButton";
 import type { Metadata } from "next";
 
@@ -25,24 +25,46 @@ export const metadata: Metadata = {
 };
 
 async function fetchTahsinData(slug: string) {
-  const sb = supabaseService();
-
-  const { data: submission } = await sb
-    .from("submissions")
-    .select("id, nama, jenis_kelamin, rapot_slug")
-    .eq("rapot_slug", slug)
-    .maybeSingle();
+  const submissionRows = await sql<
+    {
+      id: string;
+      nama: string;
+      jenis_kelamin: string;
+      rapot_slug: string | null;
+    }[]
+  >`
+    SELECT id, nama, jenis_kelamin, rapot_slug
+      FROM submissions
+     WHERE rapot_slug = ${slug}
+     LIMIT 1
+  `;
+  const submission = submissionRows[0];
   if (!submission) return null;
 
-  const { data: enrollment } = await sb
-    .from("cohort_enrollments")
-    .select(
-      `id, status, completed_sessions, qualified_for_hits,
-       cohorts:cohort_id(id, name, start_date, end_date, teacher_id,
-         teachers:teacher_id(nama))`,
-    )
-    .eq("submission_id", submission.id)
-    .maybeSingle();
+  const enrollmentRows = await sql<
+    {
+      id: string;
+      status: string;
+      completed_sessions: number;
+      qualified_for_hits: boolean;
+      cohort_id: string | null;
+      cohort_name: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      teacher_nama: string | null;
+    }[]
+  >`
+    SELECT e.id, e.status, e.completed_sessions, e.qualified_for_hits,
+           c.id AS cohort_id, c.name AS cohort_name,
+           c.start_date::text AS start_date, c.end_date::text AS end_date,
+           t.nama AS teacher_nama
+      FROM cohort_enrollments e
+      LEFT JOIN cohorts c ON c.id = e.cohort_id
+      LEFT JOIN teachers t ON t.id = c.teacher_id
+     WHERE e.submission_id = ${submission.id}
+     LIMIT 1
+  `;
+  const enrollment = enrollmentRows[0] ?? null;
 
   let sessions: {
     session_number: number;
@@ -51,65 +73,62 @@ async function fetchTahsinData(slug: string) {
     attended: boolean;
   }[] = [];
 
-  if (enrollment?.cohorts) {
-    const cohort = enrollment.cohorts as unknown as {
-      id: string;
-      name: string;
-      start_date: string;
-      end_date: string;
-      teachers: { nama: string } | null;
-    };
+  if (enrollment?.cohort_id) {
+    const cohortId = enrollment.cohort_id;
 
-    const { data: csData } = await sb
-      .from("cohort_sessions")
-      .select(
-        `session_number,
-         slots:slot_id(scheduled_at, meet_join_url)`,
-      )
-      .eq("cohort_id", cohort.id)
-      .order("session_number");
+    const csData = await sql<
+      {
+        session_number: number;
+        scheduled_at: Date | null;
+        meet_join_url: string | null;
+      }[]
+    >`
+      SELECT cs.session_number, s.scheduled_at, s.meet_join_url
+        FROM cohort_sessions cs
+        LEFT JOIN slots s ON s.id = cs.slot_id
+       WHERE cs.cohort_id = ${cohortId}
+       ORDER BY cs.session_number
+    `;
 
-    const { data: attData } = await sb
-      .from("attendance")
-      .select("cohort_session_id")
-      .eq("submission_id", submission.id);
+    const attData = await sql<{ cohort_session_id: string | null }[]>`
+      SELECT cohort_session_id
+        FROM attendance
+       WHERE submission_id = ${submission.id}
+    `;
 
     const attendedSessionIds = new Set(
-      attData?.map((a) => a.cohort_session_id).filter(Boolean) ?? [],
+      attData.map((a) => a.cohort_session_id).filter(Boolean),
     );
 
-    if (csData) {
-      const { data: allCs } = await sb
-        .from("cohort_sessions")
-        .select("id, session_number")
-        .eq("cohort_id", cohort.id);
+    if (csData.length > 0) {
+      const allCs = await sql<{ id: string; session_number: number }[]>`
+        SELECT id, session_number
+          FROM cohort_sessions
+         WHERE cohort_id = ${cohortId}
+      `;
 
       const sessionIdMap = new Map(
-        allCs?.map((cs) => [cs.session_number, cs.id]) ?? [],
+        allCs.map((cs) => [cs.session_number, cs.id]),
       );
 
-      sessions = csData.map((cs) => {
-        const slot = cs.slots as unknown as {
-          scheduled_at: string;
-          meet_join_url: string | null;
-        } | null;
-        return {
-          session_number: cs.session_number,
-          scheduled_at: slot?.scheduled_at ?? "",
-          meet_join_url: slot?.meet_join_url ?? null,
-          attended: attendedSessionIds.has(sessionIdMap.get(cs.session_number) ?? ""),
-        };
-      });
+      sessions = csData.map((cs) => ({
+        session_number: cs.session_number,
+        scheduled_at: cs.scheduled_at?.toISOString() ?? "",
+        meet_join_url: cs.meet_join_url ?? null,
+        attended: attendedSessionIds.has(
+          sessionIdMap.get(cs.session_number) ?? "",
+        ),
+      }));
     }
 
     return {
       submission,
       enrollment: {
         ...enrollment,
-        cohort_name: cohort.name,
-        teacher_nama: cohort.teachers?.nama ?? "Pengajar MPT",
-        start_date: cohort.start_date,
-        end_date: cohort.end_date,
+        cohort_name: enrollment.cohort_name,
+        teacher_nama: enrollment.teacher_nama ?? "Pengajar MPT",
+        start_date: enrollment.start_date,
+        end_date: enrollment.end_date,
       },
       sessions,
     };

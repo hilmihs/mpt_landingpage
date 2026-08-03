@@ -1,5 +1,6 @@
 import { getCurrentTeacher } from "@/lib/auth/teacher";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
+import { signedAudioUrl } from "@/lib/storage";
 import { Mic, Headphones } from "lucide-react";
 import { RecordingReviewList } from "@/components/portal/RecordingReviewList";
 
@@ -21,34 +22,51 @@ interface RecordingRow {
 }
 
 async function fetchRecordings(status: string): Promise<RecordingRow[]> {
-  const sb = supabaseService();
-  const { data } = await sb
-    .from("hits_recordings")
-    .select(
-      `id, audio_path, audio_duration_sec, status, assigned_tier, reviewer_notes,
-       reviewed_at, created_at,
-       submissions:submission_id(nama, jenis_kelamin, rapot_slug)`,
-    )
-    .eq("status", status)
-    .order("created_at", { ascending: status === "pending" });
-
-  const rows = (data ?? []) as unknown as {
+  let rows: {
     id: string;
     audio_path: string;
     audio_duration_sec: number | null;
     status: string;
     assigned_tier: string | null;
     reviewer_notes: string | null;
-    reviewed_at: string | null;
-    created_at: string;
-    submissions: { nama: string; jenis_kelamin: string; rapot_slug: string } | null;
+    reviewed_at: Date | null;
+    created_at: Date;
+    nama: string | null;
+    jenis_kelamin: string | null;
+    rapot_slug: string | null;
   }[];
+
+  try {
+    // status === "pending" diurutkan menaik (yang paling lama menunggu di atas),
+    // sisanya menurun.
+    rows = await sql`
+      SELECT r.id,
+             r.audio_path,
+             r.audio_duration_sec::float8 AS audio_duration_sec,
+             r.status,
+             r.assigned_tier,
+             r.reviewer_notes,
+             r.reviewed_at,
+             r.created_at,
+             sub.nama,
+             sub.jenis_kelamin,
+             sub.rapot_slug
+        FROM hits_recordings r
+        LEFT JOIN submissions sub ON sub.id = r.submission_id
+       WHERE r.status = ${status}
+       ORDER BY r.created_at ${status === "pending" ? sql`ASC` : sql`DESC`}`;
+  } catch {
+    rows = [];
+  }
 
   return Promise.all(
     rows.map(async (r) => {
-      const { data: urlData } = await sb.storage
-        .from("audio-submissions")
-        .createSignedUrl(r.audio_path, 3600);
+      let audioUrl = "";
+      try {
+        audioUrl = await signedAudioUrl(r.audio_path, 3600);
+      } catch {
+        audioUrl = "";
+      }
 
       return {
         id: r.id,
@@ -57,12 +75,12 @@ async function fetchRecordings(status: string): Promise<RecordingRow[]> {
         status: r.status,
         assigned_tier: r.assigned_tier,
         reviewer_notes: r.reviewer_notes,
-        reviewed_at: r.reviewed_at,
-        created_at: r.created_at,
-        peserta_nama: r.submissions?.nama ?? "—",
-        peserta_gender: r.submissions?.jenis_kelamin ?? "—",
-        peserta_slug: r.submissions?.rapot_slug ?? null,
-        audio_url: urlData?.signedUrl ?? "",
+        reviewed_at: r.reviewed_at ? r.reviewed_at.toISOString() : null,
+        created_at: r.created_at.toISOString(),
+        peserta_nama: r.nama ?? "—",
+        peserta_gender: r.jenis_kelamin ?? "—",
+        peserta_slug: r.rapot_slug ?? null,
+        audio_url: audioUrl,
       };
     }),
   );

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseService } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,37 +25,39 @@ export async function GET(req: Request) {
   }
 
   const { gender, kind } = parsed.data;
-  const sb = supabaseService();
 
   // Query slots via the v_slots_availability view (gracefully degrade if missing)
-  const { data, error } = await sb
-    .from("v_slots_availability")
-    .select(
-      "id, kind, scheduled_at, duration_min, gender_target, capacity, reserved_count, available_capacity, status, meet_join_url, teacher_id, teacher_nama",
-    )
-    .eq("kind", kind)
-    .eq("gender_target", gender)
-    .gt("scheduled_at", new Date().toISOString())
-    .order("scheduled_at", { ascending: true })
-    .limit(60);
-
-  if (error) {
+  let data: { available_capacity: number }[];
+  try {
+    data = await sql<{ available_capacity: number }[]>`
+      SELECT id, kind, scheduled_at, duration_min, gender_target, capacity,
+             reserved_count, available_capacity, status, meet_join_url,
+             teacher_id, teacher_nama
+      FROM v_slots_availability
+      WHERE kind = ${kind}
+        AND gender_target = ${gender}
+        AND scheduled_at > ${new Date()}
+      ORDER BY scheduled_at ASC
+      LIMIT 60
+    `;
+  } catch (err) {
+    const message = (err as Error).message;
     // If the view doesn't exist yet (migration not applied), return empty list
     // gracefully so the booking page can display a "coming soon" state.
     if (
-      error.message.toLowerCase().includes("does not exist") ||
-      error.message.toLowerCase().includes("relation")
+      message.toLowerCase().includes("does not exist") ||
+      message.toLowerCase().includes("relation")
     ) {
       return NextResponse.json({ slots: [], system_ready: false });
     }
     return NextResponse.json(
-      { error: "db_error", message: error.message },
+      { error: "db_error", message },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
-    slots: (data ?? []).filter((s) => s.available_capacity > 0),
+    slots: data.filter((s) => s.available_capacity > 0),
     system_ready: true,
   });
 }
