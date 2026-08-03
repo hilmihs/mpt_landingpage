@@ -1,4 +1,9 @@
-import { anthropic, AI_MODEL_NARRATIVE, isAIEnabled } from "./anthropic";
+import {
+  AI_MODEL_NARRATIVE,
+  DEEPSEEK_BASE_URL,
+  deepseekApiKey,
+  isAIEnabled,
+} from "./deepseek";
 import type { ErrorItem, IndikatorKey } from "@/types";
 import { INDIKATOR_LABEL } from "@/lib/scoring";
 import { AL_FATIHAH } from "@/lib/arabic";
@@ -50,8 +55,8 @@ export async function generateRapotNarrative(
   data: RapotForNarrative,
 ): Promise<NarrativeResult | null> {
   if (!isAIEnabled()) return null;
-  const client = anthropic();
-  if (!client) return null;
+  const apiKey = deepseekApiKey();
+  if (!apiKey) return null;
 
   const summary = summarizeErrors(data.errors);
 
@@ -64,19 +69,39 @@ ${summary}
 Tulis penjelasan untuk peserta sesuai aturan di system prompt.`;
 
   try {
-    const response = await client.messages.create({
-      model: AI_MODEL_NARRATIVE,
-      max_tokens: 600,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
+    const res = await fetch(`${DEEPSEEK_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: AI_MODEL_NARRATIVE,
+        max_tokens: 600,
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
     });
 
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") return null;
+    if (!res.ok) {
+      console.error("[ai.explain-rapot] DeepSeek HTTP", res.status);
+      return null;
+    }
+
+    const data = (await res.json()) as {
+      model?: string;
+      choices?: { message?: { content?: string } }[];
+    };
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) return null;
 
     return {
-      narrative: textBlock.text.trim(),
-      model: response.model ?? AI_MODEL_NARRATIVE,
+      narrative: text,
+      model: data.model ?? AI_MODEL_NARRATIVE,
     };
   } catch (err) {
     console.error("[ai.explain-rapot] failed:", (err as Error).message);
