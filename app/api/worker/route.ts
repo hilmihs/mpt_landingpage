@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseService, STORAGE_BUCKET } from "@/lib/supabase";
 import { drainJobs, type MLJob } from "@/lib/queue";
 import { mockMLPredict } from "@/lib/mock-ml";
+import { mlPredict } from "@/lib/ml-client";
 import { computeScore } from "@/lib/scoring";
 import { generateRapotNarrative } from "@/lib/ai/explain-rapot";
 
@@ -39,14 +40,17 @@ async function processJob(job: MLJob): Promise<{
       .from(STORAGE_BUCKET)
       .createSignedUrl(job.audio_path, 60 * 10);
 
-    const result = mockMLPredict({
+    const mlInput = {
       submission_id: job.submission_id,
       audio_url: signed?.signedUrl ?? "",
-    });
+    };
+    const result = process.env.ML_SERVER_URL
+      ? await mlPredict(mlInput)
+      : mockMLPredict(mlInput);
 
     const score = computeScore(result);
 
-    // Generate AI narrative (Phase 1 — optional, only if ANTHROPIC_API_KEY set)
+    // Generate AI narrative (Phase 1 — optional, only if DEEPSEEK_API_KEY set)
     const narrative = await generateRapotNarrative({
       skor: score.skor,
       status_label: score.status_label,
