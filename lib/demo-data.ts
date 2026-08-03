@@ -328,6 +328,7 @@ export const DEMO_NAV_LINKS = [
       { label: "Booking Jadwal", href: `/booking/assessment/demo-rizki-01` },
       { label: "Peserta Dashboard", href: `/peserta/${DEMO_SLUG}` },
       { label: "Assessment Result", href: `/peserta/${DEMO_SLUG}/assessment-result` },
+      { label: "Demo Hasil Pengajar", href: "/demo/assessment-pengajar" },
       { label: "Tahsin Progress", href: `/peserta/${DEMO_SLUG}/tahsin` },
       { label: "Tahsin Report", href: `/peserta/${DEMO_SLUG}/tahsin/report` },
       { label: "HITS Enrollment", href: `/peserta/${DEMO_SLUG}/hits` },

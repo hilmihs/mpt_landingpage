@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# working docs dropped at repo root (notulensi, proposal, dsb)
+/*.pdf
+
 # debug
 npm-debug.log*
 yarn-debug.log*
