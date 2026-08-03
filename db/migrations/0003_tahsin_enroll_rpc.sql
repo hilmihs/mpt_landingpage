@@ -73,6 +73,5 @@ BEGIN
 END;
 $$;
 
--- Grant execute to anon + authenticated so the API route can call it
--- via supabase.rpc(). Service role bypasses this anyway.
-GRANT EXECUTE ON FUNCTION enroll_in_cohort(UUID, UUID, TEXT) TO anon, authenticated, service_role;
+-- Dipanggil dari API route via SELECT enroll_in_cohort(...). Tidak ada GRANT:
+-- koneksi aplikasi memakai satu role service yang sudah jadi owner.

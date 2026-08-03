@@ -30,8 +30,14 @@ CREATE INDEX IF NOT EXISTS idx_slots_meet ON slots(meet_calendar_event_id)
 CREATE INDEX IF NOT EXISTS idx_slots_conference ON slots(meet_conference_id)
   WHERE meet_conference_id IS NOT NULL;
 
--- Update the v_slots_availability view to use new column names
-CREATE OR REPLACE VIEW v_slots_availability AS
+-- Update the v_slots_availability view to use new column names.
+-- DROP dulu, bukan CREATE OR REPLACE: urutan kolomnya berubah dari versi di
+-- 0002 (gender_target pindah posisi, meet_conference_id kolom baru), dan
+-- CREATE OR REPLACE VIEW hanya boleh menambah kolom di ujung — tidak boleh
+-- menggeser atau mengganti nama. View tidak menyimpan data, jadi DROP aman.
+DROP VIEW IF EXISTS v_slots_availability;
+
+CREATE VIEW v_slots_availability AS
 SELECT
   s.id,
   s.kind,

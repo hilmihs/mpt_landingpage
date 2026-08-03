@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:migrate": "tsx --env-file=.env.local db/migrate.ts",
+    "db:status": "tsx --env-file=.env.local db/migrate.ts --status",
     "seed:dev": "tsx --env-file=.env.local scripts/seed-dev.ts",
     "seed:reset": "tsx --env-file=.env.local scripts/seed-dev.ts --reset"
   },
@@ -26,6 +28,7 @@
     "nanoid": "^5.1.11",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
+    "postgres": "^3.4.9",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -43,7 +46,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "postgres": "^3.4.9",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
     "typescript": "^5"

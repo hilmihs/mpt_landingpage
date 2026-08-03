@@ -2,7 +2,7 @@
 -- Adds: teachers, availability, slots, bookings, cohorts, attendance, analytics, admins
 -- Aligns with docs/ARCHITECTURE_V2.md
 --
--- Apply via Supabase CLI: supabase db push
+-- Dijalankan oleh runner migrasi: pnpm db:migrate
 -- Or via SQL editor: paste entire file.
 
 -- =====================================================
@@ -42,7 +42,7 @@ CREATE TABLE teachers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at TIMESTAMPTZ DEFAULT now(),
 
-  -- Auth link (Supabase Auth user id)
+  -- Auth link — FK ke auth_users ditambahkan di 0007
   auth_user_id UUID UNIQUE,
 
   -- Profile
@@ -465,140 +465,6 @@ AFTER INSERT OR UPDATE ON attendance
 FOR EACH ROW EXECUTE FUNCTION sync_enrollment_completed_sessions();
 
 -- =====================================================
--- 17. RLS POLICIES
--- =====================================================
-
-ALTER TABLE teachers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teacher_availability ENABLE ROW LEVEL SECURITY;
-ALTER TABLE slots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cohorts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cohort_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cohort_enrollments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE interest_responses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
-
--- Helper: check if current user is admin
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM admins
-    WHERE auth_user_id = auth.uid() AND is_active = true
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Helper: check if current user is teacher (and return their teacher id)
-CREATE OR REPLACE FUNCTION current_teacher_id()
-RETURNS UUID AS $$
-  SELECT id FROM teachers
-  WHERE auth_user_id = auth.uid() AND status = 'active'
-  LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- TEACHERS: pengajar baca dirinya, admin baca semua
-CREATE POLICY teachers_self_read ON teachers
-  FOR SELECT USING (auth_user_id = auth.uid() OR is_admin());
-CREATE POLICY teachers_self_update ON teachers
-  FOR UPDATE USING (auth_user_id = auth.uid() OR is_admin());
-CREATE POLICY teachers_admin_write ON teachers
-  FOR INSERT WITH CHECK (is_admin());
-CREATE POLICY teachers_admin_delete ON teachers
-  FOR DELETE USING (is_admin());
-
--- TEACHER_AVAILABILITY: pengajar manage punyanya, admin manage semua
-CREATE POLICY avail_teacher_all ON teacher_availability
-  FOR ALL USING (teacher_id = current_teacher_id() OR is_admin())
-  WITH CHECK (teacher_id = current_teacher_id() OR is_admin());
-
--- SLOTS: public read (peserta perlu lihat untuk booking), teacher+admin write
-CREATE POLICY slots_public_read ON slots
-  FOR SELECT USING (true);
-CREATE POLICY slots_teacher_admin_write ON slots
-  FOR ALL USING (teacher_id = current_teacher_id() OR is_admin())
-  WITH CHECK (teacher_id = current_teacher_id() OR is_admin());
-
--- BOOKINGS:
--- - Anonymous read by slug not via auth (handled server-side via service role)
--- - Teacher baca booking di slotnya
--- - Admin baca semua
-CREATE POLICY bookings_teacher_read ON bookings
-  FOR SELECT USING (
-    is_admin() OR
-    slot_id IN (SELECT id FROM slots WHERE teacher_id = current_teacher_id())
-  );
-CREATE POLICY bookings_teacher_update ON bookings
-  FOR UPDATE USING (
-    is_admin() OR
-    slot_id IN (SELECT id FROM slots WHERE teacher_id = current_teacher_id())
-  );
-
--- COHORTS: same pattern
-CREATE POLICY cohorts_public_read ON cohorts
-  FOR SELECT USING (true);
-CREATE POLICY cohorts_teacher_admin_write ON cohorts
-  FOR ALL USING (teacher_id = current_teacher_id() OR is_admin())
-  WITH CHECK (teacher_id = current_teacher_id() OR is_admin());
-
--- COHORT_SESSIONS: readable for booking UI
-CREATE POLICY cohort_sessions_read ON cohort_sessions
-  FOR SELECT USING (true);
-CREATE POLICY cohort_sessions_write ON cohort_sessions
-  FOR ALL USING (
-    is_admin() OR
-    cohort_id IN (SELECT id FROM cohorts WHERE teacher_id = current_teacher_id())
-  );
-
--- COHORT_ENROLLMENTS: teacher baca yang di cohort dia
-CREATE POLICY enroll_teacher_read ON cohort_enrollments
-  FOR SELECT USING (
-    is_admin() OR
-    cohort_id IN (SELECT id FROM cohorts WHERE teacher_id = current_teacher_id())
-  );
-CREATE POLICY enroll_admin_write ON cohort_enrollments
-  FOR ALL USING (is_admin()) WITH CHECK (is_admin());
-
--- ATTENDANCE: teacher baca/tulis untuk slot/sessionnya, admin semua
-CREATE POLICY attendance_teacher ON attendance
-  FOR ALL USING (
-    is_admin() OR
-    booking_id IN (SELECT id FROM bookings WHERE slot_id IN
-      (SELECT id FROM slots WHERE teacher_id = current_teacher_id())) OR
-    cohort_session_id IN (SELECT id FROM cohort_sessions WHERE cohort_id IN
-      (SELECT id FROM cohorts WHERE teacher_id = current_teacher_id()))
-  )
-  WITH CHECK (
-    is_admin() OR
-    booking_id IN (SELECT id FROM bookings WHERE slot_id IN
-      (SELECT id FROM slots WHERE teacher_id = current_teacher_id())) OR
-    cohort_session_id IN (SELECT id FROM cohort_sessions WHERE cohort_id IN
-      (SELECT id FROM cohorts WHERE teacher_id = current_teacher_id()))
-  );
-
--- INTEREST_RESPONSES: admin baca semua (server-side via service role untuk write user)
-CREATE POLICY interest_admin_read ON interest_responses
-  FOR SELECT USING (is_admin());
-
--- ANALYTICS_EVENTS: admin baca semua (server-side write via service role)
-CREATE POLICY analytics_admin_read ON analytics_events
-  FOR SELECT USING (is_admin());
-
--- ADMINS: admin baca semua admin, super-admin write
-CREATE POLICY admins_admin_read ON admins
-  FOR SELECT USING (is_admin());
-CREATE POLICY admins_super_write ON admins
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM admins WHERE auth_user_id = auth.uid()
-            AND role = 'super' AND is_active = true)
-  );
-
--- AUDIT_LOGS: admin only
-CREATE POLICY audit_admin_read ON audit_logs
-  FOR SELECT USING (is_admin());
-
--- =====================================================
 -- 18. VIEWS — convenience for admin dashboard
 -- =====================================================
 
@@ -641,7 +507,7 @@ WHERE s.status = 'scheduled'
 -- 19. COMMENTS — documentation
 -- =====================================================
 
-COMMENT ON TABLE teachers IS 'Pengajar Assessment & Tahsin Al-Fatihah. Auth via Supabase phone+password.';
+COMMENT ON TABLE teachers IS 'Pengajar Assessment & Tahsin Al-Fatihah. Auth via auth_users (phone+password), lihat 0007.';
 COMMENT ON TABLE slots IS 'Concrete scheduled session. Assessment: 60min/12 capacity. Tahsin: 90min/12 capacity.';
 COMMENT ON TABLE cohorts IS 'Tahsin Al-Fatihah cohort: 4 sessions over 2 weeks (2x per week).';
 COMMENT ON TABLE attendance IS 'Source preference: zoom_webhook (auto) > ai_match (fuzzy fallback) > manual (override).';

@@ -1,0 +1,32 @@
+# Postgres lokal untuk development.
+# Versi 17 disamakan dengan Cloud SQL di produksi (docs/MIGRATION_SUPABASE_TO_GCP.md).
+#
+#   docker compose up -d
+#   pnpm db:migrate
+#
+# Kredensial di sini sengaja lemah — ini instance lokal yang tidak pernah
+# terekspos keluar laptop. Produksi memakai Secret Manager.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: mpt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mpt
+      POSTGRES_PASSWORD: mpt_local_dev
+      POSTGRES_DB: mpt
+    ports:
+      # 5433 di host, bukan 5432 — port itu sering sudah dipakai Postgres
+      # project lain di mesin yang sama. Di dalam container tetap 5432.
+      - "5433:5432"
+    volumes:
+      - mpt_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mpt -d mpt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mpt_pgdata:

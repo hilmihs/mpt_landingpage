@@ -1,6 +1,5 @@
 -- Muhajir Project Tilawah — Phase 1 schema
--- Run via Supabase SQL editor atau Supabase CLI:
---   supabase db push (untuk CLI)
+-- Dijalankan oleh runner migrasi: pnpm db:migrate
 
 -- Peserta submission
 CREATE TABLE submissions (

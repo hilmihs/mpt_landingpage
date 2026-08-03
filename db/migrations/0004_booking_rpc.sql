@@ -102,4 +102,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION create_booking(UUID, UUID, TEXT, TEXT) TO anon, authenticated, service_role;
+-- Dipanggil dari API route via SELECT create_booking(...). Lihat catatan di 0003.
