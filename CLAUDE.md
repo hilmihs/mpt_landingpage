@@ -39,8 +39,10 @@ Frontend:
 
 Backend:
   framework: Next.js API Routes (sama proyek)
-  database: Supabase Postgres
-  storage: Supabase Storage
+  database: Cloud SQL for PostgreSQL 17 (asia-southeast2) via postgres.js — lib/db.ts
+  storage: Google Cloud Storage (asia-southeast2), driver disk lokal saat dev — lib/storage.ts
+  auth: Auth.js v5 self-host, tabel auth_users — auth.ts
+  whatsapp: kirimi.id — lib/whatsapp.ts
   queue: BullMQ + Upstash Redis
   id_generator: nanoid(12)
 
@@ -51,8 +53,8 @@ ML Server (separate Python project):
   audio: librosa + ffmpeg
 
 Deployment:
-  frontend_backend: Vercel
-  ml_server: Biznet Gio Cloud T4 16GB (rekomendasi)
+  frontend_backend: Cloud Run (asia-southeast2), output standalone — docs/DEPLOY_GCP.md
+  ml_server: GCE VM + T4 Spot (asia-southeast2) — ml-server/scripts/gcp_deploy.sh
 
 Development Tools:
   package_manager: pnpm
@@ -219,6 +221,46 @@ Rapot → Gate 1 ("Tertarik laporan lebih dalam?") → Booking Assessment dengan
 - AI Phase 1 only: penjelasan rapot personalized + AI fuzzy match attendance
 - HITS Linktree hanya muncul setelah lulus Tahsin Al-Fatihah (≥3 dari 4 sesi attended)
 
+## V3 — Penilai adalah pengajar, bukan AI (Update 3 Agustus 2026)
+
+Keputusan rapat 3 Agustus 2026 membalik siapa yang menilai. Ini **mengesampingkan** beberapa baris di `Key Constraints` di atas — lihat catatan di sana.
+
+```
+Peserta rekam → audio disimpan
+      ├─► WA konfirmasi ke peserta ("sedang diperiksa, tunggu beberapa hari")
+      └─► WA ke pengajar via kirimi.id (rotasi, gender ketat)
+              ↓
+      Pengajar login → putar rekaman → isi formulir di panel Filament
+      muhajirproject (TAB BARU, bukan iframe) → dapat kode unik
+              ↓
+      Kode ditempel di aplikasi kita → nilai ditarik lewat API → disimpan
+              ↓
+      WA ke peserta → rapot berisi NILAI PENGAJAR (skala 1-10)
+
+  Paralel, tidak terlihat peserta:
+      AI menilai rekaman yang sama (skala 1-5), disimpan sebagai
+      bahan pembanding Agustus–Desember. Januari baru diputuskan
+      skor mana yang dipublikasikan.
+```
+
+**Yang berubah dari konstrain lama:**
+
+| Konstrain lama | Sekarang |
+|---|---|
+| `report_flow: DIGANTI di V3 — peserta menunggu pengajar (hitungan hari)` | Peserta menunggu **berhari-hari**; ada layar tunggu + notifikasi WA |
+| `scoring_scale: 1-5` untuk peserta | Peserta melihat **1-10** dari pengajar. Skor AI 1-5 tetap ada tapi **internal** |
+| Rapot AI ditampilkan ke peserta | Rapot AI **hanya untuk pengajar/admin yang login** |
+
+**Alasan:** kalau AI meleset dan memberi nilai tinggi ke semua orang, peserta merasa tidak perlu belajar lagi. Itu risiko produk yang lebih besar daripada tidak punya AI sama sekali.
+
+**Aturan formulir penilaian (dari Mas Agil, terkunci):**
+- Maksimum **5 menit** per laporan, mentok 7 menit
+- **Klik-klik saja, TIDAK ADA kolom teks bebas** — kolom bebas merusak standarisasi dan memperlambat input
+- Kategori kurang → tambah ke daftar, bukan bikin kolom bebas
+- Peserta **tidak melihat istilah "lahn jaliy/khafiy"** — yang muncul cuma "fatal"
+
+Detail integrasi, bukti header iframe, dan temuan keamanan di sistem eksternal: `docs/INTEGRASI_PENILAIAN_PENGAJAR.md`.
+
 ## Implementation Phases
 
 ### Phase 1: Foundation (Hari 1-3)
@@ -282,19 +324,19 @@ ML Engineer Anda kerja paralel di Python project terpisah:
 ```yaml
 audio_format: WebM/Opus
 audio_max_duration: 5 menit
-audio_retention: 7 hari (auto-delete)
+audio_retention: 7 hari (GCS lifecycle rule, bukan cron — berlaku per bucket)
 slug_length: 12 karakter (nanoid)
 form_required: nama, jenis_kelamin, nomor_wa
 nomor_wa_format: Indonesia (+62, 0, atau 62)
-scoring_scale: 1-5 (BUKAN 1-10)
+scoring_scale: AI 1-5 internal; peserta lihat skor PENGAJAR 1-10 (lihat V3)
 severity_weights: major=1, minor=0.5
 recommendation_target: Tahsin Al-Fatihah (single funnel untuk SEMUA skor)
 linktree_url: linktr.ee/muhajirprojecttilawah
 share_method: Share via WA + Copy Link
-report_flow: redirect setelah AI selesai
+report_flow: DIGANTI di V3 — peserta menunggu pengajar (hitungan hari)
 ml_engine: Mu'alim Open Source obadx/muaalem-model-v3_2
 ml_deployment: self-host GPU server
-data_residency: Indonesia (UU PDP)
+data_residency: Indonesia (UU PDP) — semua resource GCP di asia-southeast2
 ```
 
 ## File Structure
@@ -335,6 +377,11 @@ muhajir-tilawah/
 
 ## Anti-Patterns to Avoid
 
+- **JANGAN buat route yang menyentuh data pengajar/admin tanpa memanggil `getCurrentTeacher()` / `getCurrentAdmin()` di baris pertama.** RLS sudah dibuang — tidak ada lagi jaring pengaman di database. Sesi yang sah bukan berarti berhak atas data orang lain, jadi kepemilikan baris juga harus dicek (lihat `app/api/portal/evaluation/route.ts`)
+- JANGAN tampilkan skor AI ke peserta — termasuk di `<title>`, teks share, dan preview WhatsApp
+- JANGAN samakan skor pengajar (1-10) dengan skor AI (1-5); dua skala berbeda
+- JANGAN coba embed panel Filament muhajirproject lewat iframe — ditolak `X-Frame-Options: SAMEORIGIN` dan cookie `SameSite=Lax`
+- JANGAN jalankan migrasi saat container start; Cloud Run menaikkan banyak instance sekaligus
 - JANGAN pakai Whisper sebagai engine utama (tidak detect 4 indikator)
 - JANGAN hardcode API key di code (gunakan env vars)
 - JANGAN simpan audio peserta lebih dari 7 hari
