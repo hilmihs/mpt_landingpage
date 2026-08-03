@@ -1,5 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
-import { supabaseService } from "@/lib/supabase";
+import { auth } from "@/auth";
+import { sql } from "@/lib/db";
 
 export interface TeacherSession {
   authUserId: string;
@@ -10,38 +10,35 @@ export interface TeacherSession {
 }
 
 /**
- * Returns the current authenticated teacher, or null if no session / not a
- * registered active teacher. Use this in protected layouts.
+ * Pengajar yang sedang login, atau null kalau tidak ada sesi / bukan pengajar
+ * aktif. Panggil ini di setiap layout dan route handler yang dilindungi.
+ *
+ * Sejak RLS dibuang (lihat docs/MIGRATION_SUPABASE_TO_GCP.md 4.2), fungsi inilah
+ * satu-satunya penegak otorisasi pengajar. Tidak ada jaring pengaman di database.
+ * Sesi yang sah pun tetap ditolak kalau baris pengajarnya tidak aktif.
  */
 export async function getCurrentTeacher(): Promise<TeacherSession | null> {
-  const sb = await supabaseServer();
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return null;
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId || session.user.role !== "teacher") return null;
 
-  // Use service client to look up teacher row (RLS may not allow self-read
-  // until row is created; service-role bypasses RLS but still scoped to auth_user_id).
-  const svc = supabaseService();
-  const { data, error } = await svc
-    .from("teachers")
-    .select("id, nama, jenis_kelamin, status")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
+  const rows = await sql<
+    { id: string; nama: string; jenis_kelamin: string; status: string }[]
+  >`
+    SELECT id, nama, jenis_kelamin, status
+    FROM teachers
+    WHERE auth_user_id = ${userId}
+    LIMIT 1
+  `;
 
-  if (error || !data) return null;
-  if (data.status !== "active") return null;
+  const row = rows[0];
+  if (!row || row.status !== "active") return null;
 
   return {
-    authUserId: user.id,
-    teacherId: data.id as string,
-    nama: data.nama as string,
-    jenisKelamin: data.jenis_kelamin as "ikhwan" | "akhwat",
-    status: data.status as string,
+    authUserId: userId,
+    teacherId: row.id,
+    nama: row.nama,
+    jenisKelamin: row.jenis_kelamin as "ikhwan" | "akhwat",
+    status: row.status,
   };
-}
-
-export async function signOutTeacher(): Promise<void> {
-  const sb = await supabaseServer();
-  await sb.auth.signOut();
 }

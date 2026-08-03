@@ -1,14 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import { Mail, ChevronRight, ShieldCheck, CheckCircle2 } from "lucide-react";
-import { sendMagicLink, type MagicLinkState } from "./actions";
+import { Mail, ChevronRight, ShieldCheck, Lock } from "lucide-react";
+import { adminLogin, type AdminLoginState } from "./actions";
 
-const initialState: MagicLinkState = {};
+const initialState: AdminLoginState = {};
 
 export default function AdminLoginPage() {
   const [state, formAction, pending] = useActionState(
-    sendMagicLink,
+    adminLogin,
     initialState,
   );
 
@@ -71,10 +71,7 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="card-mpt" style={{ padding: "28px 24px" }}>
-          {state.sent ? (
-            <SentNotice />
-          ) : (
-            <>
+          <>
               <h1
                 className="font-display"
                 style={{
@@ -94,8 +91,7 @@ export default function AdminLoginPage() {
                   lineHeight: 1.5,
                 }}
               >
-                Masukkan email Anda. Kami akan kirim link login yang berlaku 1
-                jam.
+                Masukkan email dan password admin Anda.
               </p>
 
               <form
@@ -149,6 +145,49 @@ export default function AdminLoginPage() {
                   </div>
                 </label>
 
+                <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      color: "var(--ink-mute)",
+                    }}
+                  >
+                    Password
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "12px 14px",
+                      background: "var(--surface)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Lock size={16} strokeWidth={2.2} color="var(--ink-mute)" />
+                    <input
+                      name="password"
+                      type="password"
+                      placeholder="Password"
+                      autoComplete="current-password"
+                      required
+                      style={{
+                        flex: 1,
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        fontSize: 14,
+                        color: "var(--ink)",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                  </div>
+                </label>
+
                 {state.error && (
                   <div
                     style={{
@@ -177,7 +216,7 @@ export default function AdminLoginPage() {
                     opacity: pending ? 0.6 : 1,
                   }}
                 >
-                  {pending ? "Mengirim..." : "Kirim Link Login"}
+                  {pending ? "Memproses..." : "Masuk"}
                   <ChevronRight size={16} strokeWidth={2.4} />
                 </button>
               </form>
@@ -191,50 +230,12 @@ export default function AdminLoginPage() {
                   lineHeight: 1.6,
                 }}
               >
-                Hanya email yang terdaftar sebagai admin yang akan menerima link.
+                Hanya email yang terdaftar sebagai admin aktif yang bisa masuk.
               </div>
-            </>
-          )}
+          </>
         </div>
       </div>
     </div>
   );
 }
 
-function SentNotice() {
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          margin: "0 auto 16px",
-          borderRadius: 14,
-          background: "var(--success)",
-          color: "white",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <CheckCircle2 size={28} strokeWidth={2.4} />
-      </div>
-      <h2
-        className="font-display"
-        style={{ fontSize: 20, fontWeight: 700, margin: "0 0 10px" }}
-      >
-        Cek inbox Anda
-      </h2>
-      <p
-        style={{
-          fontSize: 13,
-          color: "var(--ink-soft)",
-          lineHeight: 1.6,
-          margin: 0,
-        }}
-      >
-        Kalau email Anda terdaftar sebagai admin, kami sudah mengirimkan link
-        login. Periksa juga folder spam.
-      </p>
-    </div>
-  );
-}

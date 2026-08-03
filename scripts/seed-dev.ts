@@ -17,8 +17,9 @@
  */
 
 import { createHash } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 import { sql } from "@/lib/db";
+import { hashPassword } from "@/auth";
+import { normalizeWaNumber } from "@/lib/whatsapp";
 
 // ============================================================
 // 1. Admin & Teacher data
@@ -392,17 +393,6 @@ function requireEnv(name: string): string {
 }
 
 const DATABASE_URL = requireEnv("DATABASE_URL");
-const SUPABASE_URL = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-const SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-
-/**
- * Klien Supabase ini HANYA dipakai untuk `sb.auth.admin.*`. Semua query data
- * sudah pindah ke postgres.js (`sql`). Auth menyusul di Fase 4 (Auth.js).
- */
-const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-
 const isReset = process.argv.includes("--reset");
 
 function dbTarget(): string {
@@ -419,84 +409,52 @@ function dbTarget(): string {
 // ============================================================
 
 /**
- * Supabase Auth belum diganti (Fase 4). Tapi proyek Supabase-nya sudah dimatikan,
- * jadi setiap panggilan `sb.auth.admin.*` bisa gagal di level jaringan. Semua
- * pemanggilnya dibungkus supaya seed data tetap jalan: kalau auth tidak bisa
- * dihubungi, akun dicatat di tabel lokal `auth_users` saja (lihat mirrorAuthUser).
- * Login pengajar/admin memang belum berfungsi sampai Auth.js masuk.
+ * Akun disimpan langsung di auth_users, sumber kebenaran satu-satunya sejak
+ * Auth.js menggantikan Supabase Auth.
+ *
+ * Nomor telepon disimpan lewat normalizeWaNumber() supaya bentuknya persis
+ * sama dengan yang dicari saat login di auth.ts — kalau tidak, akun terbuat
+ * tapi tidak pernah bisa dipakai masuk.
  */
-let authOffline = false;
+async function upsertAuthUser(identity: {
+  email?: string;
+  phone?: string;
+  password?: string;
+}): Promise<string> {
+  const email = identity.email?.toLowerCase() ?? null;
+  const phone = identity.phone ? normalizeWaNumber(identity.phone) : null;
+  const hash = identity.password ? await hashPassword(identity.password) : null;
 
-async function tryAuth<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
-  if (authOffline) return null;
-  try {
-    return await fn();
-  } catch (err) {
-    authOffline = true;
-    console.warn(`  ! Supabase Auth tidak bisa dihubungi (${label}): ${(err as Error).message}`);
-    console.warn("    Lanjut pakai auth_users lokal. Login belum aktif sampai Fase 4 (Auth.js).");
-    return null;
+  const existing = email
+    ? await sql<{ id: string }[]>`SELECT id FROM auth_users WHERE lower(email) = ${email} LIMIT 1`
+    : await sql<{ id: string }[]>`SELECT id FROM auth_users WHERE phone = ${phone} LIMIT 1`;
+
+  if (existing[0]) {
+    if (hash) {
+      await sql`UPDATE auth_users SET password_hash = ${hash} WHERE id = ${existing[0].id}`;
+    }
+    return existing[0].id;
   }
+
+  const created = await sql<{ id: string }[]>`
+    INSERT INTO auth_users (email, phone, password_hash)
+    VALUES (${email}, ${phone}, ${hash})
+    RETURNING id
+  `;
+  return created[0]!.id;
 }
 
-async function findAuthUserByEmail(email: string): Promise<string | null> {
-  return tryAuth("listUsers", async () => {
-    const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (error) throw error;
-    return data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id ?? null;
-  });
-}
-
-async function findAuthUserByPhone(phoneE164: string): Promise<string | null> {
-  return tryAuth("listUsers", async () => {
-    const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (error) throw error;
-    return data.users.find((u) => u.phone === phoneE164.replace(/^\+/, ""))?.id ?? null;
-  });
-}
-
-async function deleteAuthUser(userId: string): Promise<void> {
-  await tryAuth("deleteUser", async () => {
-    const { error } = await sb.auth.admin.deleteUser(userId);
-    if (error && !error.message.includes("not found")) throw error;
-  });
-}
-
-/** id auth_users lokal yang stabil per identitas, dipakai saat Supabase Auth offline. */
-function localAuthId(identifier: string): string {
-  const hex = createHash("sha256").update(identifier).digest("hex");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    `4${hex.slice(13, 16)}`,
-    `8${hex.slice(17, 20)}`,
-    hex.slice(20, 32),
-  ].join("-");
-}
-
-/**
- * Jembatan sementara: `teachers.auth_user_id` / `admins.auth_user_id` sekarang
- * FK ke tabel lokal `auth_users`, sementara akun auth-nya masih dibuat di
- * Supabase. Baris cermin ini dibuat supaya FK tidak menolak insert. Hilang
- * di Fase 4 saat Auth.js jadi satu-satunya sumber akun.
- */
-async function mirrorAuthUser(
-  authId: string,
-  identity: { email?: string; phone?: string },
-): Promise<void> {
+async function deleteAuthUserByIdentity(identity: {
+  email?: string;
+  phone?: string;
+}): Promise<void> {
   if (identity.email) {
-    await sql`DELETE FROM auth_users WHERE email = ${identity.email} AND id <> ${authId}`;
+    await sql`DELETE FROM auth_users WHERE lower(email) = ${identity.email.toLowerCase()}`;
   }
   if (identity.phone) {
-    await sql`DELETE FROM auth_users WHERE phone = ${identity.phone} AND id <> ${authId}`;
+    const phone = normalizeWaNumber(identity.phone);
+    if (phone) await sql`DELETE FROM auth_users WHERE phone = ${phone}`;
   }
-  await sql`
-    INSERT INTO auth_users (id, email, phone)
-    VALUES (${authId}, ${identity.email ?? null}, ${identity.phone ?? null})
-    ON CONFLICT (id) DO UPDATE SET
-      email = EXCLUDED.email,
-      phone = EXCLUDED.phone
-  `;
 }
 
 /** sql.json() dengan tipe longgar — ErrorItem punya field opsional, JSONValue tidak menerimanya. */
@@ -587,20 +545,24 @@ async function reset() {
       WHERE teacher_id IN (SELECT id FROM teachers WHERE nomor_wa = ${t.phone_db})
     `;
     await sql`DELETE FROM teachers WHERE nomor_wa = ${t.phone_db}`;
-    await sql`DELETE FROM auth_users WHERE phone = ${t.phone_e164}`;
-    const authId = await findAuthUserByPhone(t.phone_e164);
-    if (authId) {
-      await deleteAuthUser(authId);
-    }
-    console.log(`  ✓ Removed pengajar ${t.nama} + auth user`);
+    await deleteAuthUserByIdentity({ phone: t.phone_e164 });
+    console.log(`  ✓ Removed pengajar ${t.nama} + akun auth`);
   }
-  const adminAuthId = await findAuthUserByEmail(ADMIN_EMAIL);
   await sql`DELETE FROM admins WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
-  await sql`DELETE FROM auth_users WHERE email = ${ADMIN_EMAIL.toLowerCase()}`;
-  if (adminAuthId) {
-    await deleteAuthUser(adminAuthId);
+  await deleteAuthUserByIdentity({ email: ADMIN_EMAIL });
+  console.log(`  ✓ Removed admin ${ADMIN_EMAIL} + akun auth`);
+
+  // Sapu kredensial yatim. Format nomor pernah berubah (+62… menjadi 62…), dan
+  // baris lama yang tidak dirujuk siapa pun tetap bisa dipakai login seandainya
+  // punya password — jangan ditinggal menggantung.
+  const orphans = await sql`
+    DELETE FROM auth_users u
+    WHERE NOT EXISTS (SELECT 1 FROM teachers t WHERE t.auth_user_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM admins a WHERE a.auth_user_id = u.id)
+  `;
+  if (orphans.count > 0) {
+    console.log(`  ✓ ${orphans.count} akun auth yatim dibersihkan`);
   }
-  console.log(`  ✓ Removed admin ${ADMIN_EMAIL} + auth user`);
 }
 
 // ============================================================
@@ -609,27 +571,9 @@ async function reset() {
 
 async function seedAdmin() {
   console.log(`\n→ Seeding admin: ${ADMIN_EMAIL}`);
-  let authId = await findAuthUserByEmail(ADMIN_EMAIL);
-  if (authId) {
-    console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
-  } else {
-    const created = await tryAuth("createUser", async () => {
-      const { data, error } = await sb.auth.admin.createUser({
-        email: ADMIN_EMAIL, email_confirm: true,
-        user_metadata: { role: "admin", nama: ADMIN_NAMA },
-      });
-      if (error) throw error;
-      return data.user.id;
-    });
-    authId = created ?? localAuthId(`admin:${ADMIN_EMAIL.toLowerCase()}`);
-    console.log(
-      created
-        ? `  ✓ Auth user created (${authId.slice(0, 8)}...)`
-        : `  · Auth user lokal saja (${authId.slice(0, 8)}...)`,
-    );
-  }
+  let authId: string;
   try {
-    await mirrorAuthUser(authId, { email: ADMIN_EMAIL.toLowerCase() });
+    authId = await upsertAuthUser({ email: ADMIN_EMAIL, password: DUMMY_PASSWORD });
     await sql`
       INSERT INTO admins (auth_user_id, nama, email, role, is_active)
       VALUES (${authId}, ${ADMIN_NAMA}, ${ADMIN_EMAIL.toLowerCase()}, ${ADMIN_ROLE}, ${true})
@@ -643,7 +587,7 @@ async function seedAdmin() {
     console.error(`  ✗ Failed to upsert admins row: ${(err as Error).message}`);
     return;
   }
-  console.log(`  ✓ admins row ready (role=${ADMIN_ROLE})`);
+  console.log(`  ✓ admin siap (role=${ADMIN_ROLE}, password=${DUMMY_PASSWORD})`);
 }
 
 // ============================================================
@@ -652,33 +596,13 @@ async function seedAdmin() {
 
 async function seedTeacher(t: TeacherSeed) {
   console.log(`\n→ Seeding pengajar: ${t.nama} (${t.jenis_kelamin})`);
-  let authId = await findAuthUserByPhone(t.phone_e164);
-  if (authId) {
-    console.log(`  · Auth user already exists (${authId.slice(0, 8)}...)`);
-  } else {
-    const created = await tryAuth("createUser", async () => {
-      const { data, error } = await sb.auth.admin.createUser({
-        phone: t.phone_e164, password: DUMMY_PASSWORD, phone_confirm: true,
-        user_metadata: { role: "teacher", nama: t.nama },
-      });
-      if (error) {
-        if (error.message.toLowerCase().includes("phone provider"))
-          console.error("    Hint: enable Phone provider at Supabase Dashboard → Authentication → Providers");
-        throw error;
-      }
-      return data.user.id;
-    });
-    authId = created ?? localAuthId(`teacher:${t.phone_e164}`);
-    console.log(
-      created
-        ? `  ✓ Auth user created (${authId.slice(0, 8)}...)`
-        : `  · Auth user lokal saja (${authId.slice(0, 8)}...)`,
-    );
-  }
+  const authId = await upsertAuthUser({
+    phone: t.phone_e164,
+    password: DUMMY_PASSWORD,
+  });
 
   let teacherId: string;
   try {
-    await mirrorAuthUser(authId, { phone: t.phone_e164 });
     const rows = await sql<{ id: string }[]>`
       INSERT INTO teachers
         (auth_user_id, nama, jenis_kelamin, nomor_wa, email_meet, bio, status, activated_at)
@@ -1158,7 +1082,7 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════");
   console.log("  Muhajir Project Tilawah — Development Seed");
   console.log(`  Target: ${dbTarget()}`);
-  console.log(`  Auth:   ${SUPABASE_URL}`);
+  console.log(`  Auth:   auth_users (Auth.js), password dummy=${DUMMY_PASSWORD}`);
   console.log(`  Mode:   ${isReset ? "RESET + SEED" : "SEED (idempotent)"}`);
   console.log("═══════════════════════════════════════════════════════");
 
@@ -1187,7 +1111,7 @@ async function main() {
   console.log("  ✓ Seed complete");
   console.log("═══════════════════════════════════════════════════════");
   console.log("\nNext steps:");
-  console.log(`  1. Admin login: /admin/login (email: ${ADMIN_EMAIL}, magic link)`);
+  console.log(`  1. Admin login: /admin/login (email: ${ADMIN_EMAIL}, pwd: ${DUMMY_PASSWORD})`);
   console.log(`  2. Pengajar login: /portal-mpt-x7/login (WA: 081200000001, pwd: ${DUMMY_PASSWORD})`);
   console.log("  3. Demo rapot pages:");
   console.log("     /rapot/demo-rizki-01   — skor 3, gate1=no (stopped)");

@@ -1,64 +1,42 @@
 "use server";
 
-import { z } from "zod";
-import { supabaseServer } from "@/lib/supabase-server";
-import { supabaseService } from "@/lib/supabase";
-import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { AuthError } from "next-auth";
+import { signIn } from "@/auth";
 
-const schema = z.object({
-  email: z.string().email(),
-});
-
-export interface MagicLinkState {
+export interface AdminLoginState {
   error?: string;
-  sent?: boolean;
 }
 
-export async function sendMagicLink(
-  _prev: MagicLinkState,
+/**
+ * Login admin dengan email + password.
+ *
+ * Dulu ini mengirim magic link lewat Supabase Auth. Magic link butuh penyedia
+ * SMTP, yang sampai sekarang belum ada, jadi sementara memakai password.
+ * Lihat docs/MIGRATION_SUPABASE_TO_GCP.md bagian 7.
+ *
+ * Pengecekan admins.is_active ada di provider "admin" pada auth.ts, dan semua
+ * kegagalan dijawab pesan yang sama supaya tidak membocorkan email terdaftar.
+ */
+export async function adminLogin(
+  _prev: AdminLoginState,
   formData: FormData,
-): Promise<MagicLinkState> {
-  const parsed = schema.safeParse({ email: formData.get("email") });
-  if (!parsed.success) {
-    return { error: "Format email tidak valid." };
+): Promise<AdminLoginState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    return { error: "Email dan password wajib diisi." };
   }
 
-  const { email } = parsed.data;
-  const lowerEmail = email.toLowerCase();
-
-  // Allowlist: only emails registered in admins table can request magic link
-  const svc = supabaseService();
-  const { data: admin } = await svc
-    .from("admins")
-    .select("is_active")
-    .eq("email", lowerEmail)
-    .maybeSingle();
-
-  if (!admin || !admin.is_active) {
-    // Don't disclose whether the email is registered or inactive — return generic OK
-    return { sent: true };
+  try {
+    await signIn("admin", { email, password, redirect: false });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return { error: "Email atau password tidak cocok, atau akun tidak aktif." };
+    }
+    throw err;
   }
 
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("host") ?? "localhost:3000";
-  const origin = `${proto}://${host}`;
-
-  const sb = await supabaseServer();
-  const { error } = await sb.auth.signInWithOtp({
-    email: lowerEmail,
-    options: {
-      // We already verified admins row exists above; never create a fresh
-      // auth user from this endpoint (defense in depth against accidental
-      // signups via this code path).
-      shouldCreateUser: false,
-      emailRedirectTo: `${origin}/auth/callback?next=/admin/overview`,
-    },
-  });
-
-  if (error) {
-    return { error: "Gagal mengirim magic link. Coba lagi nanti." };
-  }
-
-  return { sent: true };
+  redirect("/admin/overview");
 }

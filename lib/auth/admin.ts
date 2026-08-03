@@ -1,5 +1,5 @@
-import { supabaseServer } from "@/lib/supabase-server";
-import { supabaseService } from "@/lib/supabase";
+import { auth } from "@/auth";
+import { sql } from "@/lib/db";
 
 export interface AdminSession {
   authUserId: string;
@@ -8,31 +8,34 @@ export interface AdminSession {
   role: "super" | "staff";
 }
 
+/**
+ * Admin yang sedang login, atau null kalau tidak ada sesi / bukan admin aktif.
+ *
+ * Sama seperti getCurrentTeacher(): sejak RLS dibuang, fungsi ini satu-satunya
+ * penegak otorisasi admin. Wajib dipanggil di awal setiap route /admin dan
+ * /api/admin.
+ */
 export async function getCurrentAdmin(): Promise<AdminSession | null> {
-  const sb = await supabaseServer();
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return null;
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId || session.user.role !== "admin") return null;
 
-  const svc = supabaseService();
-  const { data, error } = await svc
-    .from("admins")
-    .select("nama, email, role, is_active")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
+  const rows = await sql<
+    { nama: string; email: string; role: string; is_active: boolean }[]
+  >`
+    SELECT nama, email, role, is_active
+    FROM admins
+    WHERE auth_user_id = ${userId}
+    LIMIT 1
+  `;
 
-  if (error || !data || !data.is_active) return null;
+  const row = rows[0];
+  if (!row || !row.is_active) return null;
 
   return {
-    authUserId: user.id,
-    nama: data.nama as string,
-    email: data.email as string,
-    role: data.role as "super" | "staff",
+    authUserId: userId,
+    nama: row.nama,
+    email: row.email,
+    role: row.role as "super" | "staff",
   };
-}
-
-export async function signOutAdmin(): Promise<void> {
-  const sb = await supabaseServer();
-  await sb.auth.signOut();
 }

@@ -1,11 +1,8 @@
-import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { signOut } from "@/auth";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  const sb = await supabaseServer();
-  await sb.auth.signOut();
-  const { origin } = new URL(req.url);
-  return NextResponse.redirect(`${origin}/admin/login`, { status: 303 });
+export async function POST() {
+  // signOut menghapus cookie sesi lalu melempar redirect yang ditangani Next.
+  await signOut({ redirectTo: "/admin/login" });
 }

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAdmin } from "@/lib/auth/admin";
 import { sql } from "@/lib/db";
-import { supabaseService } from "@/lib/supabase";
+import { hashPassword } from "@/auth";
+import { normalizeWaNumber } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,9 +66,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Auth-only client — dipakai untuk sb.auth.admin.* saja. Diganti Auth.js di fase berikutnya.
-  const sb = supabaseService();
-
   // Check uniqueness on WA
   const dupRows = await sql<{ id: string }[]>`
     SELECT id FROM teachers WHERE nomor_wa = ${phoneDB} LIMIT 1
@@ -83,22 +81,26 @@ export async function POST(req: Request) {
     );
   }
 
-  // Create Supabase Auth user with phone+password
-  const { data: authUser, error: authErr } =
-    await sb.auth.admin.createUser({
-      phone: phoneE164,
-      password: parsed.data.password,
-      phone_confirm: true,
-      user_metadata: { role: "teacher", nama: parsed.data.nama },
-    });
-
-  if (authErr || !authUser.user) {
+  // Buat kredensial di auth_users. Nomor disimpan dalam format yang sama
+  // dengan yang dipakai saat login (lihat normalizeWaNumber di lib/whatsapp.ts),
+  // supaya pencarian saat login persis sama.
+  let authUserId: string;
+  try {
+    const created = await sql<{ id: string }[]>`
+      INSERT INTO auth_users (phone, password_hash)
+      VALUES (${normalizeWaNumber(parsed.data.nomor_wa)}, ${await hashPassword(parsed.data.password)})
+      RETURNING id
+    `;
+    if (!created[0]) throw new Error("Gagal membuat akun.");
+    authUserId = created[0].id;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal membuat akun.";
     return NextResponse.json(
       {
         error: "auth_create_failed",
-        message:
-          authErr?.message ??
-          "Gagal membuat akun auth. Pastikan phone provider sudah enabled di Supabase.",
+        message: msg.includes("auth_users_phone_key")
+          ? "Nomor WhatsApp ini sudah punya akun."
+          : msg,
       },
       { status: 500 },
     );
@@ -111,7 +113,7 @@ export async function POST(req: Request) {
       INSERT INTO teachers
         (auth_user_id, nama, jenis_kelamin, nomor_wa, email_meet, bio, status, activated_at)
       VALUES (
-        ${authUser.user.id},
+        ${authUserId},
         ${parsed.data.nama},
         ${parsed.data.jenis_kelamin},
         ${phoneDB},
@@ -125,8 +127,9 @@ export async function POST(req: Request) {
     if (!inserted[0]) throw new Error("Gagal menyimpan data pengajar.");
     teacherId = inserted[0].id;
   } catch (err) {
-    // Rollback auth user if teachers insert failed
-    await sb.auth.admin.deleteUser(authUser.user.id).catch(() => {});
+    // Batalkan akun auth kalau baris pengajarnya gagal disimpan, supaya tidak
+    // meninggalkan kredensial yatim yang bisa dipakai login tanpa profil.
+    await sql`DELETE FROM auth_users WHERE id = ${authUserId}`.catch(() => {});
     return NextResponse.json(
       {
         error: "db_error",
