@@ -10,7 +10,7 @@ import {
   SkipForward,
 } from "lucide-react";
 import { supabaseService } from "@/lib/supabase";
-import { ZoomNameReminder } from "@/components/booking/ZoomNameReminder";
+import { MeetNameReminder } from "@/components/booking/MeetNameReminder";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -279,7 +279,7 @@ export default async function BookingConfirmPage({ params, searchParams }: Props
       </div>
 
       <div style={{ marginBottom: 22 }}>
-        <ZoomNameReminder nama={submission.nama} variant="warning" />
+        <MeetNameReminder nama={submission.nama} variant="warning" />
       </div>
 
       <div

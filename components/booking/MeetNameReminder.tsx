@@ -5,7 +5,7 @@ interface Props {
   variant?: "info" | "warning";
 }
 
-export function ZoomNameReminder({ nama, variant = "info" }: Props) {
+export function MeetNameReminder({ nama, variant = "info" }: Props) {
   const isWarning = variant === "warning";
   return (
     <div

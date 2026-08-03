@@ -39,7 +39,7 @@ SET nama = EXCLUDED.nama,
     is_active = EXCLUDED.is_active;
 
 -- ----------- 2. Pengajar -------------------------------------
-INSERT INTO teachers (auth_user_id, nama, jenis_kelamin, nomor_wa, email_zoom, bio, status, activated_at)
+INSERT INTO teachers (auth_user_id, nama, jenis_kelamin, nomor_wa, email_meet, bio, status, activated_at)
 VALUES
   (
     'REPLACE_ME_TEACHER1_AUTH_UUID'::uuid,
