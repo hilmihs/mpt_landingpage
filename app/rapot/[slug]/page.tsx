@@ -13,8 +13,19 @@ import {
   TeacherEvaluationReport,
   type TeacherEvaluationView,
 } from "@/components/rapot/TeacherEvaluationReport";
+import {
+  NativeEvaluationReport,
+  type NativeEvaluationView,
+} from "@/components/rapot/NativeEvaluationReport";
 import { WaitingForTeacher } from "@/components/rapot/WaitingForTeacher";
 import { ShareButtons } from "@/components/rapot/ShareButtons";
+import { PrintButton } from "@/components/rapot/PrintButton";
+import {
+  INDICATOR_KEYS,
+  SEGMENT_KEYS,
+  type EvaluationAyat,
+  type SegmentKey,
+} from "@/lib/teacher-eval/types";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import { INDIKATOR_META } from "@/lib/scoring";
 import { AL_FATIHAH } from "@/lib/arabic";
@@ -139,6 +150,122 @@ async function getTeacherEvaluation(
   }
 }
 
+interface NativeEvalRow {
+  source: string;
+  pemeriksa: string | null;
+  kegiatan: string | null;
+  created_at: Date | null;
+  rekomendasi_program: string | null;
+  ayat: unknown;
+  score_ayat: unknown;
+  score_min: number | null;
+  label_min: string | null;
+  score_harakat: number | null;
+  label_harakat: string | null;
+  score_ketepatan_huruf: number | null;
+  label_ketepatan_huruf: string | null;
+  score_panjang_pendek: number | null;
+  label_panjang_pendek: string | null;
+  score_tasydid: number | null;
+  label_tasydid: string | null;
+  score_hukum_tajwid: number | null;
+  label_hukum_tajwid: string | null;
+}
+
+/**
+ * Kolom jsonb kembali dari driver sebagai nilai bebas, jadi bentuknya dipastikan
+ * di sini. Baris lama bisa saja ditulis sebelum katalog segmen selengkap
+ * sekarang — segmen yang hilang diisi kosong daripada meruntuhkan halaman.
+ */
+function normalizeAyat(raw: unknown): EvaluationAyat | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const src = raw as Record<string, { jaliy?: unknown; khafiy?: unknown }>;
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+  return SEGMENT_KEYS.reduce((acc, key) => {
+    acc[key] = {
+      jaliy: strings(src[key]?.jaliy),
+      khafiy: strings(src[key]?.khafiy),
+    };
+    return acc;
+  }, {} as EvaluationAyat);
+}
+
+function normalizeSegmentScores(raw: unknown): Partial<Record<SegmentKey, number>> {
+  if (raw == null || typeof raw !== "object") return {};
+  const src = raw as Record<string, unknown>;
+  const out: Partial<Record<SegmentKey, number>> = {};
+  for (const key of SEGMENT_KEYS) {
+    const v = src[key];
+    if (typeof v === "number" && Number.isFinite(v)) out[key] = v;
+  }
+  return out;
+}
+
+/**
+ * Penilaian yang diisi pengajar langsung di portal ini.
+ *
+ * Hanya baris `source = 'native'` yang punya temuan mentah per segmen; baris
+ * salinan dari panel luar cuma membawa lima skor indikator, jadi rapot rincinya
+ * tidak bisa dirakit dan pemanggil harus jatuh ke tampilan ringkas.
+ */
+async function getNativeEvaluation(
+  submissionId: string,
+): Promise<NativeEvaluationView | null> {
+  try {
+    const rows = await sql<NativeEvalRow[]>`
+      SELECT source, pemeriksa, kegiatan, created_at, rekomendasi_program,
+             ayat, score_ayat, score_min, label_min,
+             score_harakat, label_harakat,
+             score_ketepatan_huruf, label_ketepatan_huruf,
+             score_panjang_pendek, label_panjang_pendek,
+             score_tasydid, label_tasydid,
+             score_hukum_tajwid, label_hukum_tajwid
+      FROM teacher_evaluations
+      WHERE submission_id = ${submissionId}
+      LIMIT 1
+    `;
+    const r = rows[0];
+    if (!r || r.source !== "native") return null;
+
+    const skorIndikator: Record<
+      (typeof INDICATOR_KEYS)[number],
+      { score: number | null; mutu: string | null }
+    > = {
+      harakat: { score: r.score_harakat, mutu: r.label_harakat },
+      ketepatanHuruf: {
+        score: r.score_ketepatan_huruf,
+        mutu: r.label_ketepatan_huruf,
+      },
+      panjangPendek: {
+        score: r.score_panjang_pendek,
+        mutu: r.label_panjang_pendek,
+      },
+      tasydid: { score: r.score_tasydid, mutu: r.label_tasydid },
+      hukumTajwid: { score: r.score_hukum_tajwid, mutu: r.label_hukum_tajwid },
+    };
+
+    return {
+      pemeriksa: r.pemeriksa,
+      kegiatan: r.kegiatan,
+      createdAt: r.created_at?.toISOString() ?? null,
+      rekomendasiProgram: r.rekomendasi_program,
+      scoreTen: r.score_min,
+      labelMin: r.label_min,
+      ayat: normalizeAyat(r.ayat),
+      perSegment: normalizeSegmentScores(r.score_ayat),
+      indikator: INDICATOR_KEYS.map((key) => ({ key, ...skorIndikator[key] })),
+    };
+  } catch (err) {
+    console.error(
+      "[rapot] gagal ambil penilaian native:",
+      (err as Error).message,
+    );
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const rapot = await getRapot(slug);
@@ -192,6 +319,12 @@ export default async function RapotPage({ params }: Props) {
   if (!internalViewer) {
     const sub = rapot.submissions;
     const namaPeserta = sub?.nama ?? "Peserta";
+    // Penilaian yang lahir di portal ini membawa temuan per segmen, jadi peserta
+    // bisa diberi rapot rinci. Salinan dari panel luar hanya punya lima skor —
+    // untuk baris seperti itu tampilan ringkas tetap yang paling jujur.
+    const native = teacherEval
+      ? await getNativeEvaluation(rapot.submission_id)
+      : null;
     return (
       <div
         className="screen-enter"
@@ -203,9 +336,15 @@ export default async function RapotPage({ params }: Props) {
 
         {teacherEval ? (
           <>
-            <TeacherEvaluationReport nama={namaPeserta} ev={teacherEval} />
+            {native ? (
+              <NativeEvaluationReport nama={namaPeserta} ev={native} />
+            ) : (
+              <TeacherEvaluationReport nama={namaPeserta} ev={teacherEval} />
+            )}
+            {/* Ajakan lanjut ke program tidak ikut tercetak: di atas kertas
+                tautannya tidak bisa diklik dan hanya menyita satu halaman. */}
             {sub && (
-              <div style={{ marginTop: 24 }}>
+              <div className="no-print" style={{ marginTop: 24 }}>
                 <NextStepsGate
                   rapotSlug={slug}
                   submissionId={sub.id}
@@ -214,8 +353,19 @@ export default async function RapotPage({ params }: Props) {
                 />
               </div>
             )}
-            <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+            <div
+              className="no-print"
+              style={{
+                marginTop: 24,
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
               <ShareButtons slug={slug} skor={teacherEval.scoreMin} />
+              <PrintButton label="Simpan PDF" />
             </div>
           </>
         ) : (

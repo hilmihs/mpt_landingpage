@@ -27,7 +27,10 @@ const ayatSchema = z.object(
 const schema = z.object({
   assignment_id: z.string().uuid(),
   kegiatan: z.string().min(1).max(200),
-  rekomendasi_program: z.enum(["HITS Dasar", "HITS Lanjutan"]).optional(),
+  // nullish, bukan optional: rekomendasi adalah <select> yang selalu ikut
+  // terkirim, dan pilihan "belum ditentukan" mengirimkan null — bukan
+  // menghilangkan kuncinya.
+  rekomendasi_program: z.enum(["HITS Dasar", "HITS Lanjutan"]).nullish(),
   ayat: ayatSchema,
 });
 

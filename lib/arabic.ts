@@ -127,3 +127,88 @@ export function getWord(
 ): string | undefined {
   return getAyat(ayatNumber)?.words[kataIdx];
 }
+
+// ---------------------------------------------------------------------------
+// Segmen penilaian
+// ---------------------------------------------------------------------------
+
+/**
+ * Al-Fatihah dibagi DELAPAN segmen untuk keperluan penilaian, bukan tujuh.
+ *
+ * Ayat 7 dipecah setelah kata keempat (عَلَيْهِمْ) karena panjang dan memuat dua
+ * kelompok kesalahan yang berbeda: paruh pertama soal صراط dan أنعمت, paruh
+ * kedua soal المغضوب dan الضالين. Pembagian ini mengikuti instrumen yang sudah
+ * dipakai para pengajar, supaya penilaian di sini sebanding dengan yang lama.
+ */
+export interface SegmentData {
+  key: string;
+  nomor: string;
+  arabic: string;
+  transliterasi: string;
+  terjemahan: string;
+}
+
+const ayat7 = AL_FATIHAH[6]!;
+
+export const AL_FATIHAH_SEGMENTS: Record<string, SegmentData> = {
+  ayat_1: {
+    key: "ayat_1",
+    nomor: "Ayat 1",
+    arabic: AL_FATIHAH[0]!.arabic,
+    transliterasi: AL_FATIHAH[0]!.transliterasi,
+    terjemahan: AL_FATIHAH[0]!.terjemahan,
+  },
+  ayat_2: {
+    key: "ayat_2",
+    nomor: "Ayat 2",
+    arabic: AL_FATIHAH[1]!.arabic,
+    transliterasi: AL_FATIHAH[1]!.transliterasi,
+    terjemahan: AL_FATIHAH[1]!.terjemahan,
+  },
+  ayat_3: {
+    key: "ayat_3",
+    nomor: "Ayat 3",
+    arabic: AL_FATIHAH[2]!.arabic,
+    transliterasi: AL_FATIHAH[2]!.transliterasi,
+    terjemahan: AL_FATIHAH[2]!.terjemahan,
+  },
+  ayat_4: {
+    key: "ayat_4",
+    nomor: "Ayat 4",
+    arabic: AL_FATIHAH[3]!.arabic,
+    transliterasi: AL_FATIHAH[3]!.transliterasi,
+    terjemahan: AL_FATIHAH[3]!.terjemahan,
+  },
+  ayat_5: {
+    key: "ayat_5",
+    nomor: "Ayat 5",
+    arabic: AL_FATIHAH[4]!.arabic,
+    transliterasi: AL_FATIHAH[4]!.transliterasi,
+    terjemahan: AL_FATIHAH[4]!.terjemahan,
+  },
+  ayat_6: {
+    key: "ayat_6",
+    nomor: "Ayat 6",
+    arabic: AL_FATIHAH[5]!.arabic,
+    transliterasi: AL_FATIHAH[5]!.transliterasi,
+    terjemahan: AL_FATIHAH[5]!.terjemahan,
+  },
+  ayat_7: {
+    key: "ayat_7",
+    nomor: "Ayat 7",
+    // Dirakit dari words[] supaya tidak ada teks Arab yang diketik ulang —
+    // salah satu harakat saja sudah cukup membuat bacaannya berbeda.
+    arabic: ayat7.words.slice(0, 4).join(" "),
+    transliterasi: "Ṣirāṭal-laẓīna an‘amta ‘alaihim",
+    terjemahan:
+      "(Yaitu) jalan orang-orang yang telah Engkau beri nikmat kepadanya,",
+  },
+  ayat_7_part_2: {
+    key: "ayat_7_part_2",
+    nomor: "Ayat 7 (lanjutan)",
+    arabic: ayat7.words.slice(4).join(" "),
+    transliterasi: "Ghairil-maghḍūbi ‘alaihim wa laḍ-ḍāllīn",
+    terjemahan:
+      "bukan (jalan) mereka yang dimurkai dan bukan (pula jalan) mereka yang sesat.",
+  },
+};

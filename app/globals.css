@@ -10,6 +10,11 @@
   --bg: #f4ecd8;
   --bg-deep: #e8dcbe;
   --paper: #fbf5e2;
+  /* Dipakai untuk bidang di DALAM kartu — input, baris daftar, blok tersorot.
+     Keduanya sudah lama dirujuk di banyak berkas tapi tidak pernah dideklarasikan,
+     sehingga setiap color-mix() yang memakainya gugur dan latarnya hilang. */
+  --surface: #fdfaf1;
+  --surface-soft: #f7f0dd;
   --ink: #1a1f2a;
   --ink-soft: #3a4458;
   --ink-mute: #6a7488;

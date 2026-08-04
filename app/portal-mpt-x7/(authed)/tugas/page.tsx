@@ -17,11 +17,11 @@ export const dynamic = "force-dynamic";
 
 /** Di atas ambang ini peserta sudah menunggu terlalu lama dan barisnya disorot. */
 const STALE_DAYS = 3;
-const STALE_MS = STALE_DAYS * 24 * 60 * 60 * 1000;
+const STALE_SEC = STALE_DAYS * 24 * 60 * 60;
 
 interface PendingRow {
   assignment_id: string;
-  assigned_at: Date;
+  waited_sec: number;
   nama: string;
   jenis_kelamin: string;
   audio_duration_sec: number | null;
@@ -46,10 +46,13 @@ export default async function TugasPage() {
   // supaya rekaman tidak terkunci saat daftar pengajar belum lengkap.
   // Evaluasi diambil lewat LATERAL karena satu submission bisa dinilai
   // berulang kali — JOIN biasa akan menggandakan barisnya.
+  // Lama menunggu dihitung di database, bukan dari jam proses Node: assigned_at
+  // ditulis dengan jam Postgres, jadi membandingkannya dengan jam aplikasi bisa
+  // menghasilkan "menunggu -2 menit" begitu kedua mesin sedikit berbeda.
   const pending = await sql<PendingRow[]>`
     SELECT
       a.id AS assignment_id,
-      a.assigned_at,
+      EXTRACT(EPOCH FROM (now() - a.assigned_at))::float8 AS waited_sec,
       s.nama,
       s.jenis_kelamin,
       s.audio_duration_sec::float8 AS audio_duration_sec
@@ -82,8 +85,6 @@ export default async function TugasPage() {
     ORDER BY COALESCE(e.created_at, a.completed_at) DESC NULLS LAST
     LIMIT 20
   `;
-
-  const now = Date.now();
 
   return (
     <div style={{ maxWidth: 820 }}>
@@ -131,8 +132,8 @@ export default async function TugasPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {pending.map((r) => {
-              const waited = now - r.assigned_at.getTime();
-              const stale = waited >= STALE_MS;
+              const waited = r.waited_sec;
+              const stale = waited >= STALE_SEC;
               return (
                 <div
                   key={r.assignment_id}
@@ -324,8 +325,8 @@ function durationLabel(sec: number | null): string {
 }
 
 /** Jarak waktu kasar; angka presisi tidak menolong pengajar mengambil keputusan. */
-function sinceLabel(ms: number): string {
-  const menit = Math.floor(ms / 60000);
+function sinceLabel(detik: number): string {
+  const menit = Math.floor(detik / 60);
   if (menit < 1) return "baru saja";
   if (menit < 60) return `${menit} menit`;
   const jam = Math.floor(menit / 60);

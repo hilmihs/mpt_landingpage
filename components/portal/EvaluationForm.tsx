@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronRight } from "lucide-react";
 import { AL_FATIHAH_SEGMENTS } from "@/lib/arabic";
 import { EVALUATION_OPTIONS, parseOption } from "@/lib/teacher-eval/catalog";
 import { computeEvaluation } from "@/lib/teacher-eval/scoring";
 import {
+  INDICATOR_LABEL,
   SEGMENT_KEYS,
+  emptyAyat,
   type EvaluationAyat,
   type SegmentKey,
 } from "@/lib/teacher-eval/types";
@@ -44,7 +46,7 @@ function FormPenilaian({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
   const [kegiatan, setKegiatan] = useState(KEGIATAN_DEFAULT);
   const [rekomendasi, setRekomendasi] = useState<Rekomendasi | "">("");
-  const [ayat, setAyat] = useState<EvaluationAyat>(ayatKosong);
+  const [ayat, setAyat] = useState<EvaluationAyat>(emptyAyat);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +63,19 @@ function FormPenilaian({ assignmentId }: { assignmentId: string }) {
   );
 
   const hasil = useMemo(() => computeEvaluation(ayat), [ayat]);
+
+  // Tandai penugasan sebagai sedang dikerjakan begitu formulirnya terbuka.
+  // Papan admin memakai status ini untuk memisahkan rekaman yang belum
+  // disentuh dari yang sudah dipegang seseorang; tanpa penanda ini keduanya
+  // tampak sama dan tidak ada yang tahu mana yang perlu dialihkan.
+  // Gagalnya diabaikan — ini catatan pendukung, bukan syarat menilai.
+  useEffect(() => {
+    void fetch("/api/portal/evaluation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignment_id: assignmentId }),
+    }).catch(() => {});
+  }, [assignmentId]);
 
   const total = useMemo(() => {
     let jaliy = 0;
@@ -160,12 +175,12 @@ function FormPenilaian({ assignmentId }: { assignmentId: string }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {pilihan.map((segment, i) => {
-          const meta = AL_FATIHAH_SEGMENTS[segment.key];
+          const meta = AL_FATIHAH_SEGMENTS[segment.key]!;
           return (
             <SegmentCard
               key={segment.key}
               index={i + 1}
-              label={meta.label}
+              label={meta.nomor}
               arabic={meta.arabic}
               transliterasi={meta.transliterasi}
               optionsJaliy={segment.jaliy}
@@ -215,13 +230,13 @@ function FormPenilaian({ assignmentId }: { assignmentId: string }) {
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
           <span className="font-display" style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>
-            {hasil.skor}
+            {hasil.scoreTen}
           </span>
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink-mute)" }}>/10</span>
         </div>
 
         <div style={{ flex: 1, minWidth: 140 }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>{hasil.label}</div>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{hasil.band.title}</div>
           <div style={{ fontSize: 11.5, color: "var(--ink-mute)", marginTop: 2 }}>
             {total.jaliy} fatal · {total.khafiy} perlu diperhatikan
           </div>
@@ -293,12 +308,8 @@ const labelStyle: React.CSSProperties = {
 };
 
 function toSegmentOption(raw: string): SegmentOption {
-  const { text, kategori } = parseOption(raw);
-  return { raw, text, kategori };
+  const { text, indicator } = parseOption(raw);
+  return { raw, text, kategori: indicator ? INDICATOR_LABEL[indicator] : null };
 }
 
-function ayatKosong(): EvaluationAyat {
-  return Object.fromEntries(
-    SEGMENT_KEYS.map((key) => [key, { jaliy: [], khafiy: [] }]),
-  ) as EvaluationAyat;
-}
+
