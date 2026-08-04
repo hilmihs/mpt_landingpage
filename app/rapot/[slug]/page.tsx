@@ -476,7 +476,7 @@ export default async function RapotPage({ params }: Props) {
     );
   }
 
-  // Mulai dari sini yang dilayani adalah pengajar/admin: rapot AI sebagai bahan
+  // Mulai dari sini yang dilayani adalah admin: rapot AI sebagai bahan
   // pembanding. Barisnya baru ada setelah worker berjalan, jadi ketiadaannya
   // bukan kesalahan — cukup tampilkan keterangan, jangan 404.
   const rapot = await getRapot(slug);
@@ -486,14 +486,17 @@ export default async function RapotPage({ params }: Props) {
         className="screen-enter"
         style={{ maxWidth: 640, margin: "0 auto", padding: "48px 20px" }}
       >
+        {/* Sengaja tidak menyebut "rapot AI" atau "belum diproses mesin".
+            Layar ini bisa terbuka lewat tautan yang di-forward, dan menamai
+            mesin di situ mengundang pertanyaan tentang penilai yang memang
+            tidak kita tampilkan. Cukup katakan hasilnya sedang ditunggu. */}
         <div className="card-mpt" style={{ padding: "28px 24px", textAlign: "center" }}>
           <h1 className="font-display" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 10px" }}>
-            Rapot AI belum tersedia
+            Masih menunggu hasil
           </h1>
           <p style={{ fontSize: 14, color: "var(--ink-soft)", lineHeight: 1.65, margin: 0 }}>
-            Bacaan <strong>{submission.nama}</strong> belum diproses mesin, jadi
-            belum ada pembanding untuk penilaian pengajar. Halaman ini akan terisi
-            sendiri setelah pemrosesan berjalan.
+            Bacaan <strong>{submission.nama}</strong> sudah tersimpan dengan
+            aman dan sedang menunggu diperiksa. Buka kembali halaman ini nanti.
           </p>
         </div>
       </div>
