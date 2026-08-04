@@ -51,3 +51,9 @@ next-env.d.ts
 
 # storage lokal driver dev
 /.data/
+.venv/
+
+# Paket aset deck: keduanya bisa dibuat ulang dari docs/DECK_WALKTHROUGH.pptx
+# dan docs/img/deck/, jadi tidak perlu ikut menggendut di riwayat git.
+docs/deck-assets/
+docs/deck-assessment-alfatihah.zip

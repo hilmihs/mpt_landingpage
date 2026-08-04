@@ -1,0 +1,129 @@
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0b141a;
+    width: 480px;
+    padding: 18px 16px 22px;
+  }
+  /* Motif latar WhatsApp: titik-titik samar, cukup untuk memberi kesan chat asli */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 22px 22px;
+    pointer-events: none;
+  }
+  .bar {
+    display: flex; align-items: center; gap: 11px;
+    padding: 0 4px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    margin-bottom: 16px;
+  }
+  .ava {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(140deg, #1f6f54, #25d366);
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 15px;
+  }
+  .who { color: #e9edef; font-size: 15px; font-weight: 600; }
+  .sub { color: #8696a0; font-size: 11.5px; margin-top: 1px; }
+  .bubble {
+    position: relative;
+    background: #005c4b;
+    color: #e9edef;
+    border-radius: 9px;
+    padding: 8px 11px 20px;
+    font-size: 13.6px;
+    line-height: 1.52;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 92%;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.25);
+  }
+  .bubble + .bubble { margin-top: 9px; }
+  .time {
+    position: absolute; right: 10px; bottom: 5px;
+    font-size: 10.5px; color: rgba(233,237,239,0.55);
+  }
+  .link { color: #53bdeb; text-decoration: none; word-break: break-all; }
+</style>
+
+<div class="bar">
+  <div class="ava" id="ava">M</div>
+  <div>
+    <div class="who" id="who">Muhajir Project Tilawah</div>
+    <div class="sub">pesan otomatis</div>
+  </div>
+</div>
+
+<div id="isi"></div>
+
+<script>
+  // Teks diambil apa adanya dari lib/whatsapp.ts — yang direkayasa hanya
+  // tampilannya, bukan kalimatnya.
+  const BASE = "https://mpt-web-280965384396.asia-southeast2.run.app";
+
+  const PESAN = {
+    pengajar: {
+      who: "Muhajir Project Tilawah",
+      ava: "M",
+      jam: "14:11",
+      teks: `Assalamu'alaikum Ustadzah Annida Uljannah,
+
+Ada rekaman Al-Fatihah baru yang menunggu penilaian.
+
+Peserta : Siti Nur Halimah
+Gender  : akhwat
+Durasi  : 0m 58d
+
+Buka di sini untuk mendengarkan dan menilai:
+${BASE}/portal-mpt-x7/nilai/70ce68aa
+
+Jazakumullahu khairan.`,
+    },
+    diterima: {
+      who: "Muhajir Project Tilawah",
+      ava: "M",
+      jam: "14:11",
+      teks: `Assalamu'alaikum Siti Nur Halimah,
+
+Rekaman Al-Fatihah Anda sudah kami terima dan sedang diperiksa oleh pengajar.
+Mohon ditunggu — hasilnya akan kami kirim lewat WhatsApp ini.
+
+Cek status kapan saja di:
+${BASE}/rapot/3D2I3hANCTWe
+
+Jazakumullahu khairan.`,
+    },
+    siap: {
+      who: "Muhajir Project Tilawah",
+      ava: "M",
+      jam: "16:38",
+      teks: `Assalamu'alaikum Siti Nur Halimah,
+
+Alhamdulillah, hasil Assessment Al-Fatihah Anda sudah siap.
+
+Lihat rapot Anda di sini:
+${BASE}/rapot/3D2I3hANCTWe
+
+Barakallahu fiikum.`,
+    },
+  };
+
+  const jenis = new URLSearchParams(location.search).get("jenis") || "pengajar";
+  const p = PESAN[jenis] || PESAN.pengajar;
+
+  document.getElementById("who").textContent = p.who;
+  document.getElementById("ava").textContent = p.ava;
+
+  const html = p.teks
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/(https?:\/\/[^\s]+)/g, '<a class="link" href="#">$1</a>');
+
+  document.getElementById("isi").innerHTML =
+    `<div class="bubble">${html}<span class="time">${p.jam} &#10003;&#10003;</span></div>`;
+</script>
