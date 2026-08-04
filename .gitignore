@@ -24,8 +24,10 @@
 .DS_Store
 *.pem
 
-# working docs dropped at repo root (notulensi, proposal, dsb)
+# berkas kerja yang tercecer di root repo (notulensi, proposal, tangkapan layar)
+# Tangkapan layar yang memang dipakai dokumentasi disimpan di docs/img/.
 /*.pdf
+/*.png
 
 # debug
 npm-debug.log*

@@ -64,6 +64,7 @@ function temuanTakDikenal(ayat: AyatPayload): string[] {
 interface AssignmentRow {
   submission_id: string;
   teacher_id: string | null;
+  status: string;
   nama: string;
   nomor_wa: string;
   rapot_slug: string | null;
@@ -83,7 +84,7 @@ async function ambilPenugasan(
   teacherId: string,
 ): Promise<{ row: AssignmentRow } | { error: NextResponse }> {
   const rows = await sql<AssignmentRow[]>`
-    SELECT a.submission_id, a.teacher_id, s.nama, s.nomor_wa, s.rapot_slug
+    SELECT a.submission_id, a.teacher_id, a.status, s.nama, s.nomor_wa, s.rapot_slug
     FROM assignments a
     JOIN submissions s ON s.id = a.submission_id
     WHERE a.id = ${assignmentId}
@@ -219,10 +220,18 @@ export async function POST(req: Request) {
     WHERE id = ${row.submission_id}
   `;
 
-  // Kabari peserta. Gagal kirim TIDAK membatalkan penyimpanan — nilainya sudah
-  // aman di database, dan WA bisa diulang dari portal admin.
+  // Kabari peserta, TAPI hanya sekali.
+  //
+  // Menyimpan boleh diulang: pengajar berhak meralat penilaiannya. Yang tidak
+  // boleh diulang adalah pesannya — klik ganda atau percobaan ulang saat
+  // koneksi lambat akan membuat peserta menerima "hasil sudah siap" berkali-kali
+  // untuk satu rekaman yang sama.
+  //
+  // Gagal kirim TIDAK membatalkan penyimpanan: nilainya sudah aman, dan WA bisa
+  // diulang dari portal admin.
+  const sudahPernahDikabari = row.status === "completed";
   let waSent = false;
-  if (row.rapot_slug) {
+  if (row.rapot_slug && !sudahPernahDikabari) {
     const base = siteUrl();
     const send = await sendWhatsApp(
       row.nomor_wa,
@@ -239,6 +248,9 @@ export async function POST(req: Request) {
     score: hasil.scoreTen,
     label: hasil.band.title,
     wa_sent: waSent,
+    // Membedakan "tidak dikirim karena sudah pernah" dari "gagal kirim",
+    // supaya portal admin tahu mana yang perlu diulang.
+    wa_dilewati: sudahPernahDikabari,
   });
 }
 

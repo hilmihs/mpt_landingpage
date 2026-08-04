@@ -258,10 +258,14 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
           marginBottom: 16,
         }}
       >
+        {/* Skor AI sengaja TIDAK ditampilkan. Sejak rapat 3 Agustus 2026 yang
+            dilihat peserta adalah nilai pengajar; skor AI cuma bahan pembanding
+            internal sampai Januari. Yang ditampilkan di sini status rapotnya,
+            bukan angkanya. */}
         <StatCard
           icon={<FileText size={18} />}
-          value={rapot ? String(rapot.skor) : "-"}
-          label="Skor AI"
+          value={rapot ? "Siap" : "-"}
+          label="Rapot"
           color="var(--accent)"
         />
         <StatCard
@@ -357,9 +361,9 @@ export default async function PesertaDashboard({ params, searchParams }: Props) 
               }}
             >
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Rapot Assessment AI</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Rapot Assessment</div>
                 <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>
-                  Skor {rapot.skor}/5 &middot; {rapot.status_label}
+                  Lihat hasil penilaian pengajar
                 </div>
               </div>
               <ArrowRight size={16} color="var(--ink-mute)" />

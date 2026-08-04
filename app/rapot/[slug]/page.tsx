@@ -661,7 +661,11 @@ export default async function RapotPage({ params }: Props) {
 
       {/* Share row */}
       <div style={{ marginBottom: 26 }}>
-        <ShareButtons slug={slug} skor={rapot.skor} />
+        {/* Tanpa skor: yang dilihat di sini rapot AI (skala 1-5), sedangkan
+            ShareButtons menulis "/10" karena diperuntukkan bagi nilai pengajar.
+            Mengoper skor AI ke sini membuat pesan yang dibagikan menyebut angka
+            di skala yang salah. */}
+        <ShareButtons slug={slug} skor={null} />
       </div>
 
       {/* AI Narrative — optional, only if generated */}
