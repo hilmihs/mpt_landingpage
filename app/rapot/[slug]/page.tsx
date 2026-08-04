@@ -7,7 +7,6 @@ import { IndikatorCard } from "@/components/rapot/IndikatorCard";
 import { NextStepsGate } from "@/components/rapot/NextStepsGate";
 import { AINarrative } from "@/components/rapot/AINarrative";
 import { getParticipantEligibility } from "@/lib/eligibility";
-import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { getCurrentAdmin } from "@/lib/auth/admin";
 import {
   TeacherEvaluationReport,
@@ -401,10 +400,14 @@ export default async function RapotPage({ params }: Props) {
 
   // Sejak rapat 3 Agustus 2026, nilai yang dilihat peserta berasal dari
   // PENGAJAR. Rapot AI tetap dihitung, tapi jadi bahan pembanding internal
-  // sampai Januari — hanya pengajar/admin yang login yang melihatnya.
+  // sampai Januari.
+  //
+  // Pembandingnya cuma untuk ADMIN, tidak untuk pengajar. Kalau pengajar bisa
+  // melihat tebakan mesin, penilaiannya berhenti independen — dan justru
+  // keindependenan itu yang membuat perbandingannya ada gunanya. Jadi pengajar
+  // yang membuka tautan ini melihat persis apa yang dilihat peserta.
   const teacherEval = await getTeacherEvaluation(submission.id);
-  const internalViewer =
-    (await getCurrentTeacher()) ?? (await getCurrentAdmin());
+  const internalViewer = await getCurrentAdmin();
 
   if (!internalViewer) {
     const sub = submission;

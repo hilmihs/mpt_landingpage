@@ -1,5 +1,9 @@
 import { sql } from "@/lib/db";
-import { sendWhatsApp, tplTeacherNewRecording } from "@/lib/whatsapp";
+import {
+  normalizeWaNumber,
+  sendWhatsApp,
+  tplTeacherNewRecording,
+} from "@/lib/whatsapp";
 import { siteUrl } from "@/lib/site-url";
 
 /**
@@ -19,6 +23,44 @@ export interface DispatchTarget {
   nama: string;
   nomorWa: string;
   isFallback: boolean;
+}
+
+/**
+ * SEMENTARA — satu nomor peserta dipesan untuk uji coba.
+ *
+ * Kalau rekaman datang dari nomor uji di bawah, tautan penilaiannya diarahkan
+ * ke Hilmi, bukan dirotasi ke asatidah. Rekaman dari nomor lain tetap lewat
+ * rotasi seperti biasa — jadi peserta sungguhan tidak terpengaruh.
+ *
+ * `teacherId: null` disengaja, bukan kelalaian. Baris assignment dengan
+ * teacher_id kosong bisa dibuka pengajar mana pun yang login (lihat
+ * app/portal-mpt-x7/(authed)/nilai/[id]/page.tsx dan tugas/page.tsx) — itulah
+ * yang membuat tautan di WhatsApp bisa dibuka tanpa perlu mendaftarkan
+ * penerimanya sebagai pengajar lebih dulu.
+ *
+ * CARA MENCABUT: hapus konstanta ini beserta pemakaiannya di
+ * dispatchSubmission(). pickTeacher() dan fallbackTarget() tidak diubah sama
+ * sekali, jadi tidak ada yang perlu dipulihkan.
+ */
+const UJI_COBA = {
+  /** Nomor peserta yang memicu pengalihan. Disimpan apa adanya; pembandingan
+   *  dilakukan setelah dinormalkan, supaya "0822…", "62822…", dan "+62822…"
+   *  sama-sama dikenali. */
+  nomorPeserta: "082298693789",
+  penerima: {
+    teacherId: null,
+    nama: "Hilmi Hanif Sobandi",
+    nomorWa: "081399741809",
+    isFallback: false,
+  } satisfies DispatchTarget,
+} as const;
+
+/** Benar kalau rekaman ini datang dari nomor uji coba. */
+function adalahPesertaUji(nomorWaPeserta: string | null): boolean {
+  if (!nomorWaPeserta) return false;
+  const a = normalizeWaNumber(nomorWaPeserta);
+  const b = normalizeWaNumber(UJI_COBA.nomorPeserta);
+  return a !== null && a === b;
 }
 
 /**
@@ -72,6 +114,8 @@ function fallbackTarget(): DispatchTarget | null {
 export interface DispatchInput {
   submissionId: string;
   pesertaNama: string;
+  /** Nomor WhatsApp peserta — dipakai untuk mengenali rekaman uji coba. */
+  pesertaWa: string;
   jenisKelamin: "ikhwan" | "akhwat";
   durasiDetik: number | null;
 }
@@ -92,7 +136,9 @@ export interface DispatchResult {
 export async function dispatchSubmission(
   input: DispatchInput,
 ): Promise<DispatchResult> {
-  const target = (await pickTeacher(input.jenisKelamin)) ?? fallbackTarget();
+  const target = adalahPesertaUji(input.pesertaWa)
+    ? UJI_COBA.penerima
+    : ((await pickTeacher(input.jenisKelamin)) ?? fallbackTarget());
 
   if (!target) {
     console.error(

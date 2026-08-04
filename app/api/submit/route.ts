@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
     const d = await dispatchSubmission({
       submissionId,
       pesertaNama: parsed.data.nama,
+      pesertaWa: parsed.data.nomor_wa,
       jenisKelamin: parsed.data.jenis_kelamin,
       durasiDetik: audioDuration,
     });

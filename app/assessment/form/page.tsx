@@ -75,7 +75,11 @@ export default function FormPage() {
       }
       const json = await res.json();
       setSubmission(json.submission_id, json.rapot_slug);
-      router.push(`/assessment/loading/${json.rapot_slug}`);
+      // Langsung ke halaman rapot. Halaman itu sendiri yang memutuskan apa yang
+      // ditampilkan: layar menunggu selama pengajar belum menilai, rapot penuh
+      // setelahnya. Tidak perlu layar perantara — jedanya hitungan hari, jadi
+      // tidak ada yang bisa ditunggui di layar.
+      router.push(`/rapot/${json.rapot_slug}`);
     } catch (err) {
       setError((err as Error).message);
       setSubmitting(false);
