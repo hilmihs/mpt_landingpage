@@ -28,7 +28,16 @@ function create() {
   if (!connectionString) {
     throw new Error("Missing DATABASE_URL");
   }
+  // Cloud Run menyambung ke Cloud SQL lewat unix socket di /cloudsql/<instance>.
+  // postgres.js TIDAK bisa mengurai socket dari URL: bentuk "@/db?host=..."
+  // ditolak sebagai Invalid URL, dan "@localhost/db?host=..." diam-diam jatuh
+  // ke TCP localhost — dua-duanya gagal tanpa pesan yang jelas. Yang bekerja
+  // adalah meng-override `host` lewat opsi, jadi socket-nya dipisah ke env
+  // sendiri dan URL tetap berbentuk TCP biasa.
+  const socketPath = process.env.DATABASE_SOCKET_PATH;
+
   return postgres(connectionString, {
+    ...(socketPath ? { host: socketPath } : {}),
     // Cloud Run menjalankan banyak instance; jaga jumlah koneksi per instance
     // tetap kecil supaya tidak menembus batas koneksi Cloud SQL.
     max: Number(process.env.DATABASE_POOL_MAX ?? 5),
