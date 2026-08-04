@@ -276,11 +276,17 @@ async function getNativeEvaluation(
 /**
  * Penilaian lain milik peserta yang sama.
  *
- * Dicocokkan lewat nomor WhatsApp, bukan nama: nama sering ditulis berbeda tiap
- * kali mendaftar, sedangkan nomor jauh lebih stabil. Kalau peserta baru dinilai
- * sekali, komponennya menyembunyikan diri sendiri.
+ * Dicocokkan lewat nomor WhatsApp DAN nama sekaligus. Nomor saja tidak cukup:
+ * satu nomor lazim dipakai lebih dari satu orang di sini — orang tua
+ * mendaftarkan anak yang belum punya HP — dan halaman rapot terbuka bagi siapa
+ * pun yang memegang tautannya. Mencocokkan nomor saja berarti rapot seseorang
+ * memajang tautan ke rapot lengkap orang lain.
+ *
+ * Nama memang kadang ditulis berbeda tiap mendaftar, jadi pencocokan ini bisa
+ * meleset. Itu pilihan yang disengaja: gagal cocok hanya membuat riwayat tidak
+ * muncul, sedangkan salah cocok membocorkan data orang lain.
  */
-async function getRiwayat(nomorWa: string): Promise<HistoryItem[]> {
+async function getRiwayat(nomorWa: string, nama: string): Promise<HistoryItem[]> {
   try {
     const rows = await sql<
       {
@@ -293,7 +299,9 @@ async function getRiwayat(nomorWa: string): Promise<HistoryItem[]> {
       SELECT s.rapot_slug, te.kegiatan, te.created_at, te.score_min
       FROM teacher_evaluations te
       JOIN submissions s ON s.id = te.submission_id
-      WHERE s.nomor_wa = ${nomorWa} AND s.rapot_slug IS NOT NULL
+      WHERE s.nomor_wa = ${nomorWa}
+        AND lower(btrim(s.nama)) = lower(btrim(${nama}))
+        AND s.rapot_slug IS NOT NULL
       ORDER BY te.created_at DESC
       LIMIT 12
     `;
@@ -408,7 +416,7 @@ export default async function RapotPage({ params }: Props) {
       ? await getNativeEvaluation(submission.id)
       : null;
     const riwayat = teacherEval
-      ? await getRiwayat(submission.nomor_wa)
+      ? await getRiwayat(submission.nomor_wa, submission.nama)
       : [];
     return (
       <div
