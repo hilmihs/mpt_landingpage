@@ -20,7 +20,10 @@ export default async function AuthedPortalLayout({
           flex: 1,
           padding: "32px 24px 60px",
           maxWidth: "100%",
-          overflow: "hidden",
+          // clip, bukan hidden: hidden menjadikan <main> kotak gulir sendiri,
+          // dan position: sticky di dalamnya (pemutar rekaman di halaman nilai)
+          // jadi tidak pernah menempel. clip tetap menahan lebar berlebih.
+          overflow: "clip",
         }}
       >
         {children}

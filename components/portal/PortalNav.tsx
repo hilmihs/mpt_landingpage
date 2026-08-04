@@ -18,6 +18,7 @@ import { useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/portal-mpt-x7/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/portal-mpt-x7/tugas", label: "Tugas Penilaian", icon: ClipboardCheck },
   { href: "/portal-mpt-x7/availability", label: "Ketersediaan", icon: CalendarClock },
   { href: "/portal-mpt-x7/bookings", label: "Booking Masuk", icon: Users },
   { href: "/portal-mpt-x7/cohorts", label: "Kelas Tahsin", icon: GraduationCap },

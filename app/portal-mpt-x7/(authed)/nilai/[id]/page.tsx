@@ -1,15 +1,11 @@
 import { notFound } from "next/navigation";
-import { ExternalLink, Clock, User, Volume2 } from "lucide-react";
+import { Clock, User, Volume2 } from "lucide-react";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { sql } from "@/lib/db";
 import { signedAudioUrl } from "@/lib/storage";
-import { KodeUnikForm } from "@/components/portal/KodeUnikForm";
+import { EvaluationForm } from "@/components/portal/EvaluationForm";
 
 export const dynamic = "force-dynamic";
-
-const FILAMENT_CREATE_URL =
-  process.env.MPT_EVAL_FORM_URL ??
-  "https://assesment-alfatihah.muhajirproject.com/recitation-evaluations/create";
 
 interface Row {
   assignment_id: string;
@@ -58,7 +54,7 @@ export default async function NilaiPage({
   if (row.teacher_id && row.teacher_id !== teacher.teacherId) notFound();
 
   const audioUrl = await signedAudioUrl(row.audio_path, 3600);
-  const done = Boolean(row.kode_unik);
+  const sudahDinilai = row.kode_unik != null || row.score_min != null;
 
   const durasi =
     row.audio_duration_sec != null
@@ -74,8 +70,8 @@ export default async function NilaiPage({
         Penilaian Al-Fatihah
       </h1>
       <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 24px" }}>
-        Dengarkan rekaman di bawah, lalu isi formulir penilaian. Terakhir,
-        tempelkan kode unik yang Anda terima agar hasilnya masuk ke sistem.
+        Putar rekamannya, lalu centang kesalahan yang Anda dengar pada tiap
+        segmen. Pemutar tetap menempel di atas layar selama Anda menggulir.
       </p>
 
       {/* Identitas peserta */}
@@ -91,8 +87,19 @@ export default async function NilaiPage({
         </div>
       </div>
 
-      {/* Pemutar rekaman — sengaja di paling atas */}
-      <div className="card-mpt" style={{ padding: 20, marginBottom: 18 }}>
+      {/* Pemutar rekaman menempel di atas layar: pengajar mencentang 110
+          pilihan sambil mengulang-ulang bagian yang meragukan, jadi tombol
+          putarnya harus selalu terjangkau tanpa menggulir balik. */}
+      <div
+        className="card-mpt"
+        style={{
+          padding: 20,
+          marginBottom: 18,
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+        }}
+      >
         <div
           style={{
             fontSize: 11,
@@ -109,48 +116,18 @@ export default async function NilaiPage({
         <audio controls preload="metadata" src={audioUrl} style={{ width: "100%" }} />
       </div>
 
-      {/* Formulir penilaian di sistem sebelah */}
-      <div className="card-mpt" style={{ padding: 20, marginBottom: 18 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
-          Langkah 1 — Isi formulir penilaian
-        </div>
-        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 14px", lineHeight: 1.6 }}>
-          Formulir terbuka di tab baru. Setelah submit, Anda akan menerima{" "}
-          <strong>kode unik</strong> — salin kode itu, lalu kembali ke halaman ini.
-        </p>
-        <a
-          href={FILAMENT_CREATE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-mpt btn-mpt-accent"
-          style={{ minHeight: 46, fontSize: 14, fontWeight: 700, display: "inline-flex", gap: 8 }}
-        >
-          Buka Formulir Penilaian
-          <ExternalLink size={15} strokeWidth={2.4} />
-        </a>
-      </div>
-
-      {/* Kode unik */}
-      <div className="card-mpt" style={{ padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
-          Langkah 2 — Tempelkan kode unik
-        </div>
-        {done ? (
-          <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.6 }}>
-            Sudah selesai. Kode <strong>{row.kode_unik}</strong>
-            {row.score_min != null && (
-              <>
-                {" "}
-                — skor {row.score_min}
-                {row.label_min ? ` (${row.label_min})` : ""}
-              </>
-            )}
-            . Rapotnya sudah dikirim ke peserta lewat WhatsApp.
-          </p>
-        ) : (
-          <KodeUnikForm assignmentId={row.assignment_id} />
-        )}
-      </div>
+      <EvaluationForm
+        assignmentId={row.assignment_id}
+        existing={
+          sudahDinilai
+            ? {
+                skor: row.score_min,
+                label: row.label_min,
+                kodeUnik: row.kode_unik,
+              }
+            : null
+        }
+      />
     </div>
   );
 }

@@ -830,3 +830,90 @@
   .grid-2col-mobile { grid-template-columns: 1fr !important; }
 }
 
+
+/* ============================================================
+ * Cetak / Simpan PDF
+ *
+ * Rapot dicetak lewat dialog browser, bukan generator PDF terpisah, supaya
+ * hanya ada satu sumber kebenaran tata letak. Yang perlu diatur di sini hanya
+ * beda medium: buang kromnya, kunci kartu agar utuh dalam satu halaman, dan
+ * paksa browser tetap mencetak latar berwarna (default-nya dibuang demi tinta).
+ * ============================================================ */
+
+@media print {
+  /* Elemen yang tidak punya makna di atas kertas. Kelas .no-print dipasang
+     pada tombol/CTA yang tidak tercakup selektor umum di bawah. */
+  .no-print,
+  nav,
+  footer,
+  button,
+  [role="button"] {
+    display: none !important;
+  }
+
+  /* Ornamen dekoratif hanya menghabiskan toner. */
+  .blob-1,
+  .blob-2,
+  .marquee-track,
+  .steps-connector {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    /* Skala sedikit dikecilkan supaya rapot muat dalam jumlah halaman wajar. */
+    font-size: 13px;
+  }
+
+  /* Browser membuang latar berwarna saat mencetak; badge skor dan penanda
+     kesalahan kehilangan maknanya kalau ikut terbuang. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+
+  /* Bayangan jadi kotor di atas kertas; garis tipis cukup untuk memisahkan. */
+  .card-mpt {
+    box-shadow: none !important;
+    border: 1px solid var(--line-strong) !important;
+    border-radius: 10px !important;
+  }
+
+  /* Kartu apa pun yang berdiri sendiri jangan terbelah antar halaman.
+     [data-print-block] tersedia sebagai kait untuk blok lain yang butuh
+     perlakuan sama tanpa menyentuh berkas ini. */
+  .card-mpt,
+  .ayat-card,
+  .segmen-card,
+  [data-print-block] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Judul jangan menggantung sendirian di dasar halaman. */
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Animasi masuk menyisakan opacity 0 kalau halaman dicetak sebelum selesai. */
+  .screen-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Tautan tidak bisa diklik di atas kertas; garis bawah dan warnanya hanya
+     bikin teks ramai tanpa menambah informasi. */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
