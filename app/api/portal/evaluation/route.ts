@@ -6,6 +6,7 @@ import { EVALUATION_OPTIONS, SEGMENT_KEYS } from "@/lib/teacher-eval/catalog";
 import { computeEvaluation } from "@/lib/teacher-eval/scoring";
 import type { AyatPayload, SegmentKey } from "@/lib/teacher-eval/types";
 import { sendWhatsApp, tplPesertaRapotReady } from "@/lib/whatsapp";
+import { siteUrl } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -222,7 +223,7 @@ export async function POST(req: Request) {
   // aman di database, dan WA bisa diulang dari portal admin.
   let waSent = false;
   if (row.rapot_slug) {
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const base = siteUrl();
     const send = await sendWhatsApp(
       row.nomor_wa,
       tplPesertaRapotReady({

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Storage } from "@google-cloud/storage";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * Penyimpanan audio peserta. Menggantikan Supabase Storage.
@@ -146,7 +147,7 @@ export async function signedAudioUrl(
   }
 
   const exp = Math.floor(Date.now() / 1000) + expiresInSec;
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = siteUrl();
   const qs = new URLSearchParams({ exp: String(exp), sig: sign(objectPath, exp) });
   return `${base}/api/audio/${objectPath}?${qs}`;
 }

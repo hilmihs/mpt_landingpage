@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { sendWhatsApp, tplTeacherNewRecording } from "@/lib/whatsapp";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * Penugasan rekaman peserta ke pengajar.
@@ -122,7 +123,7 @@ export async function dispatchSubmission(
     return { assignmentId: null, target, waSent: false, error: msg };
   }
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = siteUrl();
   const reviewUrl = `${base}/portal-mpt-x7/nilai/${assignmentId}`;
 
   const send = await sendWhatsApp(

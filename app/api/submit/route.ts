@@ -7,6 +7,7 @@ import { enqueueJob } from "@/lib/queue";
 import { formSchema } from "@/lib/validation";
 import { dispatchSubmission } from "@/lib/dispatch";
 import { sendWhatsApp, tplPesertaSubmitted } from "@/lib/whatsapp";
+import { siteUrl } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
   // Mas Agil menekankan ini di rapat: pesertanya tidak boleh dibiarkan menunggu
   // tanpa kabar, karena pemeriksaan pengajar makan waktu berhari-hari.
   try {
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const base = siteUrl();
     const send = await sendWhatsApp(
       parsed.data.nomor_wa,
       tplPesertaSubmitted({
