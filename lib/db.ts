@@ -12,8 +12,6 @@ import postgres from "postgres";
  * lebih dulu.
  */
 
-const connectionString = process.env.DATABASE_URL;
-
 declare global {
   // Dev HMR membuat modul dievaluasi ulang berkali-kali. Tanpa cache ini,
   // tiap reload membuka pool baru sampai Postgres kehabisan slot koneksi.
@@ -22,6 +20,11 @@ declare global {
 }
 
 function create() {
+  // Dibaca di sini, bukan di tingkat modul: `next build` mengimpor tiap route
+  // untuk mengumpulkan data halaman, sedangkan env produksi baru ada saat
+  // runtime di Cloud Run. Membaca lebih awal membuat build gagal dengan
+  // "Missing DATABASE_URL" padahal aplikasinya sendiri baik-baik saja.
+  const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("Missing DATABASE_URL");
   }
@@ -53,8 +56,32 @@ function create() {
   });
 }
 
-export const sql = globalThis.__mptDb ?? create();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__mptDb = sql;
+function connection(): ReturnType<typeof postgres> {
+  if (!globalThis.__mptDb) {
+    const db = create();
+    // Di produksi Cloud Run tiap instance punya proses sendiri, jadi menyimpan
+    // di globalThis aman sekaligus mencegah pool ganda saat HMR dev.
+    globalThis.__mptDb = db;
+  }
+  return globalThis.__mptDb;
 }
+
+/**
+ * Koneksi malas. Sengaja BUKAN `postgres(...)` langsung di tingkat modul:
+ * mengimpor file ini tidak boleh menyentuh env atau membuka soket, supaya
+ * `next build` bisa mengimpor route mana pun tanpa database.
+ *
+ * Proxy-nya di atas fungsi karena postgres.js dipakai dua cara sekaligus —
+ * sebagai tagged template (`sql\`SELECT 1\``, lewat jebakan apply) dan sebagai
+ * objek bermetode (`sql.json`, `sql.begin`, `sql.unsafe`, lewat jebakan get).
+ */
+export const sql = new Proxy(function () {} as unknown as ReturnType<typeof postgres>, {
+  apply(_target, _thisArg, args: unknown[]) {
+    return (connection() as unknown as (...a: unknown[]) => unknown)(...args);
+  },
+  get(_target, prop) {
+    const db = connection() as unknown as Record<string | symbol, unknown>;
+    const value = db[prop];
+    return typeof value === "function" ? value.bind(db) : value;
+  },
+}) as ReturnType<typeof postgres>;

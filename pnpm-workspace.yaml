@@ -1,9 +1,13 @@
+# Setelan pnpm. Sejak pnpm 11, field "pnpm" di package.json TIDAK dibaca lagi —
+# rumah barunya di sini. https://pnpm.io/settings
+#
+# pnpm memblokir postinstall script secara default. Tanpa daftar tegas di bawah,
+# `pnpm install` keluar dengan ERR_PNPM_IGNORED_BUILDS dan build Docker gagal.
+# Tiap paket harus bernilai true/false — placeholder yang ditulis pnpm saat
+# instalasi pertama bukan YAML valid dan membuat build tumbang.
 allowBuilds:
-  esbuild: true
-  msgpackr-extract: set this to true or false
-  msw: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+  esbuild: true          # dipakai tsx: runner migrasi + skrip seed
+  sharp: true            # optimasi gambar Next.js
+  unrs-resolver: true    # resolver eslint-config-next
+  msgpackr-extract: true # jalur cepat serialisasi
+  msw: false             # mock service worker, dev saja — tidak perlu di image

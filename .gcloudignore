@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+.data
+ml-server
+docs
+*.pdf
+.env*
+!.env.example
+.playwright-mcp
