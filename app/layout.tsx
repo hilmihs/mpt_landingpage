@@ -24,7 +24,7 @@ const amiri = Amiri({
 export const metadata: Metadata = {
   title: "Muhajir Project Tilawah — Assessment Al-Fatihah",
   description:
-    "Rekam bacaan Al-Fatihah Anda — sistem memberi umpan balik awal dari 4 indikator kesalahan umum dalam 30 detik.",
+    "Rekam bacaan Al-Fatihah Anda, lalu didengarkan langsung oleh pengajar kami — ayat per ayat. Hasilnya dikirim lewat WhatsApp. Gratis.",
 };
 
 export const viewport: Viewport = {

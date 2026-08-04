@@ -363,7 +363,7 @@ export default function FormPage() {
           className="btn-mpt btn-mpt-primary"
           style={{ minHeight: 56, fontSize: 16, marginTop: 4 }}
         >
-          {submitting ? "Mengirim..." : "Kirim & Mulai Analisis"}
+          {submitting ? "Mengirim..." : "Kirim ke Pengajar"}
           {!submitting && (
             <svg
               width="18"

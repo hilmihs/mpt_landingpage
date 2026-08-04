@@ -155,12 +155,12 @@ function Hero() {
             textAlign: "center",
           }}
         >
-          Rekam bacaan Al-Fatihah Anda — sistem membantu mengenali{" "}
+          Rekam bacaan Al-Fatihah Anda, lalu{" "}
           <strong style={{ color: "var(--ink)", fontWeight: 700 }}>
-            4 jenis kesalahan umum
+            didengarkan langsung oleh pengajar kami
           </strong>{" "}
-          (harakat, huruf, panjang pendek, syaddah) dan menyiapkan pratinjau
-          rapot dalam 30 detik.
+          — ayat per ayat, sampai harakat, huruf, panjang pendek, dan syaddah.
+          Hasilnya kami kirim lewat WhatsApp.
         </p>
 
         <div
@@ -432,9 +432,9 @@ function Waveform({ bars = 56, height = 88 }: { bars?: number; height?: number }
 function TrustStrip() {
   const items = [
     "Untuk peserta Program Tahsin",
-    "Umpan balik bacaan otomatis",
+    "Diperiksa pengajar, bukan mesin",
     "100% gratis untuk seluruh ummat",
-    "Hasil dalam ≤ 30 detik",
+    "Hasil dikirim lewat WhatsApp",
     "Data residency Indonesia (UU PDP)",
     "Audio peserta dihapus 7 hari",
   ];
@@ -539,7 +539,7 @@ function Indikator() {
             }}
           >
             Empat hal yang{" "}
-            <span style={{ color: "var(--accent-deep)" }}>sistem dengarkan</span>
+            <span style={{ color: "var(--accent-deep)" }}>pengajar dengarkan</span>
             <br />
             dalam bacaan Anda.
           </h2>
@@ -554,9 +554,9 @@ function Indikator() {
               fontWeight: 400,
             }}
           >
-            Lebih dari sekadar transkripsi suara — sistem menyoroti potensi
-            kesalahan yang dapat mengubah makna ayat. Hasilnya bersifat umpan
-            balik awal, bukan pengganti penilaian Ustadz/Ustadzah langsung.
+            Pengajar menandai kesalahan yang dapat mengubah makna ayat, ayat per
+            ayat. Hasilnya berupa umpan balik tertulis untuk Anda pelajari, dan
+            menjadi titik awal sebelum masuk Program Tahsin.
           </p>
         </div>
 
@@ -662,14 +662,14 @@ function Steps() {
     },
     {
       n: "02",
-      title: "Analisis Sistem",
-      desc: "Sistem menandai potensi kesalahan pada 4 indikator dalam ≤ 30 detik.",
-      icon: "scan",
+      title: "Didengarkan Pengajar",
+      desc: "Pengajar kami mendengarkan rekaman Anda ayat per ayat. Karena diperiksa satu per satu, butuh beberapa hari.",
+      icon: "listen",
     },
     {
       n: "03",
       title: "Rapot + Rekomendasi",
-      desc: "Skor 1–5 lengkap dengan highlight kesalahan, dan undangan ke Program Tahsin.",
+      desc: "Skor 1–10 dari pengajar, lengkap dengan catatan tiap ayat. Kami kabari lewat WhatsApp.",
       icon: "award",
     },
   ] as const;
@@ -699,8 +699,10 @@ function Steps() {
               lineHeight: 1.05,
             }}
           >
-            Dari niat hingga rapot —{" "}
-            <span style={{ color: "var(--accent-deep)" }}>tiga menit saja</span>.
+            Merekamnya{" "}
+            <span style={{ color: "var(--accent-deep)" }}>tiga menit saja</span>,
+            <br />
+            sisanya pengajar yang kerjakan.
           </h2>
         </div>
 
@@ -824,7 +826,7 @@ function Steps() {
   );
 }
 
-function StepIcon({ kind }: { kind: "mic" | "scan" | "award" }) {
+function StepIcon({ kind }: { kind: "mic" | "listen" | "award" }) {
   const common = {
     width: 32,
     height: 32,
@@ -844,14 +846,12 @@ function StepIcon({ kind }: { kind: "mic" | "scan" | "award" }) {
       </svg>
     );
   }
-  if (kind === "scan") {
+  if (kind === "listen") {
+    // Headphone, bukan bingkai pemindai. Langkah ini dikerjakan orang yang
+    // mendengarkan, dan ikonnya harus mengatakan hal yang sama dengan teksnya.
     return (
       <svg {...common}>
-        <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-        <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-        <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-        <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-        <line x1="7" y1="12" x2="17" y2="12" />
+        <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
       </svg>
     );
   }
@@ -868,10 +868,14 @@ function StepIcon({ kind }: { kind: "mic" | "scan" | "award" }) {
  * ============================================================ */
 function RapotPreview() {
   const rows = [
-    { label: "Harakat", val: 95, color: "var(--indikator-harakat)" },
-    { label: "Huruf", val: 88, color: "var(--indikator-huruf)" },
-    { label: "Mad", val: 76, color: "var(--indikator-mad)" },
-    { label: "Syaddah", val: 92, color: "var(--indikator-syaddah)" },
+    // Nama aspek dan skalanya disamakan dengan yang benar-benar muncul di
+    // rapot, supaya peserta tidak menemui istilah atau satuan baru saat
+    // menerima hasilnya. Sebelumnya bagian ini memakai persen, padahal
+    // judulnya sendiri menyebut skala 1-10.
+    { label: "Harakat", val: 10, color: "var(--indikator-harakat)" },
+    { label: "Ketepatan Huruf", val: 8, color: "var(--indikator-huruf)" },
+    { label: "Panjang Pendek", val: 6, color: "var(--indikator-mad)" },
+    { label: "Tasydid", val: 10, color: "var(--indikator-syaddah)" },
   ];
   return (
     <section style={{ padding: "120px 32px" }}>
@@ -925,7 +929,7 @@ function RapotPreview() {
                 lineHeight: 1.1,
               }}
             >
-              Skor 1–5, bukan angka kosong — tapi{" "}
+              Skor 1–10, bukan angka kosong — tapi{" "}
               <span style={{ color: "var(--accent-deep)" }}>peta langkah</span>{" "}
               berikutnya.
             </h3>
@@ -1000,7 +1004,7 @@ function RapotPreview() {
                   letterSpacing: "-0.05em",
                 }}
               >
-                4
+                8
               </span>
               <span
                 style={{
@@ -1009,7 +1013,7 @@ function RapotPreview() {
                   fontWeight: 600,
                 }}
               >
-                / 5
+                / 10
               </span>
             </div>
             <div
@@ -1021,7 +1025,7 @@ function RapotPreview() {
                 fontWeight: 700,
               }}
             >
-              Bacaan Sangat Baik
+              Baik
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1045,7 +1049,7 @@ function RapotPreview() {
                         fontWeight: 700,
                       }}
                     >
-                      {r.val}%
+                      {r.val}/10
                     </span>
                   </div>
                   <div
@@ -1064,7 +1068,7 @@ function RapotPreview() {
                           background: r.color,
                           borderRadius: 999,
                           transitionDelay: `${0.6 + i * 0.12}s`,
-                          "--w": `${r.val}%`,
+                          "--w": `${r.val * 10}%`,
                         } as React.CSSProperties
                       }
                     />
@@ -1088,7 +1092,7 @@ function JalurMasuk() {
       badge: "Gratis",
       badgeColor: "var(--success)",
       title: "Assessment Al-Fatihah",
-      desc: "Rekam bacaan Al-Fatihah, dapatkan rapot AI instan, lalu ikuti Tahsin dan masuk HITS berjenjang.",
+      desc: "Rekam bacaan Al-Fatihah, dapatkan rapot dari pengajar, lalu ikuti Tahsin dan masuk HITS berjenjang.",
       href: "/assessment/consent",
       btnClass: "btn-mpt btn-mpt-accent",
       btnLabel: "Mulai Assessment",
