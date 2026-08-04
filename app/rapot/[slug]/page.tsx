@@ -21,6 +21,10 @@ import { WaitingForTeacher } from "@/components/rapot/WaitingForTeacher";
 import { ShareButtons } from "@/components/rapot/ShareButtons";
 import { PrintButton } from "@/components/rapot/PrintButton";
 import {
+  AssessmentHistory,
+  type HistoryItem,
+} from "@/components/rapot/AssessmentHistory";
+import {
   INDICATOR_KEYS,
   SEGMENT_KEYS,
   type EvaluationAyat,
@@ -41,6 +45,7 @@ interface RapotWithSubmission extends RapotRow {
     id: string;
     nama: string;
     jenis_kelamin: "ikhwan" | "akhwat";
+    nomor_wa: string;
     audio_duration_sec: number | null;
   } | null;
 }
@@ -62,6 +67,7 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
         s.id AS sub_id,
         s.nama AS sub_nama,
         s.jenis_kelamin AS sub_jenis_kelamin,
+        s.nomor_wa AS sub_nomor_wa,
         s.audio_duration_sec::float8 AS sub_audio_duration_sec
       FROM rapot r
       LEFT JOIN submissions s ON s.id = r.submission_id
@@ -93,6 +99,7 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
             id: row.sub_id,
             nama: row.sub_nama,
             jenis_kelamin: row.sub_jenis_kelamin,
+            nomor_wa: row.sub_nomor_wa,
             audio_duration_sec: row.sub_audio_duration_sec,
           }
         : null,
@@ -266,6 +273,45 @@ async function getNativeEvaluation(
   }
 }
 
+/**
+ * Penilaian lain milik peserta yang sama.
+ *
+ * Dicocokkan lewat nomor WhatsApp, bukan nama: nama sering ditulis berbeda tiap
+ * kali mendaftar, sedangkan nomor jauh lebih stabil. Kalau peserta baru dinilai
+ * sekali, komponennya menyembunyikan diri sendiri.
+ */
+async function getRiwayat(nomorWa: string): Promise<HistoryItem[]> {
+  try {
+    const rows = await sql<
+      {
+        rapot_slug: string | null;
+        kegiatan: string | null;
+        created_at: Date | null;
+        score_min: number | null;
+      }[]
+    >`
+      SELECT s.rapot_slug, te.kegiatan, te.created_at, te.score_min
+      FROM teacher_evaluations te
+      JOIN submissions s ON s.id = te.submission_id
+      WHERE s.nomor_wa = ${nomorWa} AND s.rapot_slug IS NOT NULL
+      ORDER BY te.created_at DESC
+      LIMIT 12
+    `;
+    return rows
+      .filter((r): r is typeof r & { rapot_slug: string } => r.rapot_slug != null)
+      .map((r) => ({
+        slug: r.rapot_slug,
+        kegiatan: r.kegiatan,
+        createdAt: r.created_at?.toISOString() ?? "",
+        scoreTen: r.score_min,
+      }));
+  } catch (err) {
+    // Riwayat hanyalah pelengkap — rapotnya sendiri tetap harus tampil.
+    console.error("[rapot] gagal ambil riwayat:", (err as Error).message);
+    return [];
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const rapot = await getRapot(slug);
@@ -325,6 +371,9 @@ export default async function RapotPage({ params }: Props) {
     const native = teacherEval
       ? await getNativeEvaluation(rapot.submission_id)
       : null;
+    const riwayat = teacherEval && rapot.submissions?.nomor_wa
+      ? await getRiwayat(rapot.submissions.nomor_wa)
+      : [];
     return (
       <div
         className="screen-enter"
@@ -340,6 +389,11 @@ export default async function RapotPage({ params }: Props) {
               <NativeEvaluationReport nama={namaPeserta} ev={native} />
             ) : (
               <TeacherEvaluationReport nama={namaPeserta} ev={teacherEval} />
+            )}
+            {riwayat.length > 1 && (
+              <div style={{ marginTop: 18 }}>
+                <AssessmentHistory items={riwayat} currentSlug={slug} />
+              </div>
             )}
             {/* Ajakan lanjut ke program tidak ikut tercetak: di atas kertas
                 tautannya tidak bisa diklik dan hanya menyita satu halaman. */}
