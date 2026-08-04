@@ -314,14 +314,17 @@ async function getRiwayat(nomorWa: string): Promise<HistoryItem[]> {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const rapot = await getRapot(slug);
-  if (!rapot)
+  // Judulnya bersandar pada peserta, bukan pada rapot AI: rapot AI baru ada
+  // setelah worker jalan, sedangkan tautan ini sudah beredar sejak pengajar
+  // selesai menilai.
+  const submission = await getSubmissionBySlug(slug);
+  if (!submission)
     return { title: "Rapot tidak ditemukan — Muhajir Project Tilawah" };
 
   // Judul dan preview share TIDAK boleh memuat skor AI. Halaman ini bisa
   // dibagikan ke grup WhatsApp, dan skor AI adalah bahan pembanding internal
   // sampai Januari — bukan angka yang diumumkan ke peserta.
-  const ev = await getTeacherEvaluation(rapot.submission_id);
+  const ev = await getTeacherEvaluation(submission.id);
   if (!ev || ev.scoreMin == null) {
     return {
       title: "Rapot Assessment Al-Fatihah — Muhajir Project Tilawah",
@@ -350,29 +353,62 @@ function scoreColor(skor: number): string {
   return "var(--danger)";
 }
 
+interface SubmissionBySlug {
+  id: string;
+  nama: string;
+  jenis_kelamin: "ikhwan" | "akhwat";
+  nomor_wa: string;
+  audio_duration_sec: number | null;
+}
+
+/**
+ * Peserta pemilik sebuah slug rapot.
+ *
+ * Dicari lewat `submissions`, BUKAN lewat tabel `rapot`. Tabel rapot hanya
+ * terisi setelah worker AI berjalan, sedangkan yang dilihat peserta adalah
+ * penilaian pengajar — dua hal yang tidak saling menunggu. Menggantungkan
+ * halaman ini pada baris rapot membuat tautan yang sudah terkirim lewat
+ * WhatsApp berakhir di 404 selama worker belum sempat jalan.
+ */
+async function getSubmissionBySlug(slug: string): Promise<SubmissionBySlug | null> {
+  try {
+    const rows = await sql<SubmissionBySlug[]>`
+      SELECT id, nama, jenis_kelamin, nomor_wa,
+             audio_duration_sec::float8 AS audio_duration_sec
+      FROM submissions
+      WHERE rapot_slug = ${slug}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  } catch (err) {
+    console.error("[rapot] gagal ambil submission:", (err as Error).message);
+    return null;
+  }
+}
+
 export default async function RapotPage({ params }: Props) {
   const { slug } = await params;
-  const rapot = await getRapot(slug);
-  if (!rapot) notFound();
+  const submission = await getSubmissionBySlug(slug);
+  if (!submission) notFound();
 
   // Sejak rapat 3 Agustus 2026, nilai yang dilihat peserta berasal dari
-  // PENGAJAR. Rapot AI di bawah tetap dihitung, tapi jadi bahan pembanding
-  // internal sampai Januari — hanya pengajar/admin yang login yang melihatnya.
-  const teacherEval = await getTeacherEvaluation(rapot.submission_id);
+  // PENGAJAR. Rapot AI tetap dihitung, tapi jadi bahan pembanding internal
+  // sampai Januari — hanya pengajar/admin yang login yang melihatnya.
+  const teacherEval = await getTeacherEvaluation(submission.id);
   const internalViewer =
     (await getCurrentTeacher()) ?? (await getCurrentAdmin());
 
   if (!internalViewer) {
-    const sub = rapot.submissions;
-    const namaPeserta = sub?.nama ?? "Peserta";
+    const sub = submission;
+    const namaPeserta = sub.nama;
     // Penilaian yang lahir di portal ini membawa temuan per segmen, jadi peserta
     // bisa diberi rapot rinci. Salinan dari panel luar hanya punya lima skor —
     // untuk baris seperti itu tampilan ringkas tetap yang paling jujur.
     const native = teacherEval
-      ? await getNativeEvaluation(rapot.submission_id)
+      ? await getNativeEvaluation(submission.id)
       : null;
-    const riwayat = teacherEval && rapot.submissions?.nomor_wa
-      ? await getRiwayat(rapot.submissions.nomor_wa)
+    const riwayat = teacherEval
+      ? await getRiwayat(submission.nomor_wa)
       : [];
     return (
       <div
@@ -429,6 +465,30 @@ export default async function RapotPage({ params }: Props) {
     );
   }
 
+  // Mulai dari sini yang dilayani adalah pengajar/admin: rapot AI sebagai bahan
+  // pembanding. Barisnya baru ada setelah worker berjalan, jadi ketiadaannya
+  // bukan kesalahan — cukup tampilkan keterangan, jangan 404.
+  const rapot = await getRapot(slug);
+  if (!rapot) {
+    return (
+      <div
+        className="screen-enter"
+        style={{ maxWidth: 640, margin: "0 auto", padding: "48px 20px" }}
+      >
+        <div className="card-mpt" style={{ padding: "28px 24px", textAlign: "center" }}>
+          <h1 className="font-display" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 10px" }}>
+            Rapot AI belum tersedia
+          </h1>
+          <p style={{ fontSize: 14, color: "var(--ink-soft)", lineHeight: 1.65, margin: 0 }}>
+            Bacaan <strong>{submission.nama}</strong> belum diproses mesin, jadi
+            belum ada pembanding untuk penilaian pengajar. Halaman ini akan terisi
+            sendiri setelah pemrosesan berjalan.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const errorsByCategory: Record<IndikatorKey, ErrorItem[]> = {
     harakat: rapot.errors_harakat,
     huruf: rapot.errors_huruf,
@@ -436,8 +496,7 @@ export default async function RapotPage({ params }: Props) {
     syaddah: rapot.errors_syaddah,
   };
 
-  const submission = rapot.submissions;
-  const nama = submission?.nama ?? "Peserta";
+  const nama = submission.nama;
   const today = new Date().toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
@@ -575,7 +634,7 @@ export default async function RapotPage({ params }: Props) {
             },
             {
               label: "Durasi",
-              val: fmt(submission?.audio_duration_sec),
+              val: fmt(submission.audio_duration_sec),
               unit: "menit",
               color: "var(--success)",
             },
