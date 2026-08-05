@@ -99,8 +99,13 @@ export async function pickTeacher(
   };
 }
 
-/** Superadmin sebagai penampung terakhir supaya tidak ada rekaman menggantung. */
-function fallbackTarget(): DispatchTarget | null {
+/**
+ * Superadmin sebagai penampung terakhir supaya tidak ada rekaman menggantung.
+ *
+ * Dipakai juga oleh route admin: kalau tidak ada pengajar segender yang aktif,
+ * admin masih bisa melempar rekaman ke superadmin ketimbang membiarkannya diam.
+ */
+export function fallbackTarget(): DispatchTarget | null {
   const wa = process.env.SUPERADMIN_WA;
   if (!wa) return null;
   return {
@@ -125,6 +130,83 @@ export interface DispatchResult {
   target: DispatchTarget | null;
   waSent: boolean;
   error?: string;
+}
+
+/**
+ * Catat satu penugasan baru.
+ *
+ * Melempar kalau gagal — termasuk saat indeks unik parsial
+ * `idx_assignments_one_active` menolak karena submission ini sudah punya
+ * penugasan aktif (SQLSTATE 23505). Pemanggil yang menentukan apa artinya:
+ * dispatchSubmission menelannya jadi hasil bergalat, route admin memetakannya
+ * jadi 409.
+ */
+export async function createAssignment(
+  submissionId: string,
+  target: DispatchTarget,
+): Promise<string> {
+  const [row] = await sql<{ id: string }[]>`
+    INSERT INTO assignments (submission_id, teacher_id, teacher_nama, teacher_wa)
+    VALUES (${submissionId}, ${target.teacherId}, ${target.nama}, ${target.nomorWa})
+    RETURNING id
+  `;
+  if (!row) throw new Error("insert assignment tidak mengembalikan baris");
+  return row.id;
+}
+
+export interface NotifyInput {
+  assignmentId: string;
+  target: DispatchTarget;
+  pesertaNama: string;
+  jenisKelamin: "ikhwan" | "akhwat";
+  durasiDetik: number | null;
+}
+
+export interface NotifyResult {
+  waSent: boolean;
+  error?: string;
+}
+
+/**
+ * Kabari pengajar lewat WhatsApp, lalu catat hasil kirimnya di baris penugasan.
+ *
+ * Tidak pernah melempar: `sendWhatsApp` sudah menelan galatnya sendiri, dan
+ * kegagalan kirim memang harus tercatat di baris — bukan membatalkan
+ * penugasannya. Rekaman yang punya pengajar tapi belum dikabari masih bisa
+ * diselamatkan; rekaman tanpa pengajar sama sekali tidak.
+ */
+export async function notifyAssignment(
+  input: NotifyInput,
+): Promise<NotifyResult> {
+  const reviewUrl = `${siteUrl()}/portal-mpt-x7/nilai/${input.assignmentId}`;
+
+  const send = await sendWhatsApp(
+    input.target.nomorWa,
+    tplTeacherNewRecording({
+      teacherNama: input.target.nama,
+      pesertaNama: input.pesertaNama,
+      jenisKelamin: input.jenisKelamin,
+      durasiDetik: input.durasiDetik,
+      reviewUrl,
+    }),
+  );
+
+  // Syarat status penting: panggilan kirimi.id bisa sampai 20 detik, dan dalam
+  // rentang itu pengajar yang keburu mengklik tautannya sudah membuat PATCH
+  // menyetel 'opened'. Tanpa syarat ini, UPDATE di bawah menyeretnya balik ke
+  // 'notified' dan penugasan yang sedang dikerjakan terlihat belum dibuka.
+  await sql`
+    UPDATE assignments
+    SET status = ${send.ok ? "notified" : "assigned"},
+        wa_sent_at = ${send.ok ? new Date() : null},
+        wa_message_id = ${send.messageId ?? null},
+        wa_error = ${send.ok ? null : (send.error ?? null)},
+        wa_attempts = wa_attempts + 1
+    WHERE id = ${input.assignmentId}
+      AND status IN ('assigned', 'notified')
+  `;
+
+  return { waSent: send.ok, error: send.ok ? undefined : send.error };
 }
 
 /**
@@ -154,13 +236,7 @@ export async function dispatchSubmission(
 
   let assignmentId: string;
   try {
-    const [row] = await sql<{ id: string }[]>`
-      INSERT INTO assignments (submission_id, teacher_id, teacher_nama, teacher_wa)
-      VALUES (${input.submissionId}, ${target.teacherId}, ${target.nama}, ${target.nomorWa})
-      RETURNING id
-    `;
-    if (!row) throw new Error("insert assignment tidak mengembalikan baris");
-    assignmentId = row.id;
+    assignmentId = await createAssignment(input.submissionId, target);
   } catch (err) {
     // Indeks unik parsial menjaga hanya ada satu penugasan aktif per submission,
     // jadi pemanggilan ganda tidak membuat pengajar dinotifikasi dua kali.
@@ -169,34 +245,18 @@ export async function dispatchSubmission(
     return { assignmentId: null, target, waSent: false, error: msg };
   }
 
-  const base = siteUrl();
-  const reviewUrl = `${base}/portal-mpt-x7/nilai/${assignmentId}`;
-
-  const send = await sendWhatsApp(
-    target.nomorWa,
-    tplTeacherNewRecording({
-      teacherNama: target.nama,
-      pesertaNama: input.pesertaNama,
-      jenisKelamin: input.jenisKelamin,
-      durasiDetik: input.durasiDetik,
-      reviewUrl,
-    }),
-  );
-
-  await sql`
-    UPDATE assignments
-    SET status = ${send.ok ? "notified" : "assigned"},
-        wa_sent_at = ${send.ok ? new Date() : null},
-        wa_message_id = ${send.messageId ?? null},
-        wa_error = ${send.ok ? null : (send.error ?? null)},
-        wa_attempts = wa_attempts + 1
-    WHERE id = ${assignmentId}
-  `;
+  const notify = await notifyAssignment({
+    assignmentId,
+    target,
+    pesertaNama: input.pesertaNama,
+    jenisKelamin: input.jenisKelamin,
+    durasiDetik: input.durasiDetik,
+  });
 
   return {
     assignmentId,
     target,
-    waSent: send.ok,
-    error: send.ok ? undefined : send.error,
+    waSent: notify.waSent,
+    error: notify.error,
   };
 }

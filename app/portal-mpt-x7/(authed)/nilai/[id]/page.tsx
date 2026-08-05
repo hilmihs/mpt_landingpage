@@ -53,6 +53,33 @@ export default async function NilaiPage({
   // rekaman tidak terkunci saat daftar pengajar belum diisi.
   if (row.teacher_id && row.teacher_id !== teacher.teacherId) notFound();
 
+  // Penugasan yang sudah dialihkan admin ke pengajar lain berhenti di sini.
+  //
+  // Tautan di WhatsApp tidak bisa ditarik kembali, jadi pengajar lama masih
+  // memegangnya. Tanpa penjagaan ini dia tetap bisa mengisi formulir, dan
+  // karena teacher_evaluations unik per submission lalu di-upsert, kiriman itu
+  // akan MENIMPA penilaian pengajar baru tanpa jejak. Rekamannya tidak
+  // ditampilkan sama sekali — sekali dialihkan, bukan lagi amanah dia.
+  if (row.status === "failed") {
+    return (
+      <div style={{ maxWidth: 560 }}>
+        <div className="card-mpt" style={{ padding: "28px 24px" }}>
+          <h1
+            className="font-display"
+            style={{ fontSize: 20, fontWeight: 800, margin: "0 0 10px" }}
+          >
+            Penugasan sudah dialihkan
+          </h1>
+          <p style={{ fontSize: 14, color: "var(--ink-soft)", lineHeight: 1.65, margin: 0 }}>
+            Rekaman ini sekarang dinilai pengajar lain, jadi tidak perlu Anda
+            kerjakan. Tugas Anda yang masih menunggu ada di halaman{" "}
+            <strong>Tugas Penilaian</strong>. Barakallahu fiik.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const audioUrl = await signedAudioUrl(row.audio_path, 3600);
   const sudahDinilai = row.kode_unik != null || row.score_min != null;
 

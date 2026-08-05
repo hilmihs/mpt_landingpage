@@ -78,6 +78,12 @@ interface AssignmentRow {
  * yang sah tidak dengan sendirinya berhak atas penugasan orang lain.
  * teacher_id null berarti rekaman jatuh ke superadmin — dibiarkan lewat supaya
  * tidak ada rekaman yang terkunci saat daftar pengajar belum terisi.
+ *
+ * Penugasan berstatus 'failed' ditolak: itu penanda admin sudah mengalihkannya
+ * ke pengajar lain. Tautan WhatsApp yang lama tidak bisa ditarik, jadi kalau
+ * tidak dihadang di sini kiriman pengajar lama akan menimpa penilaian pengajar
+ * baru — teacher_evaluations unik per submission dan ditulis dengan upsert,
+ * sehingga penimpaan itu tidak meninggalkan jejak.
  */
 async function ambilPenugasan(
   assignmentId: string,
@@ -97,6 +103,11 @@ async function ambilPenugasan(
   }
   if (row.teacher_id && row.teacher_id !== teacherId) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
+  }
+  if (row.status === "failed") {
+    return {
+      error: NextResponse.json({ error: "assignment_retired" }, { status: 409 }),
+    };
   }
   return { row };
 }
