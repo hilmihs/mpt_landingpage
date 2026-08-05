@@ -262,17 +262,6 @@ function computeScoreInline(errors: ErrorSet) {
   return { skor: tier.skor, status_label: tier.label, weighted_score: ws, total_errors_major: major, total_errors_minor: minor };
 }
 
-function narrativeBySkor(skor: number): string {
-  switch (skor) {
-    case 5: return "Masha Allah, bacaan Al-Fatihah sudah sempurna. Tidak ditemukan kesalahan pada keempat indikator. Pertahankan kualitas bacaan ini.";
-    case 4: return "Bacaan sudah sangat baik, Masha Allah. Hanya ditemukan sedikit kekurangan minor pada panjang-pendek bacaan. Dengan latihan rutin, bacaan bisa menjadi sempurna. Disarankan mengikuti program Tahsin Al-Fatihah untuk penyempurnaan.";
-    case 3: return "Bacaan cukup baik secara keseluruhan. Ditemukan beberapa kesalahan pada harakat dan makhraj huruf yang perlu diperbaiki. Disarankan mengikuti program Tahsin Al-Fatihah untuk penguatan bacaan.";
-    case 2: return "Bacaan perlu penguatan pada beberapa aspek, terutama harakat, makhraj huruf, dan panjang-pendek. Sangat disarankan mengikuti program Tahsin Al-Fatihah untuk memperbaiki fondasi bacaan Al-Fatihah.";
-    case 1: return "Bacaan memerlukan penguatan dasar pada semua indikator: harakat, huruf, panjang-pendek, dan syaddah. Program Tahsin Al-Fatihah akan sangat membantu memperbaiki bacaan dari dasar. Jangan berkecil hati — setiap langkah menuju perbaikan bacaan adalah ibadah.";
-    default: return "";
-  }
-}
-
 interface PesertaSeed {
   nama: string;
   jenis_kelamin: Gender;
@@ -730,7 +719,6 @@ async function seedFunnelData() {
       total_errors_major: score.total_errors_major, total_errors_minor: score.total_errors_minor,
       weighted_score: score.weighted_score,
       ml_model_version: "muaalem-v3_2", ml_confidence: 0.82 + i * 0.015,
-      ai_narrative: narrativeBySkor(p.target_skor), ai_narrative_model: "claude-sonnet-4-6",
     };
   });
   try {
@@ -740,7 +728,7 @@ async function seedFunnelData() {
         "slug", "submission_id", "skor", "status_label",
         "errors_harakat", "errors_huruf", "errors_panjang_pendek", "errors_syaddah",
         "total_errors_major", "total_errors_minor", "weighted_score",
-        "ml_model_version", "ml_confidence", "ai_narrative", "ai_narrative_model",
+        "ml_model_version", "ml_confidence",
       )}
       ON CONFLICT (slug) DO UPDATE SET
         submission_id = EXCLUDED.submission_id,
@@ -754,9 +742,7 @@ async function seedFunnelData() {
         total_errors_minor = EXCLUDED.total_errors_minor,
         weighted_score = EXCLUDED.weighted_score,
         ml_model_version = EXCLUDED.ml_model_version,
-        ml_confidence = EXCLUDED.ml_confidence,
-        ai_narrative = EXCLUDED.ai_narrative,
-        ai_narrative_model = EXCLUDED.ai_narrative_model
+        ml_confidence = EXCLUDED.ml_confidence
     `;
   } catch (err) { console.error(`  ✗ rapot: ${(err as Error).message}`); return; }
   console.log(`  ✓ ${rapotData.length} rapot`);

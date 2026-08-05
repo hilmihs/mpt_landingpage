@@ -5,7 +5,6 @@ import { ScoreCircle } from "@/components/assessment/ScoreCircle";
 import { AyatCard } from "@/components/rapot/AyatCard";
 import { IndikatorCard } from "@/components/rapot/IndikatorCard";
 import { NextStepsGate } from "@/components/rapot/NextStepsGate";
-import { AINarrative } from "@/components/rapot/AINarrative";
 import { getParticipantEligibility } from "@/lib/eligibility";
 import { getCurrentAdmin } from "@/lib/auth/admin";
 import {
@@ -25,10 +24,13 @@ import {
 } from "@/components/rapot/AssessmentHistory";
 import {
   INDICATOR_KEYS,
-  SEGMENT_KEYS,
   type EvaluationAyat,
   type SegmentKey,
 } from "@/lib/teacher-eval/types";
+import {
+  normalizeAyat,
+  normalizeSegmentScores,
+} from "@/lib/teacher-eval/normalize";
 import { MountainGlyph } from "@/components/shared/MPTLogo";
 import { INDIKATOR_META } from "@/lib/scoring";
 import { AL_FATIHAH } from "@/lib/arabic";
@@ -62,7 +64,6 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
         r.weighted_score::float8 AS weighted_score,
         r.ml_model_version,
         r.ml_confidence::float8 AS ml_confidence,
-        r.ai_narrative, r.ai_narrative_model,
         s.id AS sub_id,
         s.nama AS sub_nama,
         s.jenis_kelamin AS sub_jenis_kelamin,
@@ -91,8 +92,6 @@ async function getRapot(slug: string): Promise<RapotWithSubmission | null> {
       weighted_score: row.weighted_score,
       ml_model_version: row.ml_model_version,
       ml_confidence: row.ml_confidence,
-      ai_narrative: row.ai_narrative,
-      ai_narrative_model: row.ai_narrative_model,
       submissions: row.sub_id
         ? {
             id: row.sub_id,
@@ -176,37 +175,6 @@ interface NativeEvalRow {
   label_tasydid: string | null;
   score_hukum_tajwid: number | null;
   label_hukum_tajwid: string | null;
-}
-
-/**
- * Kolom jsonb kembali dari driver sebagai nilai bebas, jadi bentuknya dipastikan
- * di sini. Baris lama bisa saja ditulis sebelum katalog segmen selengkap
- * sekarang — segmen yang hilang diisi kosong daripada meruntuhkan halaman.
- */
-function normalizeAyat(raw: unknown): EvaluationAyat | null {
-  if (raw == null || typeof raw !== "object") return null;
-  const src = raw as Record<string, { jaliy?: unknown; khafiy?: unknown }>;
-  const strings = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-
-  return SEGMENT_KEYS.reduce((acc, key) => {
-    acc[key] = {
-      jaliy: strings(src[key]?.jaliy),
-      khafiy: strings(src[key]?.khafiy),
-    };
-    return acc;
-  }, {} as EvaluationAyat);
-}
-
-function normalizeSegmentScores(raw: unknown): Partial<Record<SegmentKey, number>> {
-  if (raw == null || typeof raw !== "object") return {};
-  const src = raw as Record<string, unknown>;
-  const out: Partial<Record<SegmentKey, number>> = {};
-  for (const key of SEGMENT_KEYS) {
-    const v = src[key];
-    if (typeof v === "number" && Number.isFinite(v)) out[key] = v;
-  }
-  return out;
 }
 
 /**
@@ -681,9 +649,6 @@ export default async function RapotPage({ params }: Props) {
             di skala yang salah. */}
         <ShareButtons slug={slug} skor={null} />
       </div>
-
-      {/* AI Narrative — optional, only if generated */}
-      {rapot.ai_narrative && <AINarrative narrative={rapot.ai_narrative} />}
 
       {/* Tinjauan per Ayat */}
       <section style={{ marginBottom: 36 }}>

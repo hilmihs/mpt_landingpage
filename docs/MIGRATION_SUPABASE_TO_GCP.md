@@ -137,7 +137,7 @@ Tiap fase harus hijau sebelum lanjut. Tiap fase punya commit sendiri agar bisa d
 ### Fase 5 — Infrastruktur GCP
 - Cloud SQL Postgres 17, `asia-southeast2`, private IP.
 - Cloud Run: `output: 'standalone'` di `next.config.ts`, konek Cloud SQL lewat VPC connector.
-- Secret Manager untuk `DATABASE_URL`, `AUTH_SECRET`, `DEEPSEEK_API_KEY`, dll.
+- Secret Manager untuk `DATABASE_URL`, `AUTH_SECRET`, `WORKER_SECRET`, dll.
 - Bucket GCS + lifecycle rule + service account.
 - Portal pengajar menampilkan sisa umur rekaman HITS (lihat catatan 2.2).
 

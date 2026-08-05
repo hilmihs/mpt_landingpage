@@ -59,8 +59,6 @@ export interface RapotRow {
   weighted_score: number;
   ml_model_version: string | null;
   ml_confidence: number | null;
-  ai_narrative: string | null;
-  ai_narrative_model: string | null;
 }
 
 // V2 — Booking & Pengajar

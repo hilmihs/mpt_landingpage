@@ -40,7 +40,6 @@ openssl rand -hex 32   # CLEANUP_SECRET          [WAJIB]
 |---|---|---|
 | `KIRIMI_USER_CODE` / `KIRIMI_DEVICE_ID` / `KIRIMI_SECRET` | dashboard kirimi.id | Notifikasi WA hanya masuk log. Alur tetap jalan, tapi **pengajar tidak tahu ada rekaman masuk** |
 | `SUPERADMIN_WA` | nomor kamu | Rekaman tanpa pengajar cocok jadi tidak tertugaskan sama sekali |
-| `DEEPSEEK_API_KEY` | platform.deepseek.com | Narasi AI dilewati (tidak fatal) |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash | Antrian ML mati; worker jatuh ke pemindaian submission pending |
 | `ML_SERVER_URL` / `ML_SERVER_API_KEY` | server GPU sendiri | Pakai `mockMLPredict`. **Tidak menghalangi demo** — nilai yang dilihat peserta datang dari pengajar |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | Workspace Admin Console | Pembuatan Google Meet mati |
@@ -99,7 +98,7 @@ gcloud storage buckets add-iam-policy-binding gs://mpt-audio \
 ```bash
 for k in DATABASE_URL AUTH_SECRET WORKER_SECRET CLEANUP_SECRET \
          STORAGE_SIGNING_SECRET KIRIMI_USER_CODE KIRIMI_DEVICE_ID \
-         KIRIMI_SECRET DEEPSEEK_API_KEY; do
+         KIRIMI_SECRET; do
   printf '%s' "${!k}" | gcloud secrets create "$k" --data-file=- 2>/dev/null \
     || printf '%s' "${!k}" | gcloud secrets versions add "$k" --data-file=-
 done

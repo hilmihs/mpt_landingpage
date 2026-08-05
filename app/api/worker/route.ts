@@ -5,7 +5,6 @@ import { drainJobs, type MLJob } from "@/lib/queue";
 import { mockMLPredict } from "@/lib/mock-ml";
 import { mlPredict } from "@/lib/ml-client";
 import { computeScore } from "@/lib/scoring";
-import { generateRapotNarrative } from "@/lib/ai/explain-rapot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,28 +60,13 @@ async function processJob(job: MLJob): Promise<{
 
     const score = computeScore(result);
 
-    // Generate AI narrative (Phase 1 — optional, only if DEEPSEEK_API_KEY set)
-    const narrative = await generateRapotNarrative({
-      skor: score.skor,
-      status_label: score.status_label,
-      total_errors_major: score.total_errors_major,
-      total_errors_minor: score.total_errors_minor,
-      errors: {
-        harakat: result.errors_harakat,
-        huruf: result.errors_huruf,
-        panjang_pendek: result.errors_panjang_pendek,
-        syaddah: result.errors_syaddah,
-      },
-    });
-
     try {
       await sql`
         INSERT INTO rapot (
           slug, submission_id, skor, status_label,
           errors_harakat, errors_huruf, errors_panjang_pendek, errors_syaddah,
           total_errors_major, total_errors_minor, weighted_score,
-          ml_model_version, ml_confidence, ml_raw_output,
-          ai_narrative, ai_narrative_model
+          ml_model_version, ml_confidence, ml_raw_output
         ) VALUES (
           ${job.rapot_slug},
           ${job.submission_id},
@@ -97,9 +81,7 @@ async function processJob(job: MLJob): Promise<{
           ${score.weighted_score},
           ${result.ml_model_version},
           ${result.ml_confidence},
-          ${result.ml_raw_output == null ? null : jsonb(result.ml_raw_output)},
-          ${narrative?.narrative ?? null},
-          ${narrative?.model ?? null}
+          ${result.ml_raw_output == null ? null : jsonb(result.ml_raw_output)}
         )
       `;
     } catch (err) {
@@ -109,8 +91,7 @@ async function processJob(job: MLJob): Promise<{
     await sql`
       UPDATE submissions SET
         status = ${"completed"},
-        processed_at = ${new Date()},
-        ai_narrative_generated_at = ${narrative ? new Date() : null}
+        processed_at = ${new Date()}
       WHERE id = ${job.submission_id}
     `;
 

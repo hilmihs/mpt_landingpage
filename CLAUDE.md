@@ -141,12 +141,6 @@ CREATE INDEX idx_rapot_submission ON rapot(submission_id);
 // Response 200 (failed): { status: 'failed', error_message: string }
 ```
 
-### GET /api/rapot/[slug]
-
-```typescript
-// Response 200: full rapot data dengan errors per kategori + recommendation
-```
-
 ### ML Server: POST /predict
 
 ```typescript
@@ -282,7 +276,6 @@ Detail integrasi, bukti header iframe, dan temuan keamanan di sistem eksternal: 
 ### Phase 3: Backend API + Mock ML (Hari 11-15)
 - POST /api/submit
 - GET /api/rapot/[slug]/status
-- GET /api/rapot/[slug]
 - Worker dengan mockMLPredict
 - Auto-delete audio > 7 hari
 - Rate limiting per IP
