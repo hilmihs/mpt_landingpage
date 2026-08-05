@@ -9,6 +9,7 @@ import {
   CalendarDays,
   GraduationCap,
   UserCheck,
+  ClipboardCheck,
   Activity,
   LogOut,
   Menu,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/admin/jadwal", label: "Jadwal", icon: CalendarDays },
   { href: "/admin/cohort", label: "Cohort Tahsin", icon: GraduationCap },
   { href: "/admin/peserta", label: "Peserta", icon: UserCheck },
+  { href: "/admin/assessment", label: "Assessment", icon: ClipboardCheck },
   { href: "/admin/analytics", label: "Analytics", icon: Activity },
 ];
 
