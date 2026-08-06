@@ -7,8 +7,18 @@ import type {
 import { AL_FATIHAH } from "@/lib/arabic";
 
 /**
+ * Penilaian mesin palsu untuk pengembangan.
+ *
+ * ⚠️ JANGAN DIPAKAI DI PRODUKSI. Angka yang keluar dari sini adalah bilangan
+ * acak berbasis submission_id — bentuknya identik dengan penilaian sungguhan
+ * dan tersimpan di tabel yang sama. Satu-satunya pembeda adalah
+ * `ml_model_version` berawalan "mock-". Kalau baris seperti ini ikut terbaca
+ * saat membandingkan mesin dengan pengajar, kesimpulannya diambil dari
+ * bilangan acak. `app/api/worker/route.ts` menolak menjalankannya di produksi.
+ */
+
+/**
  * Deterministic seeded PRNG (mulberry32). Same submission_id → same scenario.
- * Replace dengan real ML call (mlClient.predict) di Phase 4.
  */
 function hashStringToSeed(str: string): number {
   let h = 2166136261;
@@ -40,19 +50,46 @@ function pickScenario(rand: () => number): Scenario {
   return "pemula";
 }
 
+type Rentang = [number, number];
+
 const SCENARIO_RANGE: Record<
   Scenario,
-  { harakat: [number, number]; huruf: [number, number]; pp: [number, number]; syaddah: [number, number] }
+  {
+    harakat: Rentang;
+    ketepatan_huruf: Rentang;
+    panjang_pendek: Rentang;
+    tasydid: Rentang;
+    hukum_tajwid: Rentang;
+  }
 > = {
-  lancar: { harakat: [0, 0], huruf: [0, 0], pp: [0, 1], syaddah: [0, 0] },
-  cukup: { harakat: [0, 2], huruf: [0, 1], pp: [1, 2], syaddah: [0, 1] },
+  lancar: {
+    harakat: [0, 0],
+    ketepatan_huruf: [0, 0],
+    panjang_pendek: [0, 1],
+    tasydid: [0, 0],
+    hukum_tajwid: [0, 0],
+  },
+  cukup: {
+    harakat: [0, 2],
+    ketepatan_huruf: [0, 1],
+    panjang_pendek: [1, 2],
+    tasydid: [0, 1],
+    hukum_tajwid: [0, 1],
+  },
   banyak_salah: {
     harakat: [1, 3],
-    huruf: [1, 2],
-    pp: [2, 3],
-    syaddah: [1, 2],
+    ketepatan_huruf: [1, 2],
+    panjang_pendek: [2, 3],
+    tasydid: [1, 2],
+    hukum_tajwid: [0, 2],
   },
-  pemula: { harakat: [3, 5], huruf: [2, 4], pp: [3, 5], syaddah: [2, 3] },
+  pemula: {
+    harakat: [3, 5],
+    ketepatan_huruf: [2, 4],
+    panjang_pendek: [3, 5],
+    tasydid: [2, 3],
+    hukum_tajwid: [1, 3],
+  },
 };
 
 function randInt(rand: () => number, [min, max]: [number, number]): number {
@@ -96,17 +133,33 @@ export function mockMLPredict(
   const scenario = pickScenario(rand);
   const range = SCENARIO_RANGE[scenario];
 
+  const errors_ketepatan_huruf = generateErrors(
+    rand,
+    randInt(rand, range.ketepatan_huruf),
+    "ketepatan_huruf",
+  );
+  const errors_tasydid = generateErrors(rand, randInt(rand, range.tasydid), "tasydid");
+
   return {
     errors_harakat: generateErrors(rand, randInt(rand, range.harakat), "harakat"),
-    errors_huruf: generateErrors(rand, randInt(rand, range.huruf), "huruf"),
+    errors_ketepatan_huruf,
     errors_panjang_pendek: generateErrors(
       rand,
-      randInt(rand, range.pp),
+      randInt(rand, range.panjang_pendek),
       "panjang_pendek",
     ),
-    errors_syaddah: generateErrors(rand, randInt(rand, range.syaddah), "syaddah"),
+    errors_tasydid,
+    errors_hukum_tajwid: generateErrors(
+      rand,
+      randInt(rand, range.hukum_tajwid),
+      "hukum_tajwid",
+    ),
+    // Cermin nama lama, sama seperti yang dikirim ML server sungguhan.
+    errors_huruf: errors_ketepatan_huruf,
+    errors_syaddah: errors_tasydid,
     ml_model_version: opts?.seed ? "mock-bypass" : "mock-v1",
     ml_confidence: 0.85,
-    ml_raw_output: { scenario, seed },
+    // Mock tidak punya head sifa juga — supaya bentuknya sama dengan produksi.
+    ml_raw_output: { scenario, seed, sifa_available: false },
   };
 }

@@ -69,6 +69,15 @@ export interface ScoreResult {
   total_errors_minor: number;
 }
 
+/**
+ * Skor mesin instrumen lama: empat indikator, skala 1-5, agregasi berbobot.
+ *
+ * @deprecated Penilaian mesin sekarang memakai instrumen pengajar — lima
+ * indikator, skala 1-10, skor kepala dari segmen terlemah — lewat
+ * `buildAiEvaluationRow` di lib/ai-eval/store.ts. Fungsi ini masih dipakai
+ * pintasan demo dan halaman yang membaca baris `rapot` lama; jangan dipakai
+ * untuk penilaian baru, hasilnya tidak sebanding dengan nilai pengajar.
+ */
 export function computeScore(errors: {
   errors_harakat: ErrorItem[];
   errors_huruf: ErrorItem[];

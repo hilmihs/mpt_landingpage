@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "db:migrate": "tsx --env-file=.env.local db/migrate.ts",
     "db:status": "tsx --env-file=.env.local db/migrate.ts --status",
     "seed:dev": "tsx --env-file=.env.local scripts/seed-dev.ts",
@@ -50,7 +51,8 @@
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "packageManager": "pnpm@11.1.0"
 }

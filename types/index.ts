@@ -1,5 +1,13 @@
+/** `major` = lahn jaliy (mengubah makna), `minor` = lahn khafiy (sifat huruf). */
 export type Severity = "major" | "minor";
 
+/**
+ * Empat indikator lama, skala 1-5.
+ *
+ * @deprecated Dipakai instrumen mesin sebelum Agustus 2026 dan masih dibaca
+ * baris `rapot` lama. Penilaian baru memakai lima indikator yang sama dengan
+ * pengajar — lihat `IndicatorKey` di lib/teacher-eval/types.ts.
+ */
 export type IndikatorKey =
   | "harakat"
   | "huruf"
@@ -22,11 +30,26 @@ export interface MLPredictInput {
   ayat_range?: string;
 }
 
+/**
+ * Balasan ML server.
+ *
+ * Lima field pertama memakai nama indikator yang sama persis dengan instrumen
+ * pengajar, supaya penilaian mesin dan penilaian pengajar berada di satu sumbu
+ * dan bisa dibandingkan. `errors_huruf` dan `errors_syaddah` adalah cermin dari
+ * dua di antaranya, disimpan hanya selama masa transisi.
+ */
 export interface MLPredictResult {
   errors_harakat: ErrorItem[];
-  errors_huruf: ErrorItem[];
+  errors_ketepatan_huruf: ErrorItem[];
   errors_panjang_pendek: ErrorItem[];
-  errors_syaddah: ErrorItem[];
+  errors_tasydid: ErrorItem[];
+  errors_hukum_tajwid: ErrorItem[];
+
+  /** @deprecated cermin dari `errors_ketepatan_huruf`. */
+  errors_huruf?: ErrorItem[];
+  /** @deprecated cermin dari `errors_tasydid`. */
+  errors_syaddah?: ErrorItem[];
+
   ml_model_version: string;
   ml_confidence: number;
   ml_raw_output?: unknown;

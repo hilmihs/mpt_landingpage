@@ -62,7 +62,16 @@ export async function POST(
     { submission_id: sub.id, audio_url: "" },
     { seed: `${Date.now()}-${Math.random()}` },
   );
-  const score = computeScore(result);
+  // Pintasan demo ini masih menargetkan tabel `rapot` dengan instrumen lama
+  // (empat indikator, skala 1-5). Penilaian mesin yang sebenarnya sudah pindah
+  // ke `ai_evaluations` lewat /api/worker — lihat 0010_ai_evaluation.sql.
+  // Pemetaan nama di bawah eksplisit supaya jelas mana yang lama, mana baru.
+  const score = computeScore({
+    errors_harakat: result.errors_harakat,
+    errors_huruf: result.errors_ketepatan_huruf,
+    errors_panjang_pendek: result.errors_panjang_pendek,
+    errors_syaddah: result.errors_tasydid,
+  });
 
   try {
     await sql`
@@ -77,9 +86,9 @@ export async function POST(
         ${score.skor},
         ${score.status_label},
         ${jsonb(result.errors_harakat)},
-        ${jsonb(result.errors_huruf)},
+        ${jsonb(result.errors_ketepatan_huruf)},
         ${jsonb(result.errors_panjang_pendek)},
-        ${jsonb(result.errors_syaddah)},
+        ${jsonb(result.errors_tasydid)},
         ${score.total_errors_major},
         ${score.total_errors_minor},
         ${score.weighted_score},
