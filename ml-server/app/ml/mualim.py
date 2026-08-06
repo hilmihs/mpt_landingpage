@@ -1,187 +1,131 @@
 """
-Mu'alim model loader & inference.
+Muat dan jalankan Mu'alim v3_2.
 
-Pre-trained: obadx/muaalem-model-v3_2 (Hugging Face, ~2.4 GB).
+DIVERIFIKASI 6 Agustus 2026 di T4 Jakarta. Catatan di bawah adalah hasil
+pengamatan langsung, bukan dugaan.
 
-⚠️ KOREKSI DARI SPEC ⚠️
-Spec menyebut "TorchScript ready" — itu KELIRU. Model card HF menunjukkan ini
-model TRANSFORMERS (wav2vec2-BERT, arsitektur custom `Wav2Vec2BertForMultilevelCTC`,
-safetensors), bukan TorchScript. Loading pakai transformers + trust_remote_code,
-BUKAN torch.jit.load.
+KENAPA TORCHSCRIPT, BUKAN TRANSFORMERS
+Repo `obadx/muaalem-model-v3_2` memuat bobot dengan `model_type: multi_level_ctc`
+dan `architectures: [Wav2Vec2BertForMultilevelCTC]`, tetapi `auto_map` di
+config.json bernilai None — artinya repo TIDAK membawa kode arsitekturnya.
+Akibatnya `AutoModel.from_pretrained(..., trust_remote_code=True)` gagal dengan
+"Transformers does not recognize this architecture", dan tidak ada versi
+transformers mana pun yang memperbaikinya; yang hilang memang kodenya.
 
-⚠️ STATUS: BEST-EFFORT, BELUM TERVERIFIKASI TANPA GPU + MODEL ⚠️
-Kode di bawah ditulis dari model card, tapi BELUM dijalankan dengan model asli.
-Output multi-level CTC (phoneme + sifa) butuh investigasi runtime. Sebelum wire
-ke produksi, smoke test:  python scripts/test_inference.py path/to/audio.webm
-lalu sesuaikan _decode_outputs() ke struktur output model yang sebenarnya.
+Penulis menerbitkan varian TorchScript di repo terpisah
+`obadx/muaalem-v3_2-torchscript-v1`. TorchScript membawa grafnya sendiri, jadi
+tidak butuh kelas Python apa pun. Itulah yang dipakai di sini.
+
+BENTUK KELUARAN (hasil pengamatan)
+    forward(input_features, attention_mask) -> (Dict[str, Tensor],)
+
+Perhatikan tuple berisi satu elemen — bukan dict langsung. Isinya sebelas level:
+`phonemes` (vocab 43) ditambah sepuluh level sifat. Level sifat inilah sumber
+lahn khafiy; sebelum ini modul mencatatnya sebagai TODO, padahal modelnya sudah
+menyediakannya sejak awal.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+from typing import Any
 
-import torch
-from huggingface_hub import snapshot_download
-
-from app.config import settings
+from app.ml.alfatihah import SIFA_LEVELS
 
 log = logging.getLogger(__name__)
 
+REPO_TORCHSCRIPT = "obadx/muaalem-v3_2-torchscript-v1"
+REPO_VOCAB = "obadx/muaalem-model-v3_2"
+
+# fp16 dipilih karena T4 punya tensor core untuk itu dan bobotnya separuh fp32.
+# Ganti ke model_fp32.pt kalau menjalankan di CPU — fp16 di CPU justru lambat.
+BOBOT_DEFAULT = "model_fp16.pt"
+
 
 class MualimEngine:
-    def __init__(self, model_id: str | None = None):
-        self.model_id = model_id or settings.mualim_model_id
-        self.model = None
-        self.processor = None
-        self.device: torch.device | None = None
+    def __init__(self, model_id: str = REPO_TORCHSCRIPT, bobot: str = BOBOT_DEFAULT):
+        self.model_id = model_id
+        self.bobot = bobot
+        self.model: Any = None
+        self.processor: Any = None
+        self.id2tok: dict[str, dict[int, str]] = {}
+        self.device = "cpu"
 
-    def _resolve_device(self) -> torch.device:
-        if settings.device == "cuda":
-            return torch.device("cuda")
-        if settings.device == "cpu":
-            return torch.device("cpu")
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    async def load(self) -> None:
+        await asyncio.to_thread(self._load_sync)
 
-    async def load(self):
-        log.info(f"Loading Mualim model: {self.model_id}")
-        self.device = self._resolve_device()
-        log.info(f"Using device: {self.device}")
+    def _load_sync(self) -> None:
+        import torch
+        from huggingface_hub import hf_hub_download, snapshot_download
+        from transformers import AutoFeatureExtractor
 
-        model_path = snapshot_download(
-            repo_id=self.model_id,
-            cache_dir=settings.mualim_cache_dir,
-        )
-        log.info(f"Model files at: {model_path}")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if self.device == "cpu" and self.bobot == "model_fp16.pt":
+            log.warning("Tidak ada GPU; fp16 di CPU sangat lambat. Pakai model_fp32.pt.")
 
-        # Processor / feature extractor (wav2vec2-BERT → SeamlessM4TFeatureExtractor
-        # atau AutoProcessor; coba berurutan).
-        self.processor = self._load_processor(model_path)
+        log.info("Memuat TorchScript %s/%s ke %s", self.model_id, self.bobot, self.device)
+        path = hf_hub_download(self.model_id, self.bobot)
+        self.model = torch.jit.load(path, map_location=self.device).eval()
 
-        # Model: arsitektur custom multi-level CTC → butuh trust_remote_code.
-        self.model = self._load_model(model_path)
-        self.model.to(self.device).eval()
-        log.info(f"Mualim loaded OK: {type(self.model).__name__}")
+        proc_dir = snapshot_download(self.model_id, allow_patterns=["processor/*"])
+        self.processor = AutoFeatureExtractor.from_pretrained(f"{proc_dir}/processor")
 
-    def _load_processor(self, model_path: str):
-        from transformers import AutoFeatureExtractor, AutoProcessor
+        # Vocab tinggal di repo transformers, bukan di repo TorchScript.
+        vocab_path = hf_hub_download(REPO_VOCAB, "vocab.json")
+        with open(vocab_path, encoding="utf8") as f:
+            vocab = json.load(f)
+        self.id2tok = {lvl: {i: t for t, i in toks.items()} for lvl, toks in vocab.items()}
+        log.info("Model siap. Level: %s", sorted(self.id2tok))
 
-        for loader, name in (
-            (AutoProcessor, "AutoProcessor"),
-            (AutoFeatureExtractor, "AutoFeatureExtractor"),
-        ):
-            try:
-                proc = loader.from_pretrained(model_path, trust_remote_code=True)
-                log.info(f"Processor loaded via {name}")
-                return proc
-            except Exception as e:  # noqa: BLE001
-                log.warning(f"{name} gagal: {e}")
-        raise RuntimeError(
-            "Tidak bisa load processor/feature-extractor Mu'alim. "
-            "Cek model card HF untuk preprocessing yang benar."
-        )
+    async def predict(self, audio) -> dict:
+        return await asyncio.to_thread(self._predict_sync, audio)
 
-    def _load_model(self, model_path: str):
-        # Strategi 1: AutoModel + trust_remote_code (custom Wav2Vec2BertForMultilevelCTC)
-        try:
-            from transformers import AutoModel
+    def _predict_sync(self, audio) -> dict:
+        import torch
 
-            m = AutoModel.from_pretrained(model_path, trust_remote_code=True)
-            log.info("Model loaded via AutoModel(trust_remote_code=True)")
-            return m
-        except Exception as e:  # noqa: BLE001
-            log.warning(f"AutoModel gagal: {e}")
+        if self.model is None:
+            raise RuntimeError("Model belum dimuat")
 
-        # Strategi 2: AutoModelForCTC
-        try:
-            from transformers import AutoModelForCTC
+        feats = self.processor(audio, sampling_rate=16000, return_tensors="pt")
+        x = feats["input_features"]
+        mask = feats["attention_mask"]
+        if self.device == "cuda":
+            x, mask = x.half().cuda(), mask.cuda()
 
-            m = AutoModelForCTC.from_pretrained(model_path, trust_remote_code=True)
-            log.info("Model loaded via AutoModelForCTC")
-            return m
-        except Exception as e:  # noqa: BLE001
-            log.warning(f"AutoModelForCTC gagal: {e}")
+        with torch.no_grad():
+            keluaran = self.model(x, mask)
+        # TorchScript membungkus dict-nya dalam tuple satu elemen.
+        if isinstance(keluaran, tuple):
+            keluaran = keluaran[0]
 
-        raise RuntimeError(
-            "Tidak bisa load model Mu'alim dengan strategi yang ada. "
-            "Investigasi struktur repo (lihat scripts/download_model.py output) "
-            "dan model card https://huggingface.co/obadx/muaalem-model-v3_2"
-        )
-
-    @torch.inference_mode()
-    async def predict(self, audio: torch.Tensor) -> dict:
-        """
-        Args:
-            audio: 1D float32 tensor @ 16000 Hz
-
-        Returns dict:
-            - phonemes: list[str]
-            - timestamps: list[tuple[float, float]] | None (frame→time, untuk word map)
-            - sifa: list[dict] | None
-            - confidence: float
-        """
-        if self.model is None or self.processor is None:
-            raise RuntimeError("Model belum di-load")
-
-        inputs = self.processor(
-            audio.numpy(),
-            sampling_rate=settings.target_sample_rate,
-            return_tensors="pt",
-        )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        outputs = self.model(**inputs)
-        return self._decode_outputs(outputs)
-
-    def _decode_outputs(self, outputs) -> dict:
-        """
-        Decode output model → phoneme sequence (+ sifa + confidence).
-
-        ⚠️ TODO (sesi GPU): struktur `outputs` untuk multi-level CTC belum pasti.
-        Asumsi sementara: outputs.logits [B, T, V] untuk level phoneme. Greedy CTC
-        decode + collapse blank/repeat. Vocab id→token diambil dari processor /
-        tokenizer model. SESUAIKAN setelah lihat output asli.
-        """
-        logits = getattr(outputs, "logits", None)
-        if logits is None and isinstance(outputs, (tuple, list)):
-            logits = outputs[0]
-        if logits is None:
-            raise RuntimeError(
-                "Output model tidak punya .logits — multi-level CTC mungkin balas "
-                "dict/struct lain. Investigasi runtime lalu sesuaikan _decode_outputs()."
-            )
-
-        probs = torch.softmax(logits, dim=-1)
-        conf, ids = probs.max(dim=-1)  # [B, T]
-        ids_seq = ids[0].tolist()
-        confidence = float(conf[0].mean().item())
-
-        blank_id = getattr(self.model.config, "pad_token_id", 0) or 0
-        collapsed: list[int] = []
-        prev = None
-        for tok_id in ids_seq:
-            if tok_id != prev and tok_id != blank_id:
-                collapsed.append(tok_id)
-            prev = tok_id
-
-        phonemes = self._ids_to_tokens(collapsed)
+        fonem = self._decode(keluaran["phonemes"], "phonemes")
+        sifa = {
+            lvl: self._decode(keluaran[lvl], lvl)
+            for lvl in SIFA_LEVELS
+            if lvl in keluaran
+        }
         return {
-            "phonemes": phonemes,
-            "timestamps": None,  # TODO: derive dari frame index × hop bila perlu word-level akurat
-            "sifa": None,        # TODO: ekstrak dari level sifa multi-CTC
-            "confidence": confidence,
+            "phonemes": fonem,
+            "sifa": sifa or None,
+            "timestamps": None,
+            "confidence": self._confidence(keluaran["phonemes"]),
         }
 
-    def _ids_to_tokens(self, ids: list[int]) -> list[str]:
-        """Map token id → string via tokenizer/processor. Fallback: str(id)."""
-        tok = getattr(self.processor, "tokenizer", None) or getattr(self.processor, "decoder", None)
-        if tok is not None and hasattr(tok, "convert_ids_to_tokens"):
-            try:
-                return [str(t) for t in tok.convert_ids_to_tokens(ids)]
-            except Exception:  # noqa: BLE001
-                pass
-        return [str(i) for i in ids]
+    def _decode(self, logits, level: str) -> list[str]:
+        """CTC greedy: ambil argmax, buang blank (id 0) dan pengulangan."""
+        peta = self.id2tok.get(level, {})
+        ids = logits.argmax(-1).squeeze(0).tolist()
+        keluar: list[str] = []
+        sebelumnya = None
+        for i in ids:
+            if i != sebelumnya and i != 0:
+                keluar.append(peta.get(i, f"<{i}>"))
+            sebelumnya = i
+        return keluar
 
-    async def cleanup(self):
-        if self.model is not None:
-            del self.model
-            self.model = None
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+    def _confidence(self, logits) -> float:
+        import torch
+
+        probs = torch.softmax(logits.float(), dim=-1)
+        return float(probs.max(dim=-1).values.mean())

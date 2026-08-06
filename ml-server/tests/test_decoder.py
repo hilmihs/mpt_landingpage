@@ -1,121 +1,135 @@
 """
-Unit tests qps_decoder + alfatihah. Tidak butuh GPU/model — murni algoritmik.
+Unit test decoder. Tidak butuh GPU maupun model — murni algoritmik.
+
+Sebagian tes butuh `quran_transcript` (pustaka resmi penulis model) untuk
+menyusun target Al-Fatihah. Kalau paket itu belum terpasang, tes tersebut
+dilewati, bukan dianggap lulus.
 """
-from app.ml import alfatihah as af
-from app.ml.qps_decoder import _align_sequences, _classify_category, decode_to_errors
+import pytest
+
+from app.ml.qps_decoder import align_semi_global, klasifikasi
+
+try:
+    from app.ml import alfatihah as af
+
+    af.build_target()
+    ADA_QT = True
+except Exception:  # noqa: BLE001
+    ADA_QT = False
+
+butuh_qt = pytest.mark.skipif(not ADA_QT, reason="quran_transcript belum terpasang")
 
 
-# ── Wagner-Fischer alignment ─────────────────────────────────────────────────
-def test_align_identical_all_match():
-    seq = ["b", "a", "s"]
-    ops = _align_sequences(seq, seq)
-    assert [o[0] for o in ops] == ["match", "match", "match"]
+# ── Alignment semi-global ────────────────────────────────────────────────────
+def test_identik_semua_cocok():
+    ops = align_semi_global("بِسمِ", "بِسمِ")
+    assert [o[0] for o in ops] == ["match"] * 5
 
 
-def test_align_substitution():
-    ops = _align_sequences(["b", "a", "s"], ["b", "i", "s"])
-    kinds = [o[0] for o in ops]
-    assert kinds == ["match", "substitute", "match"]
-    sub = next(o for o in ops if o[0] == "substitute")
-    assert sub[1] == 1 and sub[2] == 1  # pred_idx, target_idx
+def test_substitusi_di_tengah():
+    ops = align_semi_global("صِرَاطَ", "سِرَاطَ")
+    jenis = [o[0] for o in ops]
+    assert jenis.count("substitute") == 1
+    assert jenis.count("match") == 6
 
 
-def test_align_deletion():
-    # target lebih panjang → 1 delete
-    ops = _align_sequences(["b", "s"], ["b", "a", "s"])
-    kinds = [o[0] for o in ops]
-    assert kinds.count("delete") == 1
-    dele = next(o for o in ops if o[0] == "delete")
-    assert dele[1] is None and dele[2] == 1
+def test_prefiks_pembaca_tidak_dihukum():
+    """Isti'adzah sebelum surah harus gratis, bukan puluhan kesalahan."""
+    target = "بِسمِ"
+    pred = "ءَعُۥۥذُبِللَاه" + target
+    ops = align_semi_global(target, pred)
+    assert all(o[0] == "match" for o in ops), [o[0] for o in ops]
 
 
-def test_align_insertion():
-    # pred lebih panjang → 1 insert
-    ops = _align_sequences(["b", "x", "s"], ["b", "s"])
-    kinds = [o[0] for o in ops]
-    assert kinds.count("insert") == 1
+def test_sufiks_pembaca_tidak_dihukum():
+    """'aamiin' sesudah surah juga gratis."""
+    target = "بِسمِ"
+    ops = align_semi_global(target, target + "ءَاامِۦۦن")
+    assert all(o[0] == "match" for o in ops)
 
 
-# ── Classification ───────────────────────────────────────────────────────────
-def test_classify_vowel_substitution_is_harakat():
-    assert _classify_category("substitute", "a", "i") == "harakat"
+def test_prefiks_dan_sufiks_sekaligus():
+    target = "بِسمِ"
+    ops = align_semi_global(target, "ءَعُۥۥذُ" + target + "ءَاامِۦۦن")
+    assert all(o[0] == "match" for o in ops)
 
 
-def test_classify_length_substitution_is_panjang_pendek():
-    # vokal dasar sama (a vs aa), beda panjang → mad
-    assert _classify_category("substitute", "a", "aa") == "panjang_pendek"
+def test_huruf_hilang_terdeteksi():
+    ops = align_semi_global("بِسمِ", "بِمِ")
+    assert "delete" in [o[0] for o in ops]
 
 
-def test_classify_consonant_substitution_is_huruf():
-    assert _classify_category("substitute", "s", "S") == "huruf"
+# ── Klasifikasi lima indikator ──────────────────────────────────────────────
+def test_huruf_tertukar():
+    # ص dibaca س — kesalahan huruf paling khas di Al-Fatihah
+    assert klasifikasi("substitute", "س", "ص", "صِرَاطَ", 0) == "ketepatan_huruf"
 
 
-def test_classify_gemination_substitution_is_syaddah():
-    # base consonant sama, beda gemination → syaddah
-    assert _classify_category("substitute", "l", "lː") == "syaddah"
+def test_harakat_tertukar():
+    assert klasifikasi("substitute", "ُ", "َ", "بَ", 1) == "harakat"
 
 
-def test_classify_delete_long_vowel_is_panjang_pendek():
-    assert _classify_category("delete", None, "aa") == "panjang_pendek"
+def test_mad_hilang():
+    assert klasifikasi("delete", None, "ا", "بَا", 2) == "panjang_pendek"
 
 
-def test_classify_delete_consonant_is_huruf():
-    assert _classify_category("delete", None, "m") == "huruf"
+def test_harakat_jadi_mad_dihitung_panjang_pendek():
+    assert klasifikasi("substitute", "ا", "َ", "بَ", 1) == "panjang_pendek"
 
 
-def test_classify_insert_vowel_is_harakat():
-    assert _classify_category("insert", "i", None) == "harakat"
+def test_dengung_tertukar_adalah_hukum_tajwid():
+    # ن dibaca م pada أنعمت — izhar dijadikan idgham
+    assert klasifikasi("substitute", "م", "ن", "ءَنعَمتَ", 2) == "hukum_tajwid"
 
 
-# ── alfatihah reference + index map ──────────────────────────────────────────
-def test_words_split_count():
-    # 7 ayat ada, kata_idx 0-based
-    assert len(af.ALFATIHAH_WORDS[1]) == 4  # بسم الله الرحمن الرحيم
-    assert all(len(words) >= 1 for words in af.ALFATIHAH_WORDS.values())
+def test_huruf_berulang_adalah_tasydid():
+    # Pada skema ini tasydid ditulis sebagai huruf ganda: ررَ
+    assert klasifikasi("delete", None, "ر", "ررَ", 1) == "tasydid"
 
 
-def test_phonemes_per_word_populated():
-    for ayat, entries in af.ALFATIHAH_PHONEMES_PER_WORD.items():
-        assert len(entries) == len(af.ALFATIHAH_WORDS[ayat])
-        for kata_idx, toks in entries:
-            assert isinstance(toks, list) and len(toks) > 0
+def test_dengung_berharakat_bukan_hukum_tajwid():
+    # nun yang jelas berharakat dan tertukar jadi huruf lain = salah huruf
+    assert klasifikasi("substitute", "ب", "ن", "نَ", 0) == "ketepatan_huruf"
 
 
-def test_build_target_sequence_alignment():
-    phonemes, owners = af.build_target_sequence()
-    assert len(phonemes) == len(owners) > 0
-    # owner pertama = (ayat 1, kata 0)
-    assert owners[0] == (1, 0)
-    # semua owner valid
-    for ayat, kata_idx in owners:
-        assert 1 <= ayat <= 7
-        assert 0 <= kata_idx < len(af.ALFATIHAH_WORDS[ayat])
+# ── Target resmi ────────────────────────────────────────────────────────────
+@butuh_qt
+def test_target_sepadan_dengan_pemiliknya():
+    fonem, pemilik, sifat = af.build_target()
+    assert len(fonem) == len(pemilik) > 0
+    assert set(pemilik) == set(range(1, 8)), "ketujuh ayat harus terwakili"
+    assert len(sifat) > 0
 
 
-# ── decode_to_errors end-to-end (heuristik) ──────────────────────────────────
-def test_decode_perfect_reading_no_errors():
-    target, _ = af.build_target_sequence()
-    errors = decode_to_errors(predicted_phonemes=list(target))
-    total = sum(len(v) for v in errors.values())
-    assert total == 0
+@butuh_qt
+def test_target_memakai_huruf_arab_bukan_latin():
+    """
+    Penjaga terhadap kekeliruan yang pernah terjadi: target sempat dibangun
+    dari transliterasi latin, sementara model mengeluarkan huruf Arab.
+    """
+    fonem, _, _ = af.build_target()
+    assert not any("a" <= c <= "z" for c in fonem), "target tidak boleh mengandung latin"
+    assert "ب" in fonem and "ِ" in fonem
 
 
-def test_decode_returns_contract_keys():
-    errors = decode_to_errors(predicted_phonemes=["b", "a"])
-    assert set(errors.keys()) == {
-        "errors_harakat", "errors_huruf", "errors_panjang_pendek", "errors_syaddah",
+@butuh_qt
+def test_bacaan_sempurna_tanpa_temuan():
+    from app.ml.qps_decoder import decode_to_errors
+
+    fonem, _, _ = af.build_target()
+    errors = decode_to_errors(predicted_phonemes=fonem)
+    assert sum(len(v) for v in errors.values()) == 0
+
+
+@butuh_qt
+def test_kunci_kontrak_lima_indikator():
+    from app.ml.qps_decoder import decode_to_errors
+
+    errors = decode_to_errors(predicted_phonemes="بِسمِ")
+    assert set(errors) == {
+        "errors_harakat",
+        "errors_ketepatan_huruf",
+        "errors_panjang_pendek",
+        "errors_tasydid",
+        "errors_hukum_tajwid",
     }
-
-
-def test_decode_error_has_word_position():
-    target, _ = af.build_target_sequence()
-    # rusak 1 phoneme di tengah → minimal 1 error dengan posisi valid
-    broken = list(target)
-    broken[3] = "zzz"
-    errors = decode_to_errors(predicted_phonemes=broken)
-    items = [e for v in errors.values() for e in v]
-    assert len(items) >= 1
-    for e in items:
-        assert 1 <= e.ayat <= 7
-        assert e.kata_idx >= 0
-        assert e.severity in ("major", "minor")

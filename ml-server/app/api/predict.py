@@ -52,9 +52,10 @@ async def predict(
         raise HTTPException(500, "ML inference error")
 
     # 3. Decode ke ErrorItem per kategori
+    sifa = prediction.get("sifa")
     errors = decode_to_errors(
         predicted_phonemes=prediction["phonemes"],
-        predicted_sifa=prediction.get("sifa"),
+        predicted_sifa=sifa,
         predicted_timestamps=prediction.get("timestamps"),
     )
 
@@ -67,10 +68,19 @@ async def predict(
 
     return MLPredictResult(
         **errors,
+        # Cermin nama lama. Lihat catatan DEPRECATED di schemas.py — ini ada
+        # semata supaya klien yang belum diperbarui tidak menerima field kosong.
+        errors_huruf=errors["errors_ketepatan_huruf"],
+        errors_syaddah=errors["errors_tasydid"],
         ml_model_version=MODEL_VERSION,
         ml_confidence=float(prediction.get("confidence", 0.0)),
         ml_raw_output={
             "phoneme_count": len(prediction["phonemes"]),
             "processing_time_sec": round(elapsed, 2),
+            # Dibaca halaman pembanding admin. Selama False, jumlah lahn khafiy
+            # selalu nol dan skor mesin tampak lebih longgar daripada pengajar
+            # — artefak yang harus dinyatakan, bukan dibiarkan terbaca sebagai
+            # temuan.
+            "sifa_available": sifa is not None,
         },
     )

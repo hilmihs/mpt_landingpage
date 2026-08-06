@@ -1,188 +1,111 @@
 """
-Reference Al-Fatihah: teks Uthmani per ayat, segmentasi per kata, dan QPS
-phoneme sequence per kata + index map global phoneme → (ayat, kata_idx).
+Target fonetik Al-Fatihah — dihasilkan pustaka resmi, bukan ditebak.
 
-KENAPA PER KATA: kontrak ErrorItem butuh (ayat, kata_idx) supaya frontend bisa
-highlight kata yang salah di mushaf. Decoder harus tahu phoneme span mana milik
-kata mana.
+RIWAYAT SINGKAT, SUPAYA TIDAK TERULANG
+Versi sebelumnya membangun target sendiri lewat `text_to_qps_heuristic()`, sebuah
+transliterator Arab→latin buatan sendiri (token `a i u aa ii uu b t th H kh …`
+dengan sufiks `ː` untuk tasydid). Berkas itu sendiri menuliskan peringatan bahwa
+skemanya belum tervalidasi.
 
-⚠️ STATUS PHONEME SCHEME — PHASE 1 HEURISTIK, BELUM TERVALIDASI ⚠️
-`ALFATIHAH_PHONEMES_PER_WORD` di-generate oleh `text_to_qps_heuristic()`, sebuah
-transliterator Arab→token sederhana (BUKAN QPS resmi paper Mu'alim). Tujuannya:
-membuat pipeline decoder runnable + index map nyata untuk MVP.
+Diverifikasi 6 Agustus 2026 di GPU: vocab asli model `obadx/muaalem-model-v3_2`
+ternyata **huruf Arab itu sendiri** — ء ب ت ث … ي ا, ditambah harakat َ ُ ِ dan
+tanda mad ۦ ۥ ۪. Tumpang tindih dengan skema latin lama: NOL. Selama ini
+alignment membandingkan dua abjad yang berbeda, dan setiap angka yang keluar
+darinya tidak berarti apa-apa.
 
-TODO (sesi GPU): setelah tahu vocab QPS aktual model `obadx/muaalem-model-v3_2`
-(cek output `mualim.predict`), GANTI skema token di sini supaya match vocab model.
-Kalau repo Mu'alim punya utility text→QPS, pakai itu. Kalau tidak: anotasi manual
-39 kata feasible. `kata_idx` HARUS konsisten dengan word splitting frontend
-(split teks Uthmani by whitespace, 0-based).
+Penulis model menyediakan pengubahnya sendiri: `quran_transcript.quran_phonetizer`
+mengeluarkan skrip fonetik DAN sepuluh level sifat, persis sebelas level yang
+diprediksi model. Dibuktikan cocok karakter-per-karakter dengan keluaran model
+pada rekaman yang dinilai bersih oleh Ustadzah:
+
+    target ayat 1 : بِسمِللَااهِررَحمَاانِررَحِۦۦۦۦم
+    model         : بِسمِللَااهِررَحمَاانِررَحِۦۦۦۦم
+
+Maka berkas ini tidak lagi mengarang apa pun; ia hanya memanggil pustaka itu dan
+menyimpan hasilnya.
 """
 from __future__ import annotations
 
-# ── Teks Uthmani per ayat ────────────────────────────────────────────────────
-ALFATIHAH_TEXT_UTHMANI: dict[int, str] = {
-    1: "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ",
-    2: "اَلْحَمْدُ لِلّٰهِ رَبِّ الْعَالَمِيْنَ",
-    3: "اَلرَّحْمٰنِ الرَّحِيْمِ",
-    4: "مٰلِكِ يَوْمِ الدِّيْنِۗ",
-    5: "اِيَّاكَ نَعْبُدُ وَاِيَّاكَ نَسْتَعِيْنُۗ",
-    6: "اِهْدِنَا الصِّرَاطَ الْمُسْتَقِيْمَۙ",
-    7: "صِرَاطَ الَّذِيْنَ اَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوْبِ عَلَيْهِمْ وَلَا الضَّاۤلِّيْنَ",
-}
+from functools import lru_cache
 
-# Kata per ayat — split by whitespace. 0-based, konsisten dengan frontend.
-ALFATIHAH_WORDS: dict[int, list[str]] = {
-    ayat: text.split() for ayat, text in ALFATIHAH_TEXT_UTHMANI.items()
-}
+# Panjang mad yang dipakai saat menyusun target. Ini pilihan qiraah, bukan
+# konstanta teknis: peserta membaca murattal Hafs, dan mad 4 harakat adalah yang
+# paling lazim diajarkan. Kalau pengajar memutuskan lain, ubah di sini — seluruh
+# target ikut berubah dengan sendirinya.
+MADD_LEN = 4
 
-# ── Token phoneme: kategori ──────────────────────────────────────────────────
-# Skema token (placeholder, lihat warning di atas):
-#   short vowels: a i u
-#   long  vowels: aa ii uu          → indikator panjang_pendek
-#   consonant geminate (shadda):    token diakhiri "ː", mis. "lː"  → indikator syaddah
-SHORT_VOWELS = {"a", "i", "u"}
-LONG_VOWELS = {"aa", "ii", "uu"}
-_VOWEL_BASE = {"a": "a", "aa": "a", "i": "i", "ii": "i", "u": "u", "uu": "u"}
+SURAH_ALFATIHAH = 1
+JUMLAH_AYAT = 7
 
-
-def is_geminate(tok: str) -> bool:
-    return tok.endswith("ː")
+# Sepuluh level sifat yang diprediksi model, di luar level fonem. Nama-nama ini
+# berasal dari config.json model dan dipakai apa adanya sebagai kunci.
+SIFA_LEVELS: tuple[str, ...] = (
+    "hams_or_jahr",
+    "shidda_or_rakhawa",
+    "tafkheem_or_taqeeq",
+    "itbaq",
+    "safeer",
+    "qalqla",
+    "tikraar",
+    "tafashie",
+    "istitala",
+    "ghonna",
+)
 
 
-def base(tok: str) -> str:
-    return tok[:-1] if is_geminate(tok) else tok
+def _moshaf():
+    import quran_transcript as qt
+
+    return qt.MoshafAttributes(
+        rewaya="hafs",
+        madd_monfasel_len=MADD_LEN,
+        madd_mottasel_len=MADD_LEN,
+        madd_mottasel_waqf=MADD_LEN,
+        madd_aared_len=MADD_LEN,
+    )
 
 
-def is_short_vowel(tok: str) -> bool:
-    return base(tok) in SHORT_VOWELS
-
-
-def is_long_vowel(tok: str) -> bool:
-    return base(tok) in LONG_VOWELS
-
-
-def is_vowel(tok: str) -> bool:
-    return is_short_vowel(tok) or is_long_vowel(tok)
-
-
-def vowel_family(tok: str) -> str | None:
-    """a/aa→'a', i/ii→'i', u/uu→'u'. None kalau bukan vokal."""
-    return _VOWEL_BASE.get(base(tok))
-
-
-# ── Arab → token consonant ───────────────────────────────────────────────────
-_CONSONANT = {
-    "ء": "'", "ا": "'", "أ": "'", "إ": "'", "آ": "'", "ٱ": "'",
-    "ب": "b", "ت": "t", "ث": "th", "ج": "j", "ح": "H", "خ": "kh",
-    "د": "d", "ذ": "dh", "ر": "r", "ز": "z", "س": "s", "ش": "sh",
-    "ص": "S", "ض": "D", "ط": "T", "ظ": "Z", "ع": "3", "غ": "gh",
-    "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n",
-    "ه": "h", "و": "w", "ي": "y", "ى": "y",
-}
-# Harakat / tanda
-_FATHA, _KASRA, _DAMMA = "َ", "ِ", "ُ"
-_SUKUN, _SHADDA = "ْ", "ّ"
-_DAGGER_ALIF = "ٰ"  # ٰ  → mad (aa)
-_MADDA = "ۤ"         # ۤ
-_SMALL_HIGH = {"ۖ", "ۗ", "ۘ", "ۙ", "ۚ", "ۛ", "ۜ"}
-_HARAKAT = {_FATHA, _KASRA, _DAMMA, _SUKUN, _SHADDA, _DAGGER_ALIF, _MADDA}
-
-
-def text_to_qps_heuristic(word: str) -> list[str]:
+@lru_cache(maxsize=1)
+def build_target() -> tuple[str, tuple[int, ...], tuple[tuple[int, object], ...]]:
     """
-    Transliterasi heuristik 1 kata Arab berharakat → list token phoneme.
-
-    HEURISTIK (Phase 1, bukan QPS resmi):
-    - consonant + harakat → [consonant, vowel]
-    - shadda → consonant jadi geminate (token + "ː")
-    - alif/wau/ya sebagai mad (huruf vokal panjang) → long vowel, bukan consonant
-    - dagger alif ٰ → "aa"
-    Lihat warning modul: ganti dengan vocab model saat tersedia.
-    """
-    chars = list(word)
-    out: list[str] = []
-    i = 0
-    n = len(chars)
-    while i < n:
-        ch = chars[i]
-        if ch in _HARAKAT or ch in _SMALL_HIGH or ch.isspace():
-            i += 1
-            continue
-        cons = _CONSONANT.get(ch)
-        if cons is None:
-            i += 1
-            continue
-
-        # lookahead untuk shadda + harakat
-        j = i + 1
-        geminate = False
-        vowel: str | None = None
-        sukun = False
-        while j < n and (chars[j] in _HARAKAT or chars[j] in _SMALL_HIGH):
-            d = chars[j]
-            if d == _SHADDA:
-                geminate = True
-            elif d == _FATHA:
-                vowel = "a"
-            elif d == _KASRA:
-                vowel = "i"
-            elif d == _DAMMA:
-                vowel = "u"
-            elif d == _SUKUN:
-                sukun = True
-            elif d == _DAGGER_ALIF:
-                vowel = "aa"
-            j += 1
-
-        # huruf mad: alif/wau/ya yang jadi pemanjang vokal sebelumnya
-        is_madd_letter = ch in ("ا", "و", "ي", "ى")
-        prev_vowel = next((t for t in reversed(out) if is_vowel(t)), None)
-        if is_madd_letter and sukun is False and vowel is None and prev_vowel is not None:
-            fam = vowel_family(prev_vowel)
-            if (ch == "ا" and fam == "a") or (ch == "و" and fam == "u") or (ch in ("ي", "ى") and fam == "i"):
-                # ubah vokal pendek sebelumnya jadi panjang (mad thabi'i)
-                for k in range(len(out) - 1, -1, -1):
-                    if is_vowel(out[k]):
-                        out[k] = {"a": "aa", "i": "ii", "u": "uu"}[fam]
-                        break
-                i = j
-                continue
-
-        cons_tok = cons + "ː" if geminate else cons
-        out.append(cons_tok)
-        if vowel is not None:
-            out.append(vowel)
-        i = j
-    return out
-
-
-# ── Build phonemes-per-word + global index map ───────────────────────────────
-# Struktur: {ayat: [(kata_idx, [phoneme, ...]), ...]}
-ALFATIHAH_PHONEMES_PER_WORD: dict[int, list[tuple[int, list[str]]]] = {
-    ayat: [(idx, text_to_qps_heuristic(word)) for idx, word in enumerate(words)]
-    for ayat, words in ALFATIHAH_WORDS.items()
-}
-
-
-def build_target_sequence() -> tuple[list[str], list[tuple[int, int]]]:
-    """
-    Concat semua phoneme target Al-Fatihah jadi 1 sequence + index map paralel.
+    Susun target Al-Fatihah sekali, lalu simpan di memori.
 
     Returns:
-        (phonemes, owners) dengan len sama; owners[i] = (ayat, kata_idx) pemilik
-        phonemes[i]. Dipakai qps_decoder untuk map posisi error → kata.
+        (fonem, pemilik, sifat)
+        - fonem   : satu untai karakter tanpa spasi, sama bentuknya dengan
+                    keluaran model.
+        - pemilik : nomor ayat untuk TIAP karakter di `fonem`, panjangnya sama.
+                    Dipakai memetakan kesalahan kembali ke ayatnya.
+        - sifat   : (nomor_ayat, SifaOutput) per unit fonem. Perhatikan satu unit
+                    sifat mencakup beberapa karakter (mis. 'بِ'), jadi jumlahnya
+                    TIDAK sama dengan panjang `fonem`.
     """
-    phonemes: list[str] = []
-    owners: list[tuple[int, int]] = []
-    for ayat in sorted(ALFATIHAH_PHONEMES_PER_WORD):
-        for kata_idx, toks in ALFATIHAH_PHONEMES_PER_WORD[ayat]:
-            for t in toks:
-                phonemes.append(t)
-                owners.append((ayat, kata_idx))
-    return phonemes, owners
+    import quran_transcript as qt
+
+    moshaf = _moshaf()
+    fonem: list[str] = []
+    pemilik: list[int] = []
+    sifat: list[tuple[int, object]] = []
+
+    for ayat in range(1, JUMLAH_AYAT + 1):
+        uthmani = qt.Aya(SURAH_ALFATIHAH, ayat).get().uthmani
+        keluaran = qt.quran_phonetizer(uthmani, moshaf, remove_spaces=True)
+        for ch in keluaran.phonemes:
+            fonem.append(ch)
+            pemilik.append(ayat)
+        for unit in keluaran.sifat:
+            sifat.append((ayat, unit))
+
+    return "".join(fonem), tuple(pemilik), tuple(sifat)
 
 
-def word_text(ayat: int, kata_idx: int) -> str:
-    """Teks Arab kata pada (ayat, kata_idx). '' kalau out of range."""
-    words = ALFATIHAH_WORDS.get(ayat, [])
-    return words[kata_idx] if 0 <= kata_idx < len(words) else ""
+def uthmani(ayat: int) -> str:
+    """Teks Uthmani satu ayat, untuk ditampilkan ke manusia."""
+    import quran_transcript as qt
+
+    return qt.Aya(SURAH_ALFATIHAH, ayat).get().uthmani
+
+
+def kata(ayat: int) -> list[str]:
+    """Kata-kata satu ayat, dipisah spasi, 0-based — sama dengan sisi frontend."""
+    return uthmani(ayat).split()

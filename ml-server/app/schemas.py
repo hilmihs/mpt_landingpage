@@ -4,8 +4,13 @@ Jangan ubah field names; frontend deployed sudah bergantung pada shape ini.
 
 Kontrak (LOCKED):
 - ErrorItem: per kesalahan, dengan posisi (ayat, kata_idx) untuk highlight kata di mushaf.
-- MLPredictResult: 4 array error + metadata. Key HARUS errors_panjang_pendek (bukan errors_mad).
+- MLPredictResult: 5 array error + metadata. Key HARUS errors_panjang_pendek (bukan errors_mad).
 ML server TIDAK compute skor dan TIDAK generate AI narrative (itu di Next.js).
+
+Agustus 2026: indikator naik dari empat ke lima agar sama dengan instrumen
+pengajar (lihat qps_decoder.py). Penambahannya ADITIF — `errors_huruf` dan
+`errors_syaddah` tetap dikirim sebagai cermin dari nama barunya supaya klien
+lama tidak pecah di tengah transisi.
 """
 from typing import Any, Literal
 
@@ -29,10 +34,19 @@ class PredictRequest(BaseModel):
 
 
 class MLPredictResult(BaseModel):
+    # Lima indikator, nama sama persis dengan instrumen pengajar.
     errors_harakat: list[ErrorItem] = []
-    errors_huruf: list[ErrorItem] = []
+    errors_ketepatan_huruf: list[ErrorItem] = []
     errors_panjang_pendek: list[ErrorItem] = []
+    errors_tasydid: list[ErrorItem] = []
+    errors_hukum_tajwid: list[ErrorItem] = []
+
+    # DEPRECATED — cermin dari dua field di atas, diisi oleh predict.py demi
+    # klien lama. Jangan dipakai untuk penilaian baru: keduanya tidak pernah
+    # memuat temuan hukum_tajwid, jadi selalu kurang lengkap.
+    errors_huruf: list[ErrorItem] = []
     errors_syaddah: list[ErrorItem] = []
+
     ml_model_version: str
     ml_confidence: float = Field(..., ge=0.0, le=1.0)
     ml_raw_output: Any | None = None

@@ -10,10 +10,16 @@ import sys
 
 import httpx
 
-REQUIRED_KEYS = {
-    "errors_harakat", "errors_huruf", "errors_panjang_pendek", "errors_syaddah",
-    "ml_model_version", "ml_confidence",
-}
+CATEGORY_KEYS = (
+    "errors_harakat",
+    "errors_ketepatan_huruf",
+    "errors_panjang_pendek",
+    "errors_tasydid",
+    "errors_hukum_tajwid",
+)
+# Nama lama tetap wajib hadir selama masa transisi — lihat schemas.py.
+LEGACY_KEYS = ("errors_huruf", "errors_syaddah")
+REQUIRED_KEYS = {*CATEGORY_KEYS, *LEGACY_KEYS, "ml_model_version", "ml_confidence"}
 ERROR_ITEM_KEYS = {"ayat", "kata_idx", "expected", "actual", "severity"}
 
 
@@ -32,7 +38,7 @@ def main():
     missing = REQUIRED_KEYS - set(data.keys())
     assert not missing, f"Missing keys: {missing}"
 
-    for cat in ("errors_harakat", "errors_huruf", "errors_panjang_pendek", "errors_syaddah"):
+    for cat in (*CATEGORY_KEYS, *LEGACY_KEYS):
         assert isinstance(data[cat], list), f"{cat} bukan list"
         for item in data[cat]:
             item_missing = ERROR_ITEM_KEYS - set(item.keys())
@@ -42,7 +48,13 @@ def main():
             assert item["severity"] in ("major", "minor")
 
     assert 0.0 <= data["ml_confidence"] <= 1.0
-    print("✅ Contract OK — response match MLPredictResult")
+
+    raw = data.get("ml_raw_output") or {}
+    if raw.get("sifa_available") is False:
+        print("⚠️  Head sifa belum jalan — semua temuan jaliy, khafiy selalu 0.")
+        print("   Skor mesin akan tampak lebih longgar daripada pengajar.")
+
+    print("✅ Contract OK — response match MLPredictResult (5 indikator)")
 
 
 if __name__ == "__main__":

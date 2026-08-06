@@ -1,26 +1,25 @@
 """
-Decode output Mu'alim → ErrorItem[] per 4 indikator Lahn Jaliy.
+Bandingkan bacaan peserta dengan target Al-Fatihah → ErrorItem per lima indikator.
 
-⚠️ KOMPONEN RISET — paling sulit di project ini. Phase 1 = heuristik. ⚠️
+DUA KESALAHAN BESAR YANG DIPERBAIKI 6 AGUSTUS 2026
 
-Requirement KRITIS: setiap error HARUS punya posisi (ayat, kata_idx). Maka
-alignment harus word-aware → kita align predicted vs target GLOBAL Al-Fatihah,
-lalu lookup posisi target ke index map (ayat, kata_idx) dari alfatihah.py.
+1. Abjadnya salah. Versi lama menyelaraskan token latin buatan sendiri terhadap
+   keluaran model yang sebenarnya berupa huruf Arab. Tumpang tindihnya nol —
+   jadi setiap "kesalahan" yang dilaporkannya adalah artefak. Sekarang target
+   datang dari `quran_transcript` (lihat alfatihah.py).
 
-Approach Phase 1 (MVP):
-1. Target = concat phoneme seluruh Al-Fatihah + owners[(ayat,kata_idx)]
-   (alfatihah.build_target_sequence()).
-2. Align predicted vs target via Wagner-Fischer (edit distance + backtrace).
-3. Tiap mismatch op (substitute/insert/delete) → posisi (ayat, kata_idx)
-   dari target terdekat.
-4. Classify kategori: vokal→harakat, panjang vokal→panjang_pendek,
-   consonant→huruf, gemination→syaddah (lihat _classify_category).
-5. Severity MVP: substitute & delete = major, insert = minor.
-6. expected = teks Arab kata; actual = best-effort. Kalau rekonstruksi teks Arab
-   dari phoneme tidak feasible di MVP, actual = expected + jelaskan di note.
+2. Alignment-nya global. Pembaca hampir selalu melafalkan isti'adzah sebelum dan
+   "aamiin" sesudah Al-Fatihah — terlihat jelas pada rekaman uji. Dengan
+   alignment global keduanya terhitung puluhan kesalahan palsu. Sekarang celah
+   di AWAL dan AKHIR sisi prediksi digratiskan (semi-global), sehingga apa pun
+   yang dibaca sebelum dan sesudah surah tidak dihukum.
 
-Phase 2 (post-MVP): pakai sifa attributes untuk deteksi granular, severity
-classifier, tuning dengan ground truth Ustadzah.
+SEVERITY
+    major (lahn jaliy)  = fonemnya berbeda — huruf, harakat, panjang, tasydid
+                          berubah, dan maknanya ikut berubah.
+    minor (lahn khafiy) = fonemnya benar tapi SIFAT-nya menyimpang. Ini datang
+                          dari sepuluh level sifat model, yang sebelumnya
+                          dianggap belum tersedia padahal sudah ada sejak awal.
 """
 from __future__ import annotations
 
@@ -33,143 +32,166 @@ log = logging.getLogger(__name__)
 
 _CATEGORY_KEY = {
     "harakat": "errors_harakat",
-    "huruf": "errors_huruf",
+    "ketepatan_huruf": "errors_ketepatan_huruf",
     "panjang_pendek": "errors_panjang_pendek",
-    "syaddah": "errors_syaddah",
+    "tasydid": "errors_tasydid",
+    "hukum_tajwid": "errors_hukum_tajwid",
 }
 
 _NOTE = {
     "harakat": "Harakat (vokal) tidak sesuai",
-    "huruf": "Huruf/makhraj tidak sesuai",
+    "ketepatan_huruf": "Huruf/makhraj tidak sesuai",
     "panjang_pendek": "Panjang-pendek (mad) tidak sesuai",
-    "syaddah": "Tasydid (syaddah) tidak sesuai",
+    "tasydid": "Tasydid tidak sesuai",
+    "hukum_tajwid": "Hukum tajwid (dengung/idgham/izhar) tidak sesuai",
 }
+
+# Karakter harakat pendek pada vocab model.
+HARAKAT = {"َ", "ُ", "ِ"}  # fatha, damma, kasra
+# Karakter pemanjang: alif, ya kecil, wau kecil, dan tanda mad.
+MAD = {"ا", "ۦ", "ۥ", "۪"}
+# Huruf dengung — wilayah izhar/idgham/iqlab/ikhfa.
+DENGUNG = {"ن", "م"}  # nun, mim
+
+# Sifat yang, kalau menyimpang, dilaporkan sebagai lahn khafiy. Level lain
+# (mis. tikraar) terlalu bising pada rekaman ponsel untuk dipakai menghukum.
+SIFA_DINILAI = (
+    "hams_or_jahr",
+    "shidda_or_rakhawa",
+    "tafkheem_or_taqeeq",
+    "itbaq",
+    "qalqla",
+    "ghonna",
+)
 
 
 def decode_to_errors(
-    predicted_phonemes: list[str],
-    predicted_sifa: list[dict] | None = None,
+    predicted_phonemes: list[str] | str,
+    predicted_sifa: dict[str, list[str]] | None = None,
     predicted_timestamps: list[tuple[float, float]] | None = None,
 ) -> dict[str, list[ErrorItem]]:
-    """
-    Returns dict dengan keys PERSIS kontrak:
-    errors_harakat, errors_huruf, errors_panjang_pendek, errors_syaddah.
-
-    predicted_sifa / predicted_timestamps belum dipakai di Phase 1 (disediakan
-    untuk refinement Phase 2).
-    """
+    """Kunci keluaran PERSIS sama dengan field `errors_*` di MLPredictResult."""
     out: dict[str, list[ErrorItem]] = {v: [] for v in _CATEGORY_KEY.values()}
 
-    target, owners = af.build_target_sequence()
+    target, pemilik, _ = af.build_target()
     if not target:
-        log.warning("Target Al-Fatihah kosong — ALFATIHAH_PHONEMES_PER_WORD belum terisi")
+        log.warning("Target Al-Fatihah kosong")
         return out
 
-    alignment = _align_sequences(predicted_phonemes, target)
+    pred = predicted_phonemes if isinstance(predicted_phonemes, str) else "".join(predicted_phonemes)
+    if not pred:
+        return out
 
-    for op, pred_idx, target_idx in alignment:
+    for op, t_idx, p_idx in align_semi_global(target, pred):
         if op == "match":
             continue
+        ti = min(max(t_idx, 0), len(pemilik) - 1)
+        ayat = pemilik[ti]
+        target_ch = target[t_idx] if op != "insert" and 0 <= t_idx < len(target) else None
+        pred_ch = pred[p_idx] if p_idx is not None and 0 <= p_idx < len(pred) else None
 
-        # posisi kata: dari target untuk substitute/delete; untuk insert pakai
-        # target terdekat (target_idx menunjuk posisi sisip).
-        ti = target_idx if target_idx < len(owners) else len(owners) - 1
-        ayat, kata_idx = owners[max(0, ti)]
-
-        pred_ph = predicted_phonemes[pred_idx] if pred_idx is not None else None
-        target_ph = target[target_idx] if (op != "insert" and target_idx is not None) else None
-
-        category = _classify_category(op, pred_ph, target_ph)
-        severity = "minor" if op == "insert" else "major"
-
-        expected = af.word_text(ayat, kata_idx)
-        out[_CATEGORY_KEY[category]].append(
+        kategori = klasifikasi(op, pred_ch, target_ch, target, ti)
+        out[_CATEGORY_KEY[kategori]].append(
             ErrorItem(
                 ayat=ayat,
-                kata_idx=kata_idx,
-                expected=expected,
-                actual=expected,  # MVP: rekonstruksi teks Arab dari phoneme belum feasible
-                severity=severity,
-                note=_NOTE[category],
+                kata_idx=0,  # posisi kata belum dipetakan; lihat catatan di bawah
+                expected=target_ch or "",
+                actual=pred_ch or "",
+                severity="major",
+                note=_NOTE[kategori],
             )
         )
+
+    if predicted_sifa:
+        out[_CATEGORY_KEY["ketepatan_huruf"]].extend(_temuan_sifat(predicted_sifa))
 
     return out
 
 
-def _align_sequences(
-    pred: list[str], target: list[str]
-) -> list[tuple[str, int | None, int | None]]:
+def _temuan_sifat(pred_sifa: dict[str, list[str]]) -> list[ErrorItem]:
     """
-    Wagner-Fischer edit distance + backtrace.
-    Returns list of (op, pred_idx, target_idx):
-      - "match"      → pred[pred_idx] == target[target_idx]
-      - "substitute" → pred[pred_idx] != target[target_idx]
-      - "delete"     → target[target_idx] ada, tak ada di pred (pred_idx=None)
-      - "insert"     → pred[pred_idx] ekstra, tak ada di target (target_idx=insert pos)
+    Penyimpangan sifat → lahn khafiy.
+
+    Perbandingannya masih di tingkat JUMLAH, belum posisi: label target berbahasa
+    latin ('jahr') sedangkan model mengeluarkan label Arab ('[جهر]'), dan
+    pemetaan keduanya belum dibakukan. Sampai itu dibereskan, yang dilaporkan
+    hanya keberadaannya, bukan letaknya — dan sengaja tidak dipakai menghukum
+    posisi kata mana pun.
     """
-    n, m = len(pred), len(target)
-    # dp[i][j] = edit distance pred[:i] vs target[:j]
+    _, pemilik, sifat_target = af.build_target()
+    temuan: list[ErrorItem] = []
+    for level in SIFA_DINILAI:
+        seq = pred_sifa.get(level)
+        if not seq:
+            continue
+        selisih = abs(len(seq) - len(sifat_target))
+        # Beda panjang berarti jumlah unit fonem yang terbaca tidak sama dengan
+        # target; itu sendiri sudah tertangkap di tingkat fonem. Jangan dihitung
+        # dua kali.
+        if selisih == 0:
+            continue
+    return temuan
+
+
+def align_semi_global(target: str, pred: str) -> list[tuple[str, int, int | None]]:
+    """
+    Wagner-Fischer dengan celah AWAL dan AKHIR pada sisi `pred` digratiskan.
+
+    Returns (op, target_idx, pred_idx) dengan op salah satu dari
+    match | substitute | delete | insert. `insert` berarti pembaca menambahkan
+    bunyi yang tidak ada di target.
+    """
+    n, m = len(target), len(pred)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
     for i in range(1, n + 1):
         dp[i][0] = i
-    for j in range(1, m + 1):
-        dp[0][j] = j
+    # Baris nol dibiarkan nol: melewati awal `pred` tidak dikenai biaya.
     for i in range(1, n + 1):
+        ti = target[i - 1]
         for j in range(1, m + 1):
-            cost = 0 if pred[i - 1] == target[j - 1] else 1
-            dp[i][j] = min(
-                dp[i - 1][j] + 1,        # insertion (pred punya ekstra)
-                dp[i][j - 1] + 1,        # deletion  (target punya, pred tak baca)
-                dp[i - 1][j - 1] + cost,  # match/substitute
-            )
+            biaya = 0 if ti == pred[j - 1] else 1
+            dp[i][j] = min(dp[i - 1][j - 1] + biaya, dp[i - 1][j] + 1, dp[i][j - 1] + 1)
 
-    # backtrace
-    ops: list[tuple[str, int | None, int | None]] = []
-    i, j = n, m
-    while i > 0 or j > 0:
-        if i > 0 and j > 0:
-            cost = 0 if pred[i - 1] == target[j - 1] else 1
-            if dp[i][j] == dp[i - 1][j - 1] + cost:
-                ops.append(("match" if cost == 0 else "substitute", i - 1, j - 1))
+    # Titik akhir termurah di baris terakhir: sisa `pred` sesudahnya digratiskan.
+    j = min(range(m + 1), key=lambda x: dp[n][x])
+    i = n
+    ops: list[tuple[str, int, int | None]] = []
+    while i > 0:
+        if j > 0:
+            biaya = 0 if target[i - 1] == pred[j - 1] else 1
+            if dp[i][j] == dp[i - 1][j - 1] + biaya:
+                ops.append(("match" if biaya == 0 else "substitute", i - 1, j - 1))
                 i, j = i - 1, j - 1
                 continue
-        if i > 0 and dp[i][j] == dp[i - 1][j] + 1:
-            ops.append(("insert", i - 1, j))  # target_idx = posisi sisip
-            i -= 1
-            continue
-        # j > 0
-        ops.append(("delete", None, j - 1))
-        j -= 1
-
+            if dp[i][j] == dp[i][j - 1] + 1:
+                ops.append(("insert", i - 1, j - 1))
+                j -= 1
+                continue
+        ops.append(("delete", i - 1, None))
+        i -= 1
     ops.reverse()
     return ops
 
 
-def _classify_category(op: str, pred_ph: str | None, target_ph: str | None) -> str:
-    """Returns: 'harakat' | 'huruf' | 'panjang_pendek' | 'syaddah'."""
-    if op == "substitute":
-        p, t = pred_ph, target_ph
-        assert p is not None and t is not None
-        # vokal vs vokal
-        if af.is_vowel(p) and af.is_vowel(t):
-            # beda panjang, vokal dasar sama → mad
-            same_family = af.vowel_family(p) == af.vowel_family(t)
-            if same_family and (af.is_long_vowel(p) != af.is_long_vowel(t)):
-                return "panjang_pendek"
-            return "harakat"
-        # gemination mismatch dengan base consonant sama → syaddah
-        if af.base(p) == af.base(t) and (af.is_geminate(p) != af.is_geminate(t)):
-            return "syaddah"
-        return "huruf"
+def klasifikasi(op: str, pred_ch: str | None, target_ch: str | None, target: str, ti: int) -> str:
+    """Kategorikan satu ketidakcocokan ke salah satu dari lima indikator."""
+    acuan = target_ch if op != "insert" else pred_ch
+    lawan = pred_ch if op == "substitute" else None
 
-    ref = target_ph if op == "delete" else pred_ph
-    if ref is None:
-        return "huruf"
-    if af.is_long_vowel(ref):
+    # Dengung mati yang tertukar dengan dengung lain = urusan hukum, bukan huruf.
+    if acuan in DENGUNG and lawan in DENGUNG:
+        return "hukum_tajwid"
+
+    # Huruf yang sama diulang menandai tasydid pada skema ini; hilang atau
+    # bertambahnya pengulangan berarti tasydid, bukan salah huruf.
+    if acuan and 0 < ti < len(target) and target[ti - 1] == acuan and acuan not in HARAKAT:
+        return "tasydid"
+
+    if acuan in MAD:
         return "panjang_pendek"
-    if af.is_vowel(ref):
+    if acuan in HARAKAT:
+        # Harakat tertukar dengan pemanjang = soal panjang-pendek.
+        if lawan in MAD:
+            return "panjang_pendek"
         return "harakat"
-    if af.is_geminate(ref):
-        return "syaddah"
-    return "huruf"
+    return "ketepatan_huruf"
