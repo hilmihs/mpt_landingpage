@@ -255,6 +255,40 @@ Peserta rekam → audio disimpan
 
 Detail integrasi, bukti header iframe, dan temuan keamanan di sistem eksternal: `docs/INTEGRASI_PENILAIAN_PENGAJAR.md`.
 
+## V3.1 — Mesin memakai instrumen pengajar (Update 6 Agustus 2026)
+
+V3 menetapkan mesin berjalan paralel sebagai **pembanding internal** untuk
+keputusan Januari. Tujuan itu tidak tercapai selama keduanya memakai instrumen
+berbeda: mesin 4 indikator skala 1-5 dengan agregasi berbobot, pengajar 5
+indikator skala 1-10 dengan agregasi minimum. Dua angka dari dua instrumen tidak
+bisa dibandingkan, jadi data yang terkumpul tidak menjawab apa pun.
+
+Sekarang mesin memakai **instrumen yang sama persis**:
+
+| | Sebelum | Sekarang |
+|---|---|---|
+| Indikator | 4 (harakat, huruf, panjang_pendek, syaddah) | 5 — sama dengan pengajar, termasuk `hukum_tajwid` |
+| Segmen | 7 ayat | 8 (ayat 7 dipecah di `kata_idx >= 4`) |
+| Skala | 1-5 | 1-10 |
+| Agregasi | jumlah berbobot | **min** antar segmen |
+| Tabel | `rapot` | **`ai_evaluations`** (migrasi 0010) |
+| Fungsi skor | `lib/scoring.ts` (deprecated) | `computeEvaluation()` milik pengajar, **dipakai ulang tanpa diubah** |
+
+Kuncinya: `computeEvaluation()` menghitung `.length` array string dan membaca tag
+`[Kategori]`, jadi mesin cukup mengarang kalimat temuan bertag yang sama
+(`lib/ai-eval/project.ts`). Nol kode skoring baru.
+
+**Yang harus diingat saat membaca angka mesin:**
+- Head `sifa` model belum jalan → mesin **buta terhadap lahn khafiy**, jumlahnya
+  selalu 0, dan skornya tampak lebih longgar daripada pengajar secara
+  sistematis. Cek `ml_raw_output->>'sifa_available'` sebelum menyimpulkan.
+- `submissions.ai_status` milik mesin; `submissions.status` milik alur pengajar.
+  Jangan tukar.
+- Tanpa `ML_SERVER_URL` di produksi, worker **tidak menulis apa pun**. Mock hanya
+  hidup di luar produksi dan barisnya berawalan `mock-`.
+
+Halaman agregat untuk keputusan Januari: `/admin/assessment/pembanding`.
+
 ## Implementation Phases
 
 ### Phase 1: Foundation (Hari 1-3)
@@ -321,7 +355,7 @@ audio_retention: 7 hari (GCS lifecycle rule, bukan cron — berlaku per bucket)
 slug_length: 12 karakter (nanoid)
 form_required: nama, jenis_kelamin, nomor_wa
 nomor_wa_format: Indonesia (+62, 0, atau 62)
-scoring_scale: AI 1-5 internal; peserta lihat skor PENGAJAR 1-10 (lihat V3)
+scoring_scale: AI dan pengajar sama-sama 1-10, instrumen identik (lihat V3.1). Skor AI tetap internal — peserta hanya melihat skor PENGAJAR
 severity_weights: major=1, minor=0.5
 recommendation_target: Tahsin Al-Fatihah (single funnel untuk SEMUA skor)
 linktree_url: linktr.ee/muhajirprojecttilawah
@@ -372,7 +406,9 @@ muhajir-tilawah/
 
 - **JANGAN buat route yang menyentuh data pengajar/admin tanpa memanggil `getCurrentTeacher()` / `getCurrentAdmin()` di baris pertama.** RLS sudah dibuang — tidak ada lagi jaring pengaman di database. Sesi yang sah bukan berarti berhak atas data orang lain, jadi kepemilikan baris juga harus dicek (lihat `app/api/portal/evaluation/route.ts`)
 - JANGAN tampilkan skor AI ke peserta — termasuk di `<title>`, teks share, dan preview WhatsApp
-- JANGAN samakan skor pengajar (1-10) dengan skor AI (1-5); dua skala berbeda
+- JANGAN menulis skor AI ke tabel `rapot` atau memakai `lib/scoring.ts` untuk penilaian baru — keduanya instrumen lama 1-5 yang sudah dipensiunkan. Pakai `buildAiEvaluationRow` → `ai_evaluations` (lihat V3.1)
+- JANGAN mengubah `submissions.status` dari jalur mesin; kolom itu milik alur pengajar. Mesin memakai `submissions.ai_status`
+- JANGAN menyimpulkan "mesin lebih longgar" dari bias positif selama `sifa_available` masih false — mesin belum bisa melihat lahn khafiy sama sekali
 - JANGAN coba embed panel Filament muhajirproject lewat iframe — ditolak `X-Frame-Options: SAMEORIGIN` dan cookie `SameSite=Lax`
 - JANGAN jalankan migrasi saat container start; Cloud Run menaikkan banyak instance sekaligus
 - JANGAN pakai Whisper sebagai engine utama (tidak detect 4 indikator)
