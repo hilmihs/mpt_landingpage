@@ -123,6 +123,17 @@ export default async function AssessmentAdminPage({ searchParams }: Props) {
           tindakan ada di atas; baris merah menandakan peserta sudah menunggu
           lebih dari {STALE_DAYS} hari.
         </p>
+        <Link
+          href="/admin/assessment/pembanding"
+          style={{
+            display: "inline-block",
+            marginTop: 10,
+            fontSize: 12,
+            color: "var(--ink-mute)",
+          }}
+        >
+          Pembanding mesin vs pengajar →
+        </Link>
       </header>
 
       {/* Chip tahap — angkanya keseluruhan, tidak ikut tersaring, supaya selalu

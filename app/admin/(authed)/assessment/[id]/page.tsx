@@ -19,7 +19,13 @@ import {
   type EvaluationDetailData,
 } from "@/components/admin/EvaluationDetail";
 import { AssessmentActions } from "@/components/admin/AssessmentActions";
-import { INDICATOR_KEYS, type IndicatorKey } from "@/lib/teacher-eval/types";
+import {
+  INDICATOR_KEYS,
+  INDICATOR_LABEL,
+  SEGMENT_KEYS,
+  type IndicatorKey,
+} from "@/lib/teacher-eval/types";
+import { AL_FATIHAH_SEGMENTS } from "@/lib/arabic";
 
 /**
  * Riwayat lengkap satu rekaman: perjalanannya dari masuk sampai dinilai.
@@ -75,14 +81,24 @@ interface EvalRow {
   label_hukum_tajwid: string | null;
 }
 
+/**
+ * Penilaian mesin, kini dalam instrumen yang sama dengan pengajar: delapan
+ * segmen, lima indikator, skala 1-10. Lihat 0010_ai_evaluation.sql.
+ */
 interface AiRow {
-  skor: number;
-  status_label: string;
-  total_errors_major: number;
-  total_errors_minor: number;
-  weighted_score: number | null;
+  score_min: number;
+  label_min: string;
+  score_ayat: unknown;
+  score_harakat: number | null;
+  score_ketepatan_huruf: number | null;
+  score_panjang_pendek: number | null;
+  score_tasydid: number | null;
+  score_hukum_tajwid: number | null;
+  total_jaliy: number;
+  total_khafiy: number;
   ml_model_version: string | null;
   ml_confidence: number | null;
+  ml_raw_output: unknown;
   created_at: Date | null;
 }
 
@@ -114,7 +130,7 @@ export default async function AssessmentDetailPage({
   const [assignments, evaluasi, ai] = await Promise.all([
     fetchAssignments(id).catch(() => [] as AssignmentRow[]),
     fetchEvaluation(id).catch(() => null),
-    fetchAi(row.rapot_slug).catch(() => null),
+    fetchAi(id).catch(() => null),
   ]);
 
   // Gender baru diketahui setelah baris utama terbaca, jadi daftar pengajar
@@ -212,7 +228,7 @@ export default async function AssessmentDetailPage({
         </Card>
       )}
 
-      <AiComparator ai={ai} teacherScore={row.score_min} aiStatus={row.ai_status} />
+      <AiComparator ai={ai} pengajar={evaluasi} aiStatus={row.ai_status} />
 
       <Card title="Jejak WhatsApp">
         <WaTrace row={row} assignments={assignments} />
@@ -397,23 +413,98 @@ function Step({
   );
 }
 
+/** Satu baris perbandingan: label, nilai mesin, nilai pengajar, selisih. */
+function BarisBanding({
+  label,
+  mesin,
+  pengajar,
+}: {
+  label: string;
+  mesin: number | null | undefined;
+  pengajar: number | null | undefined;
+}) {
+  const adaKeduanya = mesin != null && pengajar != null;
+  const selisih = adaKeduanya ? mesin - pengajar : null;
+  const beda = selisih != null && selisih !== 0;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto auto auto",
+        gap: 10,
+        alignItems: "baseline",
+        fontSize: 12,
+        padding: "5px 0",
+        borderTop: "1px solid var(--line)",
+      }}
+    >
+      <span style={{ color: beda ? "var(--ink)" : "var(--ink-mute)" }}>{label}</span>
+      <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 34, textAlign: "right" }}>
+        {mesin ?? "—"}
+      </span>
+      <span
+        style={{
+          fontVariantNumeric: "tabular-nums",
+          minWidth: 34,
+          textAlign: "right",
+          color: "var(--ink-soft)",
+        }}
+      >
+        {pengajar ?? "—"}
+      </span>
+      <span
+        style={{
+          fontVariantNumeric: "tabular-nums",
+          minWidth: 34,
+          textAlign: "right",
+          fontWeight: beda ? 700 : 400,
+          color: beda ? "var(--warning, var(--ink))" : "var(--ink-mute)",
+        }}
+      >
+        {selisih == null ? "—" : selisih > 0 ? `+${selisih}` : selisih}
+      </span>
+    </div>
+  );
+}
+
 /**
- * Skor mesin, khusus mata admin.
+ * Skor mesin berdampingan dengan skor pengajar, khusus mata admin.
  *
- * Ditutup dalam <details> dan diberi peringatan skala secara terang-terangan:
- * 1-10 milik pengajar dan 1-5 milik mesin bukan dua angka yang bisa
- * disandingkan, dan sekali seseorang membandingkannya langsung, kesimpulannya
- * salah tanpa ada yang mengoreksi.
+ * Sejak Agustus 2026 keduanya memakai instrumen yang sama — delapan segmen,
+ * lima indikator, skala 1-10, skor kepala dari segmen terlemah — dan angkanya
+ * dihitung fungsi yang sama. Karena itu peringatan "beda skala" yang dulu ada
+ * di sini sudah dicabut: sekarang dua angka ini memang boleh disandingkan.
+ *
+ * Yang tidak berubah: ini tetap tidak pernah sampai ke peserta maupun pengajar.
  */
 function AiComparator({
   ai,
-  teacherScore,
+  pengajar,
   aiStatus,
 }: {
   ai: AiRow | null;
-  teacherScore: number | null;
+  pengajar: EvaluationDetailData | null;
   aiStatus: string;
 }) {
+  const segmenMesin = normalizeSegmentScores(ai?.score_ayat);
+  const segmenPengajar = pengajar?.scoreAyat;
+
+  const indikatorMesin: Record<IndicatorKey, number | null> = {
+    harakat: ai?.score_harakat ?? null,
+    ketepatanHuruf: ai?.score_ketepatan_huruf ?? null,
+    panjangPendek: ai?.score_panjang_pendek ?? null,
+    tasydid: ai?.score_tasydid ?? null,
+    hukumTajwid: ai?.score_hukum_tajwid ?? null,
+  };
+
+  const raw = (ai?.ml_raw_output ?? {}) as Record<string, unknown>;
+  const sifaJalan = raw.sifa_available === true;
+  const diBuang = typeof raw.temuan_di_luar_jangkauan === "number"
+    ? raw.temuan_di_luar_jangkauan
+    : 0;
+  const mock = (ai?.ml_model_version ?? "").startsWith("mock");
+
   return (
     <details className="card-mpt" style={{ padding: "16px 20px", marginBottom: 16 }}>
       <summary
@@ -432,19 +523,48 @@ function AiComparator({
       <div style={{ marginTop: 14 }}>
         {ai ? (
           <>
+            {mock && (
+              <p
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "var(--danger)",
+                  border: "1px solid var(--danger)",
+                  borderRadius: 6,
+                  padding: "8px 10px",
+                  margin: "0 0 14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                DATA PALSU — model <code>{ai.ml_model_version}</code>. Angka di
+                bawah ini bilangan acak dari mock, bukan penilaian mesin. Jangan
+                dipakai sebagai bahan perbandingan.
+              </p>
+            )}
+
             <div style={{ display: "flex", flexWrap: "wrap", gap: 22, fontSize: 12 }}>
               <div>
                 <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1 }}>
-                  {ai.skor}/5
+                  {ai.score_min}/10
                 </div>
-                <div style={{ color: "var(--ink-soft)", marginTop: 3 }}>
-                  {ai.status_label}
-                </div>
+                <div style={{ color: "var(--ink-soft)", marginTop: 3 }}>Mesin</div>
               </div>
-              <Meta label="Pengajar" value={teacherScore != null ? `${teacherScore}/10` : "—"} />
+              <div>
+                <div
+                  style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    color: "var(--ink-soft)",
+                  }}
+                >
+                  {pengajar?.scoreMin != null ? `${pengajar.scoreMin}/10` : "—"}
+                </div>
+                <div style={{ color: "var(--ink-soft)", marginTop: 3 }}>Pengajar</div>
+              </div>
               <Meta
-                label="Catatan"
-                value={`${ai.total_errors_major} major · ${ai.total_errors_minor} minor`}
+                label="Temuan mesin"
+                value={`${ai.total_jaliy} fatal · ${ai.total_khafiy} ringan`}
               />
               <Meta label="Model" value={ai.ml_model_version ?? "—"} />
               <Meta
@@ -452,29 +572,115 @@ function AiComparator({
                 value={ai.ml_confidence != null ? ai.ml_confidence.toFixed(2) : "—"}
               />
             </div>
+
+            <Kolom label="Per segmen" mesin="Mesin" pengajar="Pengajar" />
+            {SEGMENT_KEYS.map((k) => (
+              <BarisBanding
+                key={k}
+                label={AL_FATIHAH_SEGMENTS[k]?.nomor ?? k}
+                mesin={segmenMesin?.[k] ?? null}
+                pengajar={segmenPengajar?.[k] ?? null}
+              />
+            ))}
+
+            <Kolom label="Per indikator" mesin="Mesin" pengajar="Pengajar" />
+            {INDICATOR_KEYS.map((k) => (
+              <BarisBanding
+                key={k}
+                label={INDICATOR_LABEL[k]}
+                mesin={indikatorMesin[k]}
+                pengajar={pengajar?.skorIndikator?.[k]?.score ?? null}
+              />
+            ))}
+
+            {/* Hanya berlaku untuk penilaian sungguhan. Mock mengarang angka
+                khafiy sendiri, jadi menampilkan "khafiy selalu nol" di sebelah
+                baris mock yang memuat khafiy justru saling menyangkal. */}
+            {!sifaJalan && !mock && (
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-mute)",
+                  margin: "14px 0 0",
+                  lineHeight: 1.6,
+                }}
+              >
+                Head <em>sifa</em> model belum jalan, jadi mesin sama sekali tidak
+                bisa melihat lahn khafiy dan angkanya selalu nol. Akibatnya skor
+                mesin cenderung LEBIH TINGGI daripada pengajar. Selisih positif di
+                atas belum tentu berarti mesin longgar — sebagian pasti berasal
+                dari kebutaan ini.
+              </p>
+            )}
+            {diBuang > 0 && (
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-mute)",
+                  margin: "8px 0 0",
+                  lineHeight: 1.6,
+                }}
+              >
+                {diBuang} temuan dibuang karena koordinat katanya di luar
+                Al-Fatihah. Kalau angka ini besar, alignment sedang meleset dan
+                skor di atas tidak layak dipakai.
+              </p>
+            )}
             <p
               style={{
                 fontSize: 12,
                 color: "var(--ink-mute)",
-                margin: "14px 0 0",
+                margin: "8px 0 0",
                 lineHeight: 1.6,
               }}
             >
-              Dua angka di atas berbeda skala dan tidak boleh dibandingkan
-              langsung — mesin memakai 1-5, pengajar 1-10. Keduanya dikumpulkan
-              sebagai bahan perbandingan sampai keputusan Januari, dan tidak
-              pernah ditampilkan ke peserta maupun pengajar.
+              Dikumpulkan sebagai bahan perbandingan sampai keputusan Januari.
+              Tidak pernah ditampilkan ke peserta maupun pengajar.
             </p>
           </>
         ) : (
           <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.6 }}>
             Belum ada hasil mesin untuk rekaman ini (status pipeline:{" "}
-            <code style={{ fontSize: 12 }}>{aiStatus}</code>). Worker belum
-            dijalankan, jadi tabel rapot memang masih kosong.
+            <code style={{ fontSize: 12 }}>{aiStatus}</code>).{" "}
+            {aiStatus === "pending"
+              ? "Worker belum menjalankannya — cek ML_SERVER_URL."
+              : "Lihat kolom ai_error_message di tabel submissions."}
           </p>
         )}
       </div>
     </details>
+  );
+}
+
+/** Kepala kolom untuk blok perbandingan. */
+function Kolom({
+  label,
+  mesin,
+  pengajar,
+}: {
+  label: string;
+  mesin: string;
+  pengajar: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto auto auto",
+        gap: 10,
+        marginTop: 16,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: "var(--ink-mute)",
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ minWidth: 34, textAlign: "right" }}>{mesin}</span>
+      <span style={{ minWidth: 34, textAlign: "right" }}>{pengajar}</span>
+      <span style={{ minWidth: 34, textAlign: "right" }}>Δ</span>
+    </div>
   );
 }
 
@@ -609,16 +815,18 @@ async function fetchEvaluation(
   };
 }
 
-async function fetchAi(rapotSlug: string | null): Promise<AiRow | null> {
-  if (!rapotSlug) return null;
+async function fetchAi(submissionId: string): Promise<AiRow | null> {
   const rows = await sql<AiRow[]>`
-    SELECT skor, status_label, total_errors_major, total_errors_minor,
-           weighted_score::float8 AS weighted_score,
+    SELECT score_min, label_min, score_ayat,
+           score_harakat, score_ketepatan_huruf, score_panjang_pendek,
+           score_tasydid, score_hukum_tajwid,
+           total_jaliy, total_khafiy,
            ml_model_version,
            ml_confidence::float8 AS ml_confidence,
+           ml_raw_output,
            created_at
-    FROM rapot
-    WHERE slug = ${rapotSlug}
+    FROM ai_evaluations
+    WHERE submission_id = ${submissionId}
     LIMIT 1
   `;
   return rows[0] ?? null;

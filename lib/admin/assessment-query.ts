@@ -124,7 +124,7 @@ function assessmentBase() {
         s.jenis_kelamin,
         s.nomor_wa,
         s.created_at,
-        s.status                      AS ai_status,
+        s.ai_status,
         s.rapot_slug,
         s.audio_path,
         s.audio_duration_sec::float8  AS durasi_sec,
@@ -151,7 +151,7 @@ function assessmentBase() {
         e.source     AS eval_source,
         e.created_at AS eval_at,
 
-        r.skor AS ai_skor,
+        ai.score_min AS ai_skor,
 
         CASE
           WHEN e.submission_id IS NOT NULL       THEN 'selesai'
@@ -188,8 +188,10 @@ function assessmentBase() {
       LEFT JOIN teachers t ON t.id = a.teacher_id
       -- teacher_evaluations.submission_id UNIK (0008:22) → JOIN biasa aman.
       LEFT JOIN teacher_evaluations e ON e.submission_id = s.id
-      -- submissions.rapot_slug UNIK dan rapot.slug PK → 1:1 dijamin skema.
-      LEFT JOIN rapot r ON r.slug = s.rapot_slug
+      -- ai_evaluations.submission_id UNIK (0010) → JOIN biasa aman.
+      -- Skalanya kini SAMA dengan e.score_min: keduanya 1-10 dari rubrik yang
+      -- sama, jadi ai_skor dan score_min memang boleh disandingkan.
+      LEFT JOIN ai_evaluations ai ON ai.submission_id = s.id
     )
   `;
 }
