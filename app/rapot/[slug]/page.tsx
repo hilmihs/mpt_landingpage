@@ -39,6 +39,7 @@ import type { Metadata } from "next";
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 interface RapotWithSubmission extends RapotRow {
@@ -361,7 +362,7 @@ async function getSubmissionBySlug(slug: string): Promise<SubmissionBySlug | nul
   }
 }
 
-export default async function RapotPage({ params }: Props) {
+export default async function RapotPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const submission = await getSubmissionBySlug(slug);
   if (!submission) notFound();
@@ -377,7 +378,15 @@ export default async function RapotPage({ params }: Props) {
   const teacherEval = await getTeacherEvaluation(submission.id);
   const internalViewer = await getCurrentAdmin();
 
-  if (!internalViewer) {
+  // Sesi admin TIDAK boleh mengubah arti tautan ini. Dulu admin yang membuka
+  // /rapot/<slug> langsung dilempar ke rapot AI, jadi admin yang mau memeriksa
+  // rapot peserta — persis yang dilakukan tombol "Lihat" di /admin/peserta —
+  // malah melihat halaman mesin yang sudah tidak dipakai. Pembanding AI kini
+  // hanya muncul kalau diminta lewat ?pembanding=1.
+  const sp = searchParams ? await searchParams : {};
+  const mintaPembanding = sp.pembanding === "1";
+
+  if (!internalViewer || !mintaPembanding) {
     const sub = submission;
     const namaPeserta = sub.nama;
     // Penilaian yang lahir di portal ini membawa temuan per segmen, jadi peserta
@@ -440,6 +449,20 @@ export default async function RapotPage({ params }: Props) {
         ) : (
           <WaitingForTeacher nama={namaPeserta} />
         )}
+
+        {/* Jalan masuk ke pembanding mesin, hanya untuk admin yang sudah login.
+            Sengaja berupa tautan, bukan pengalihan otomatis: yang dituju admin
+            saat mengklik "Lihat" dari daftar peserta adalah rapot peserta. */}
+        {internalViewer && (
+          <div className="no-print" style={{ marginTop: 20, textAlign: "center" }}>
+            <Link
+              href={`/rapot/${slug}?pembanding=1`}
+              style={{ fontSize: 12, color: "var(--ink-mute)" }}
+            >
+              Lihat pembanding mesin (internal)
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -466,6 +489,11 @@ export default async function RapotPage({ params }: Props) {
             Bacaan <strong>{submission.nama}</strong> sudah tersimpan dengan
             aman dan sedang menunggu diperiksa. Buka kembali halaman ini nanti.
           </p>
+          <div style={{ marginTop: 16 }}>
+            <Link href={`/rapot/${slug}`} style={{ fontSize: 12, color: "var(--ink-mute)" }}>
+              ← Kembali ke rapot peserta
+            </Link>
+          </div>
         </div>
       </div>
     );
