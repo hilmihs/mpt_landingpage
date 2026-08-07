@@ -1,17 +1,23 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { signedAudioUrl } from "@/lib/storage";
-import { drainJobs, type MLJob } from "@/lib/queue";
-import { mockMLPredict } from "@/lib/mock-ml";
-import { mlPredict } from "@/lib/ml-client";
 import { buildAiEvaluationRow } from "@/lib/ai-eval/store";
+import type { ErrorItem, MLPredictResult } from "@/types";
 
 /**
- * Worker penilaian mesin.
+ * Worker penilaian mesin — memproyeksikan temuan mentah jadi penilaian.
  *
- * Hasilnya masuk ke `ai_evaluations` dalam instrumen yang sama dengan pengajar
- * (delapan segmen, lima indikator, skala 1-10), bukan ke `rapot` dengan skala
- * 1-5 seperti sebelumnya. Alasannya ada di db/migrations/0010_ai_evaluation.sql.
+ * TIDAK memanggil ML server. GPU dinyalakan seperlunya, tidak jalan terus
+ * (~$125/bulan untuk pekerjaan beberapa menit sehari), jadi sebagian besar
+ * waktu tidak ada yang bisa dipanggil — dan alamat VM berubah tiap kali
+ * dinyalakan. VM menulis temuan mentah ke `ai_inference_raw` lalu mati; worker
+ * ini membacanya kapan saja setelahnya.
+ *
+ * Pembagiannya mengikuti bahasa masing-masing: Python mengubah audio jadi
+ * temuan, TypeScript memproyeksikan temuan ke instrumen pengajar. Logika
+ * proyeksi itu memakai computeEvaluation milik pengajar; menuliskannya ulang
+ * dalam Python berarti dua implementasi yang akan menyimpang diam-diam.
+ *
+ * Lihat docs/BATCH_INFERENSI.md.
  *
  * Worker ini TIDAK menyentuh `submissions.status` — kolom itu milik alur
  * pengajar. Statusnya sendiri ada di `submissions.ai_status`.
@@ -24,18 +30,13 @@ export const maxDuration = 60;
 const MAX_JOBS_PER_INVOCATION = 10;
 
 /**
- * Mock hanya boleh hidup di luar produksi.
+ * Mock sudah tidak punya peran di sini.
  *
- * Sebelumnya worker diam-diam jatuh ke `mockMLPredict` begitu `ML_SERVER_URL`
- * kosong, lalu menyimpan hasilnya seperti penilaian sungguhan. Nilai-nilai itu
- * bilangan acak. Karena mesin ini ada semata untuk dibandingkan dengan
- * pengajar, satu baris acak yang lolos ke basis data akan membuat kesimpulan
- * perbandingannya salah — dan tidak ada yang akan menyadarinya, karena
- * bentuknya sama persis dengan penilaian nyata.
+ * Worker ini tidak lagi memanggil model — ia cuma memproyeksikan temuan yang
+ * sudah ada di ai_inference_raw. Tidak ada lagi jalur yang bisa diam-diam
+ * jatuh ke bilangan acak lalu menyimpannya sebagai penilaian. `lib/mock-ml.ts`
+ * kini hanya dipakai pintasan demo di app/api/bypass.
  */
-function mockDiizinkan(): boolean {
-  return process.env.NODE_ENV !== "production";
-}
 
 /**
  * Bungkus nilai untuk kolom jsonb. Tipe JSONValue milik postgres.js menolak
@@ -57,34 +58,60 @@ function authorized(req: Request): boolean {
   return false;
 }
 
-async function processJob(job: MLJob): Promise<{
+/** Satu baris temuan mentah yang menunggu diproyeksikan. */
+interface BarisMentah {
+  id: string;
+  submission_id: string;
+  findings: ErrorItem[] | null;
+  ml_model_version: string;
+  ml_confidence: number | null;
+  ml_raw_output: unknown;
+}
+
+const FIELD_KATEGORI: Record<string, keyof MLPredictResult> = {
+  harakat: "errors_harakat",
+  ketepatan_huruf: "errors_ketepatan_huruf",
+  panjang_pendek: "errors_panjang_pendek",
+  tasydid: "errors_tasydid",
+  hukum_tajwid: "errors_hukum_tajwid",
+};
+
+/**
+ * Kembalikan temuan datar ke bentuk MLPredictResult.
+ *
+ * `ai_inference_raw.findings` menyimpan kelima indikator sebagai satu daftar,
+ * jadi kategorinya dibaca dari tiap temuan. Tanpa pengelompokan ini, aturan
+ * pencocokan katalog yang menyaring berdasarkan kategori tidak akan cocok.
+ */
+function keHasilML(baris: BarisMentah): MLPredictResult {
+  const hasil: MLPredictResult = {
+    errors_harakat: [],
+    errors_ketepatan_huruf: [],
+    errors_panjang_pendek: [],
+    errors_tasydid: [],
+    errors_hukum_tajwid: [],
+    ml_model_version: baris.ml_model_version,
+    ml_confidence: baris.ml_confidence ?? 0,
+    ml_raw_output: baris.ml_raw_output,
+  };
+  for (const f of baris.findings ?? []) {
+    const kunci = FIELD_KATEGORI[f.kategori ?? ""] ?? "errors_ketepatan_huruf";
+    (hasil[kunci] as ErrorItem[]).push(f);
+  }
+  return hasil;
+}
+
+async function processJob(baris: BarisMentah): Promise<{
   ok: boolean;
   error?: string;
 }> {
+  const job = { submission_id: baris.submission_id };
   await sql`
     UPDATE submissions SET ai_status = ${"processing"} WHERE id = ${job.submission_id}
   `;
 
   try {
-    // Signed URL for ML server (mock doesn't use it, but real client will)
-    let signedUrl = "";
-    try {
-      signedUrl = await signedAudioUrl(job.audio_path, 60 * 10);
-    } catch {
-      // Gagal menandatangani bukan alasan menggagalkan job — mock tidak
-      // memakainya, dan ml-client yang akan mengeluh kalau URL kosong.
-    }
-
-    const mlInput = {
-      submission_id: job.submission_id,
-      audio_url: signedUrl,
-    };
-
-    const result = process.env.ML_SERVER_URL
-      ? await mlPredict(mlInput)
-      : mockMLPredict(mlInput);
-
-    const row = buildAiEvaluationRow(job.submission_id, result);
+    const row = buildAiEvaluationRow(job.submission_id, keHasilML(baris));
 
     try {
       await sql`
@@ -170,63 +197,38 @@ async function handleRun(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // Tanpa ML server, tidak ada yang bisa dikerjakan. Rekaman sengaja dibiarkan
-  // 'pending' — bukan ditandai gagal — supaya ikut terproses begitu model
-  // menyala, selama audionya belum kena retensi 7 hari.
-  if (!process.env.ML_SERVER_URL && !mockDiizinkan()) {
-    return NextResponse.json({
-      processed: 0,
-      results: [],
-      skipped: "ML_SERVER_URL belum diset; mock tidak dijalankan di produksi",
-    });
-  }
-
-  // Antrean Redis adalah jalur cepat, bukan sumber kebenaran. Kalau Upstash
-  // tidak terjangkau, jangan menjatuhkan seluruh run — justru untuk keadaan
-  // inilah pemindaian basis data di bawah ada. Sebelumnya galat di sini
-  // melempar keluar dan fallback-nya tidak pernah sempat jalan.
-  let jobs: MLJob[] = [];
+  // Antreannya adalah tabel, bukan Redis: temuan mentah ditulis VM GPU yang
+  // sudah mati saat worker ini jalan, jadi tidak ada yang bisa mengirim pesan
+  // ke mana pun. `diproses_at IS NULL` adalah satu-satunya penanda antrean.
+  let antrean: BarisMentah[] = [];
   try {
-    jobs = await drainJobs(MAX_JOBS_PER_INVOCATION);
+    antrean = await sql<BarisMentah[]>`
+      SELECT id, submission_id, findings, ml_model_version,
+             ml_confidence::float8 AS ml_confidence, ml_raw_output
+      FROM ai_inference_raw
+      WHERE diproses_at IS NULL
+      ORDER BY created_at
+      LIMIT ${MAX_JOBS_PER_INVOCATION}
+    `;
   } catch (err) {
-    console.error("[worker] antrean tidak terbaca:", (err as Error).message);
-  }
-
-  // Fallback: also pick up orphaned pending submissions (queue lost / no enqueue)
-  if (jobs.length < MAX_JOBS_PER_INVOCATION) {
-    let pending: {
-      id: string;
-      rapot_slug: string | null;
-      audio_path: string;
-    }[] = [];
-    try {
-      // Antre berdasarkan ai_status, bukan status: rekaman yang sudah dinilai
-      // pengajar (status = 'completed') tetap perlu dinilai mesin — justru
-      // itulah pasangan yang dicari untuk perbandingan.
-      pending = await sql`
-        SELECT id, rapot_slug, audio_path
-        FROM submissions
-        WHERE ai_status = ${"pending"}
-          AND created_at < ${new Date(Date.now() - 2 * 60_000)}
-        LIMIT ${MAX_JOBS_PER_INVOCATION - jobs.length}
-      `;
-    } catch (err) {
-      console.error("pending scan error", err);
-    }
-    for (const p of pending) {
-      jobs.push({
-        submission_id: p.id,
-        rapot_slug: p.rapot_slug ?? "",
-        audio_path: p.audio_path,
-        enqueued_at: Date.now(),
-      });
-    }
+    console.error("[worker] gagal membaca ai_inference_raw:", (err as Error).message);
+    return NextResponse.json(
+      { error: "queue_unreadable", message: (err as Error).message },
+      { status: 500 },
+    );
   }
 
   const results: { id: string; ok: boolean; error?: string }[] = [];
-  for (const job of jobs) {
-    const r = await processJob(job);
-    results.push({ id: job.submission_id, ...r });
+  for (const baris of antrean) {
+    const r = await processJob(baris);
+    results.push({ id: baris.submission_id, ...r });
+    // Ditandai selesai apa pun hasilnya. Baris yang gagal diproyeksikan akan
+    // gagal lagi dengan cara yang sama pada putaran berikutnya — mencobanya
+    // terus hanya memblokir antrean. Sebabnya tercatat di
+    // submissions.ai_error_message.
+    await sql`
+      UPDATE ai_inference_raw SET diproses_at = ${new Date()} WHERE id = ${baris.id}
+    `;
   }
 
   return NextResponse.json({ processed: results.length, results });
