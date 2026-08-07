@@ -30,6 +30,12 @@ import tempfile
 sys.path.insert(0, ".")
 
 
+# Al-Fatihah utuh butuh sekitar 45-55 detik dibaca murattal — pada 762 rekaman
+# ber-ground-truth, yang terpendek 33 detik. Ambang 25 detik memberi kelonggaran
+# untuk pembaca cepat tanpa meloloskan rekaman yang jelas terpotong.
+DURASI_MINIMUM = 25.0
+
+
 def _wajib(nama: str) -> str:
     nilai = os.environ.get(nama)
     if not nilai:
@@ -57,12 +63,18 @@ def ke_pcm(raw: bytes) -> "object":
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
             f.write(raw)
             tmp = f.name
-        keluaran = subprocess.run(
-            ["ffmpeg", "-v", "quiet", "-i", tmp, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
+        hasil = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", tmp, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
             capture_output=True,
-            check=True,
-        ).stdout
-        return np.frombuffer(keluaran, dtype="float32")
+        )
+        if hasil.returncode != 0:
+            # Tanpa ini yang terlihat hanya "exit status 1" — tidak cukup untuk
+            # membedakan berkas rusak, format tak dikenal, atau audio kosong.
+            # `-v error` dipakai (bukan `quiet`) supaya sebabnya ikut terbawa.
+            pesan = (hasil.stderr or b"").decode("utf8", "replace").strip().splitlines()
+            ringkas = pesan[-1] if pesan else "tanpa keterangan"
+            raise ValueError(f"ffmpeg gagal membaca audio ({len(raw)} byte): {ringkas}")
+        return np.frombuffer(hasil.stdout, dtype="float32")
     finally:
         if tmp and os.path.exists(tmp):
             os.unlink(tmp)  # audio tidak menetap
@@ -74,7 +86,10 @@ async def main() -> None:
     args = ap.parse_args()
 
     import psycopg
-    from app.config import settings
+
+    # `app.config` sengaja TIDAK diimpor. Settings di sana mewajibkan API_KEY
+    # milik FastAPI, padahal batch ini tidak melayani HTTP sama sekali —
+    # mengimpornya cuma membuat batch gagal menuntut rahasia yang tak dipakai.
     from app.ml.mualim import MualimEngine
     from app.ml.qps_decoder import decode_to_errors
 
@@ -112,8 +127,18 @@ async def main() -> None:
     for i, (submission_id, audio_path) in enumerate(antrean, 1):
         try:
             audio = ke_pcm(await unduh_audio(bucket, audio_path))
-            if len(audio) < 16000:
-                raise ValueError("audio kurang dari 1 detik")
+            detik = len(audio) / 16000
+            if detik < DURASI_MINIMUM:
+                # Rekaman jauh lebih pendek daripada Al-Fatihah bukan bacaan
+                # yang buruk — ia bacaan yang TIDAK LENGKAP: peserta berhenti di
+                # tengah, atau salah tekan. Memaksakan alignment menghasilkan
+                # ratusan "kesalahan" yang sebetulnya cuma bagian yang tidak
+                # pernah dibaca. Kalau itu sampai ke formulir pengajar, ia
+                # membanjirinya dengan usulan yang tidak satu pun benar.
+                raise ValueError(
+                    f"rekaman {detik:.1f} detik — terlalu pendek untuk Al-Fatihah utuh "
+                    f"(minimum {DURASI_MINIMUM} detik); kemungkinan bacaan tidak selesai"
+                )
 
             pred = await engine.predict(audio)
             errors = decode_to_errors(
