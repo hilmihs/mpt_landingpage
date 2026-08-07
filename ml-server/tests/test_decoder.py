@@ -61,38 +61,39 @@ def test_huruf_hilang_terdeteksi():
 
 # ── Perataan panjang mad ────────────────────────────────────────────────────
 def test_mad_berulang_diratakan():
-    teks, _ = ratakan_mad("ررَحِۦۦۦۦم", None)
+    teks, _, _ = ratakan_mad("ررَحِۦۦۦۦم", None)
     assert teks == "ررَحِۦم"
 
 
 def test_perataan_tidak_menghapus_mad():
     """Yang diratakan derajat panjangnya, bukan keberadaannya."""
-    teks, _ = ratakan_mad("بَاا", None)
+    teks, _, _ = ratakan_mad("بَاا", None)
     assert "ا" in teks
 
 
 def test_huruf_ganda_bukan_mad_tidak_diratakan():
     """ررَ menandai tasydid, bukan mad — jangan disentuh."""
-    teks, _ = ratakan_mad("ررَحمَاان", None)
+    teks, _, _ = ratakan_mad("ررَحمَاان", None)
     assert teks.startswith("ررَ")
 
 
 def test_pemilik_ikut_dipangkas():
-    teks, pemilik = ratakan_mad("بَاا", (1, 1, 1, 1))
-    assert len(teks) == len(pemilik) == 3
+    teks, pemilik, panjang = ratakan_mad("بَاا", ((1, 0), (1, 0), (1, 0), (1, 0)))
+    assert len(teks) == len(pemilik) == len(panjang) == 3
+    assert panjang == (1, 1, 2), "run mad harus tercatat panjangnya"
 
 
 def test_beda_panjang_mad_bukan_kesalahan():
     """Pembaca 4 harakat dan 5 harakat sama-sama benar."""
-    a, _ = ratakan_mad("حِۦۦۦۦم", None)
-    b, _ = ratakan_mad("حِۦۦم", None)
+    a, _, _ = ratakan_mad("حِۦۦۦۦم", None)
+    b, _, _ = ratakan_mad("حِۦۦم", None)
     assert a == b
 
 
 def test_mad_dipendekkan_tetap_terdeteksi():
     """Tapi memendekkan sampai hilang tetap kesalahan."""
-    a, _ = ratakan_mad("حِۦۦۦۦم", None)
-    b, _ = ratakan_mad("حِم", None)
+    a, _, _ = ratakan_mad("حِۦۦۦۦم", None)
+    b, _, _ = ratakan_mad("حِم", None)
     assert a != b
 
 
@@ -132,7 +133,7 @@ def test_dengung_berharakat_bukan_hukum_tajwid():
 # ── Target resmi ────────────────────────────────────────────────────────────
 @butuh_qt
 def test_target_sepadan_dengan_pemiliknya():
-    fonem, pemilik, sifat = af.build_target()
+    fonem, pemilik, sifat, _ = af.build_target()
     assert len(fonem) == len(pemilik) > 0
     assert {a for a, _ in pemilik} == set(range(1, 8)), "ketujuh ayat harus terwakili"
     assert len(sifat) > 0
@@ -151,7 +152,7 @@ def test_jumlah_kata_per_ayat():
 
 @butuh_qt
 def test_kata_idx_selalu_dalam_jangkauan():
-    _, pemilik, _ = af.build_target()
+    _, pemilik, _, _ = af.build_target()
     for ayat, kata_idx in pemilik:
         assert 0 <= kata_idx < len(af.kata(ayat)), f"ayat {ayat} kata {kata_idx}"
 
@@ -159,7 +160,7 @@ def test_kata_idx_selalu_dalam_jangkauan():
 @butuh_qt
 def test_setiap_kata_punya_fonem():
     """Tidak boleh ada kata yang tidak terwakili — itu berarti pemetaan bolong."""
-    _, pemilik, _ = af.build_target()
+    _, pemilik, _, _ = af.build_target()
     for ayat in range(1, 8):
         terlihat = {k for a, k in pemilik if a == ayat}
         assert terlihat == set(range(len(af.kata(ayat)))), f"ayat {ayat}: {terlihat}"
@@ -168,7 +169,7 @@ def test_setiap_kata_punya_fonem():
 @butuh_qt
 def test_kata_terakhir_ayat_7_memetakan_benar():
     """Titik uji paling rawan: kata terpanjang, penuh tasydid dan mad."""
-    fonem, pemilik, _ = af.build_target()
+    fonem, pemilik, _, _ = af.build_target()
     idx = [i for i, (a, k) in enumerate(pemilik) if a == 7 and k == 8]
     potongan = fonem[idx[0] : idx[-1] + 1]
     assert potongan.startswith("ضض"), potongan
@@ -179,7 +180,7 @@ def test_kata_terakhir_ayat_7_memetakan_benar():
 def test_temuan_membawa_posisi_kata():
     from app.ml.qps_decoder import decode_to_errors
 
-    fonem, _, _ = af.build_target()
+    fonem, _, _, _ = af.build_target()
     rusak = fonem.replace("ص", "س", 1)  # ص dibaca س — kesalahan paling khas
     errors = decode_to_errors(predicted_phonemes=rusak)
     items = [e for v in errors.values() for e in v]
@@ -197,7 +198,7 @@ def test_target_memakai_huruf_arab_bukan_latin():
     Penjaga terhadap kekeliruan yang pernah terjadi: target sempat dibangun
     dari transliterasi latin, sementara model mengeluarkan huruf Arab.
     """
-    fonem, _, _ = af.build_target()
+    fonem, _, _, _ = af.build_target()
     assert not any("a" <= c <= "z" for c in fonem), "target tidak boleh mengandung latin"
     assert "ب" in fonem and "ِ" in fonem
 
@@ -206,7 +207,7 @@ def test_target_memakai_huruf_arab_bukan_latin():
 def test_bacaan_sempurna_tanpa_temuan():
     from app.ml.qps_decoder import decode_to_errors
 
-    fonem, _, _ = af.build_target()
+    fonem, _, _, _ = af.build_target()
     errors = decode_to_errors(predicted_phonemes=fonem)
     assert sum(len(v) for v in errors.values()) == 0
 
@@ -223,3 +224,42 @@ def test_kunci_kontrak_lima_indikator():
         "errors_tasydid",
         "errors_hukum_tajwid",
     }
+
+
+# ── Panjang mad per jenis ───────────────────────────────────────────────────
+# Perataan membuang derajat panjang karena sebagian besar variasinya adalah
+# pilihan qiraah. Tapi tidak semuanya: mad thabi'i selalu 2 harakat dan mad
+# lazim selalu 6. Dua tes berikut menjaga perbedaan itu.
+@butuh_qt
+def test_mad_lazim_dipendekkan_terdeteksi():
+    from app.ml.qps_decoder import decode_to_errors
+
+    fonem, _, _, _ = af.build_target()
+    # الضالين: mad lazim 6 harakat dibaca 2
+    pendek = fonem.replace("ضضَاااااا", "ضضَاا")
+    assert pendek != fonem, "pola mad lazim tidak ditemukan di target"
+    temuan = decode_to_errors(predicted_phonemes=pendek)["errors_panjang_pendek"]
+    assert len(temuan) == 1
+    assert temuan[0].ayat == 7 and temuan[0].kata_idx == 8
+    assert "6 harakat" in (temuan[0].note or "")
+
+
+@butuh_qt
+def test_mad_aared_dipendekkan_tidak_dihukum():
+    """Panjang mad Aared boleh 2, 4, atau 6 — ketiganya sah."""
+    from app.ml.qps_decoder import decode_to_errors
+
+    fonem, _, _, _ = af.build_target()
+    longgar = fonem.replace("ررَحِۦۦۦۦم", "ررَحِۦۦم")
+    assert longgar != fonem
+    errors = decode_to_errors(predicted_phonemes=longgar)
+    assert sum(len(v) for v in errors.values()) == 0
+
+
+@butuh_qt
+def test_aturan_mad_terpasang_di_target():
+    _, _, _, mad = af.build_target()
+    tetap = [m for m in mad if m and m[1]]
+    bervariasi = [m for m in mad if m and not m[1]]
+    assert tetap and bervariasi, "kedua jenis mad harus ada di Al-Fatihah"
+    assert 6 in {g for g, _ in tetap}, "mad lazim 6 harakat (الضالين) harus terdeteksi"

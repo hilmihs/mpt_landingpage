@@ -235,16 +235,35 @@ Tiga varian ambang selisih panjang run diuji untuk memulihkannya:
 | selisih ≥ 3 | 0,452 | 0,625 | 4,0 | 0,19 |
 | selisih ≥ 2 | 0,476 | 0,610 | 6,0 | 3,66 |
 
-Tidak ada yang memulihkan `panjang_pendek` tanpa merusak yang lain, jadi **tidak
-ada yang dipasang**. Ambang ≥2 menaikkan Pearson tapi menurunkan Spearman dan
-menaikkan lantai derau — 3,66 temuan mad per rekaman hampir pasti variasi gaya,
-bukan kesalahan.
+Tidak ada yang memulihkan `panjang_pendek` tanpa merusak yang lain, jadi tidak
+ada yang dipasang. Ambang ≥2 menaikkan Pearson tapi menurunkan Spearman dan
+menaikkan lantai derau.
 
 Sebabnya: aturan panjang run yang berlaku global tidak bisa membedakan mad yang
-panjangnya **tetap** (mad lazim 6 harakat, mad thabi'i 2) dari yang **boleh
-bervariasi** (mad jaiz munfasil 2–5). Yang dibutuhkan adalah toleransi per-jenis
-mad, dan `quran_phonetizer` mengembalikan `mappings` yang bisa memberi tahu
-jenisnya. Itu pekerjaan berikutnya di area ini.
+panjangnya **tetap** dari yang **boleh bervariasi**.
+
+**Diselesaikan lewat toleransi per-jenis mad.** `mappings` ternyata membawa
+`tajweed_rules` berisi `golden_len` dan jenis aturannya:
+
+| Jenis | Panjang seharusnya | Sifat |
+|---|---|---|
+| Normal Madd (thabi'i) | 2 harakat | tetap |
+| Aared Madd | 4 harakat | boleh 2/4/6 — pilihan qiraah |
+| Lazem Madd | 6 harakat | tetap — inilah الضالين yang dinamai katalog |
+
+Sekarang hanya mad yang panjangnya tetap yang dihukum, dengan toleransi 1
+harakat. Hasilnya naik di **semua** ukuran sekaligus — yang tidak bisa dicapai
+ambang global:
+
+| | Pearson | Spearman | Lantai derau | `panjang_pendek` |
+|---|---|---|---|---|
+| Ratakan saja | 0,466 | 0,628 | 4,0 | 6% |
+| **+ toleransi per-jenis** | **0,476** | **0,639** | **4,0** | **9%** |
+
+Masih di bawah 19% milik katalog. Sisanya kemungkinan opsi yang berbicara
+tentang mad yang DITAMBAHKAN di tempat yang seharusnya tidak ada ("Menambah
+mad/panjang di huruf ك pada kata إياك") — penyisipan, bukan pemendekan, dan
+belum ditangani.
 
 ### Kelayakan pra-isi form
 

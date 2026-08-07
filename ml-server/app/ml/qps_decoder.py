@@ -73,7 +73,7 @@ def decode_to_errors(
     """Kunci keluaran PERSIS sama dengan field `errors_*` di MLPredictResult."""
     out: dict[str, list[ErrorItem]] = {v: [] for v in _CATEGORY_KEY.values()}
 
-    target, pemilik, _ = af.build_target()
+    target, pemilik, _, mad = af.build_target()
     if not target:
         log.warning("Target Al-Fatihah kosong")
         return out
@@ -82,10 +82,25 @@ def decode_to_errors(
     if not pred:
         return out
 
-    target, pemilik = ratakan_mad(target, pemilik)
-    pred, _ = ratakan_mad(pred, None)
+    # `mad` sejajar target ASLI; setelah perataan indeksnya ikut menyusut, jadi
+    # aturan mad diambil lewat posisi asli yang disimpan di sini.
+    mad_rata: list[tuple[int, bool] | None] = []
+    sebelumnya: str | None = None
+    for idx, ch in enumerate(target):
+        if sebelumnya is not None and ch == sebelumnya and ch in MAD:
+            continue
+        mad_rata.append(mad[idx])
+        sebelumnya = ch
 
-    for op, t_idx, p_idx in align_semi_global(target, pred):
+    target, pemilik, panjang_target = ratakan_mad(target, pemilik)
+    pred, _, panjang_pred = ratakan_mad(pred, None)
+
+    alignment = align_semi_global(target, pred)
+    out[_CATEGORY_KEY["panjang_pendek"]].extend(
+        _temuan_mad(alignment, target, pemilik, mad_rata, panjang_target, panjang_pred)
+    )
+
+    for op, t_idx, p_idx in alignment:
         if op == "match":
             continue
         ti = min(max(t_idx, 0), len(pemilik) - 1)
@@ -116,6 +131,71 @@ def decode_to_errors(
     return out
 
 
+# Berapa harakat selisih sebelum dianggap kesalahan. Satu harakat dibiarkan
+# lewat: model dan rekaman ponsel tidak seteliti itu, dan menghukum selisih satu
+# akan menenggelamkan temuan sungguhan dalam derau.
+TOLERANSI_MAD = 2
+
+
+def _temuan_mad(
+    alignment: list[tuple[str, int, int | None]],
+    target: str,
+    pemilik: tuple[tuple[int, int], ...],
+    mad_rata: list[tuple[int, bool] | None],
+    panjang_target: tuple[int, ...],
+    panjang_pred: tuple[int, ...],
+) -> list[ErrorItem]:
+    """
+    Hukum panjang mad HANYA di posisi yang panjangnya memang tetap.
+
+    Perataan di `ratakan_mad` sengaja membuang derajat panjang karena sebagian
+    besar variasinya adalah pilihan qiraah yang sah. Tapi tidak semuanya:
+    mad thabi'i selalu 2 harakat dan mad lazim selalu 6 — memendekkan keduanya
+    adalah kesalahan, dan katalog pengajar menamainya ("Kurangnya mad dari 6
+    harakat pada kata الضالين").
+
+    Yang dibiarkan lewat: mad Aared, yang panjangnya boleh 2, 4, atau 6
+    tergantung pilihan pembaca. Aturan panjang run yang berlaku global tidak
+    bisa membedakan keduanya — itulah sebabnya percobaan sebelumnya gagal.
+    """
+    temuan: list[ErrorItem] = []
+    for op, t_idx, p_idx in alignment:
+        if op != "match" or p_idx is None:
+            continue
+        if t_idx >= len(mad_rata) or target[t_idx] not in MAD:
+            continue
+        aturan = mad_rata[t_idx]
+        if aturan is None:
+            continue
+        seharusnya, tetap = aturan
+        if not tetap:
+            continue
+
+        dibaca = panjang_pred[p_idx] if p_idx < len(panjang_pred) else 0
+        if abs(dibaca - seharusnya) < TOLERANSI_MAD:
+            continue
+
+        ayat, kata_idx = pemilik[t_idx]
+        kata = af.kata(ayat)
+        arah = "kurang" if dibaca < seharusnya else "lebih"
+        temuan.append(
+            ErrorItem(
+                ayat=ayat,
+                kata_idx=kata_idx,
+                expected=kata[kata_idx] if kata_idx < len(kata) else "",
+                actual=target[t_idx] * dibaca,
+                severity="major",
+                note=(
+                    f"Panjang mad {arah} — seharusnya {seharusnya} harakat, "
+                    f"terbaca {dibaca}"
+                ),
+                expected_char=target[t_idx],
+                actual_char=target[t_idx],
+            )
+        )
+    return temuan
+
+
 def _temuan_sifat(pred_sifa: dict[str, list[str]]) -> list[ErrorItem]:
     """
     Penyimpangan sifat → lahn khafiy.
@@ -126,7 +206,7 @@ def _temuan_sifat(pred_sifa: dict[str, list[str]]) -> list[ErrorItem]:
     hanya keberadaannya, bukan letaknya — dan sengaja tidak dipakai menghukum
     posisi kata mana pun.
     """
-    _, pemilik, sifat_target = af.build_target()
+    _, pemilik, sifat_target, _ = af.build_target()
     temuan: list[ErrorItem] = []
     for level in SIFA_DINILAI:
         seq = pred_sifa.get(level)
@@ -160,20 +240,32 @@ def ratakan_mad(teks: str, pemilik: tuple[tuple[int, int], ...] | None):
         batas maks 2    Spearman 0,616 · median rekaman bersih 4,0
         ratakan penuh   Spearman 0,628 · median rekaman bersih 4,0   ← dipakai
 
-    `pemilik` (nomor ayat per karakter) ikut dipangkas agar tetap sejajar.
+    Perataan ini membuang derajat panjang, tapi tidak membuangnya begitu saja:
+    panjang aslinya dikembalikan sebagai `panjang` supaya `_temuan_mad()` masih
+    bisa menghukum mad yang panjangnya memang TETAP menurut aturan tajwid.
+
+    Returns: (teks, pemilik, panjang) — `panjang[i]` adalah berapa karakter asli
+    yang menyusut jadi posisi i.
     """
     if not teks:
-        return teks, pemilik
+        return teks, pemilik, ()
 
     keluar: list[str] = []
     keluar_pemilik: list[tuple[int, int]] = []
+    panjang: list[int] = []
     for idx, ch in enumerate(teks):
         if keluar and ch == keluar[-1] and ch in MAD:
+            panjang[-1] += 1
             continue
         keluar.append(ch)
+        panjang.append(1)
         if pemilik is not None:
             keluar_pemilik.append(pemilik[idx])
-    return "".join(keluar), (tuple(keluar_pemilik) if pemilik is not None else None)
+    return (
+        "".join(keluar),
+        (tuple(keluar_pemilik) if pemilik is not None else None),
+        tuple(panjang),
+    )
 
 
 def align_semi_global(target: str, pred: str) -> list[tuple[str, int, int | None]]:

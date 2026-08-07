@@ -65,13 +65,34 @@ def _moshaf():
     )
 
 
+# Jenis mad yang panjangnya TETAP — menyimpang darinya adalah kesalahan.
+# Mad lain (mis. Aared) panjangnya pilihan qiraah: `madd_aared_len` boleh 2, 4,
+# atau 6 dan ketiganya sah, jadi selisih di sana bukan kesalahan.
+_MAD_TETAP = ("NormalMaddRule", "LazemMaddRule")
+
+
+def _aturan_mad(mp) -> tuple[int, bool] | None:
+    """(panjang_seharusnya, tetap) untuk satu entri mappings. None kalau bukan mad."""
+    for rule in mp.tajweed_rules or ():
+        golden = getattr(rule, "golden_len", None)
+        if golden is None:
+            continue
+        return int(golden), type(rule).__name__ in _MAD_TETAP
+    return None
+
+
 @lru_cache(maxsize=1)
-def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, object], ...]]:
+def build_target() -> tuple[
+    str,
+    tuple[tuple[int, int], ...],
+    tuple[tuple[int, object], ...],
+    tuple[tuple[int, bool] | None, ...],
+]:
     """
     Susun target Al-Fatihah sekali, lalu simpan di memori.
 
     Returns:
-        (fonem, pemilik, sifat)
+        (fonem, pemilik, sifat, mad)
         - fonem   : satu untai karakter tanpa spasi, sama bentuknya dengan
                     keluaran model.
         - pemilik : (nomor_ayat, kata_idx) untuk TIAP karakter di `fonem`,
@@ -80,6 +101,11 @@ def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, o
         - sifat   : (nomor_ayat, SifaOutput) per unit fonem. Perhatikan satu unit
                     sifat mencakup beberapa karakter (mis. 'بِ'), jadi jumlahnya
                     TIDAK sama dengan panjang `fonem`.
+        - mad     : (panjang_seharusnya, tetap) per karakter `fonem`, atau None
+                    kalau posisi itu bukan mad. Panjang dihitung dalam harakat,
+                    dan pada skema ini satu harakat = satu pengulangan karakter.
+                    `tetap=False` berarti panjangnya pilihan qiraah yang sah,
+                    jadi jangan dihukum.
 
     POSISI KATA datang dari `mappings` milik quran_phonetizer, bukan dihitung
     sendiri. Tiap entri mappings sepadan satu karakter teks Uthmani dan menunjuk
@@ -96,6 +122,7 @@ def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, o
     fonem: list[str] = []
     pemilik: list[tuple[int, int]] = []
     sifat: list[tuple[int, object]] = []
+    mad: list[tuple[int, bool] | None] = []
 
     for ayat in range(1, JUMLAH_AYAT + 1):
         uthmani = qt.Aya(SURAH_ALFATIHAH, ayat).get().uthmani
@@ -112,8 +139,9 @@ def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, o
             else:
                 kata_dari_char.append(k)
 
-        # Balik arahnya: fonem ke-j milik kata mana.
+        # Balik arahnya: fonem ke-j milik kata mana, dan tunduk aturan mad apa.
         kata_dari_fonem: list[int] = [0] * len(keluaran.phonemes)
+        mad_dari_fonem: list[tuple[int, bool] | None] = [None] * len(keluaran.phonemes)
         for i, mp in enumerate(keluaran.mappings):
             if mp.deleted or i >= len(kata_dari_char):
                 continue
@@ -121,14 +149,18 @@ def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, o
             if kata is None:
                 continue
             awal, akhir = mp.pos
+            aturan = _aturan_mad(mp)
             for j in range(awal, min(akhir, len(kata_dari_fonem))):
                 kata_dari_fonem[j] = kata
+                if aturan is not None:
+                    mad_dari_fonem[j] = aturan
 
         fonem.extend(keluaran.phonemes)
         pemilik.extend((ayat, kata_dari_fonem[j]) for j in range(len(keluaran.phonemes)))
         sifat.extend((ayat, unit) for unit in keluaran.sifat)
+        mad.extend(mad_dari_fonem)
 
-    return "".join(fonem), tuple(pemilik), tuple(sifat)
+    return "".join(fonem), tuple(pemilik), tuple(sifat), tuple(mad)
 
 
 def uthmani(ayat: int) -> str:
