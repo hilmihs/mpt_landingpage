@@ -26,23 +26,43 @@ export interface EvaluationSummary {
   kodeUnik: string | null;
 }
 
+export interface UsulanUntukForm {
+  kelompok: "diberi_usulan" | "pembanding";
+  perSegmen: Record<string, string[]>;
+  semua: string[];
+}
+
 export interface EvaluationFormProps {
   assignmentId: string;
   /** Terisi kalau rekaman ini sudah pernah dinilai. */
   existing: EvaluationSummary | null;
+  /**
+   * Usulan mesin, kalau rekaman ini termasuk yang diberi usulan.
+   *
+   * TIDAK ikut dikirim saat menyimpan. Server menghitung ulang sendiri lewat
+   * fungsi yang sama — kalau klien yang menentukan apa yang "ditampilkan",
+   * angka presisi mesin bisa dikarang dari sisi klien.
+   */
+  usulan?: UsulanUntukForm | null;
 }
 
-export function EvaluationForm({ assignmentId, existing }: EvaluationFormProps) {
+export function EvaluationForm({ assignmentId, existing, usulan }: EvaluationFormProps) {
   // Dipisah jadi dua komponen supaya urutan hook tidak bergantung pada ada
   // tidaknya hasil lama.
   return existing ? (
     <HasilTersimpan summary={existing} />
   ) : (
-    <FormPenilaian assignmentId={assignmentId} />
+    <FormPenilaian assignmentId={assignmentId} usulan={usulan} />
   );
 }
 
-function FormPenilaian({ assignmentId }: { assignmentId: string }) {
+function FormPenilaian({
+  assignmentId,
+  usulan,
+}: {
+  assignmentId: string;
+  usulan?: UsulanUntukForm | null;
+}) {
   const router = useRouter();
   const [kegiatan, setKegiatan] = useState(KEGIATAN_DEFAULT);
   const [rekomendasi, setRekomendasi] = useState<Rekomendasi | "">("");
@@ -188,6 +208,7 @@ function FormPenilaian({ assignmentId }: { assignmentId: string }) {
               markedJaliy={ayat[segment.key].jaliy}
               markedKhafiy={ayat[segment.key].khafiy}
               onToggle={(severity, raw) => toggle(segment.key, severity, raw)}
+              usulan={usulan?.perSegmen[segment.key]}
             />
           );
         })}

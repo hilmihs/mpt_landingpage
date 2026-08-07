@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { ambilUsulan } from "@/lib/ai-eval/usulan";
 import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { sql } from "@/lib/db";
 import { EVALUATION_OPTIONS, SEGMENT_KEYS } from "@/lib/teacher-eval/catalog";
@@ -165,6 +166,15 @@ export async function POST(req: Request) {
   const hasil = computeEvaluation(ayat);
   const ind = hasil.indicators;
 
+  // Dihitung ulang di server, bukan diterima dari klien: ini data pengukuran
+  // presisi mesin, dan klien tidak boleh menentukan apa yang dianggap
+  // "ditampilkan". Fungsinya deterministik, jadi hasilnya sama dengan yang
+  // dilihat pengajar saat halaman dirender.
+  const usulan = await ambilUsulan(row.submission_id).catch((err) => {
+    console.error("[evaluation] usulan gagal dihitung:", (err as Error).message);
+    return { kelompok: "pembanding" as const, semua: [] as string[] };
+  });
+
   try {
     await sql`
       INSERT INTO teacher_evaluations (
@@ -176,7 +186,8 @@ export async function POST(req: Request) {
         score_tasydid, label_tasydid,
         score_hukum_tajwid, label_hukum_tajwid,
         score_ketepatan_huruf, label_ketepatan_huruf,
-        score_min, label_min
+        score_min, label_min,
+        usulan_mesin, usulan_mesin_kelompok
       ) VALUES (
         ${row.submission_id}, ${"native"}, ${teacher.teacherId}, ${teacher.nama},
         ${parsed.data.kegiatan}, ${parsed.data.rekomendasi_program ?? null},
@@ -187,7 +198,8 @@ export async function POST(req: Request) {
         ${ind.tasydid.score}, ${ind.tasydid.label},
         ${ind.hukumTajwid.score}, ${ind.hukumTajwid.label},
         ${ind.ketepatanHuruf.score}, ${ind.ketepatanHuruf.label},
-        ${hasil.scoreTen}, ${hasil.band.title}
+        ${hasil.scoreTen}, ${hasil.band.title},
+        ${usulan.semua.length ? sql.json(usulan.semua) : null}, ${usulan.kelompok}
       )
       ON CONFLICT (submission_id) DO UPDATE SET
         source = EXCLUDED.source,
@@ -209,6 +221,8 @@ export async function POST(req: Request) {
         label_ketepatan_huruf = EXCLUDED.label_ketepatan_huruf,
         score_min = EXCLUDED.score_min,
         label_min = EXCLUDED.label_min,
+        usulan_mesin = EXCLUDED.usulan_mesin,
+        usulan_mesin_kelompok = EXCLUDED.usulan_mesin_kelompok,
         fetched_at = now()
     `;
   } catch (err) {

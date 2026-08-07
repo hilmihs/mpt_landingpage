@@ -4,6 +4,7 @@ import { getCurrentTeacher } from "@/lib/auth/teacher";
 import { sql } from "@/lib/db";
 import { signedAudioUrl } from "@/lib/storage";
 import { EvaluationForm } from "@/components/portal/EvaluationForm";
+import { ambilUsulan } from "@/lib/ai-eval/usulan";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,15 @@ export default async function NilaiPage({
   const audioUrl = await signedAudioUrl(row.audio_path, 3600);
   const sudahDinilai = row.kode_unik != null || row.score_min != null;
 
+  // Usulan mesin, kalau rekaman ini kebagian. Kegagalan di sini tidak boleh
+  // menghalangi penilaian — mesin ini pembantu, bukan prasyarat.
+  const usulan = sudahDinilai
+    ? null
+    : await ambilUsulan(row.submission_id).catch((err) => {
+        console.error("[portal.nilai] usulan gagal:", (err as Error).message);
+        return null;
+      });
+
   const durasi =
     row.audio_duration_sec != null
       ? `${Math.floor(row.audio_duration_sec / 60)}m ${Math.round(row.audio_duration_sec % 60)}d`
@@ -145,6 +155,7 @@ export default async function NilaiPage({
 
       <EvaluationForm
         assignmentId={row.assignment_id}
+        usulan={usulan}
         existing={
           sudahDinilai
             ? {

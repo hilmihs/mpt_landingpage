@@ -32,6 +32,12 @@ class ErrorItem(BaseModel):
     expected_char: str | None = None
     actual_char: str | None = None
 
+    # Indikator asal temuan. Sudah tersirat dari field `errors_*` yang memuatnya,
+    # tapi begitu kelimanya digabung jadi satu daftar — seperti di kolom
+    # ai_evaluations.findings — informasi itu hilang, dan sebagian aturan
+    # pencocokan katalog bergantung padanya.
+    kategori: str | None = None
+
 
 class PredictRequest(BaseModel):
     submission_id: str

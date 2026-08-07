@@ -122,6 +122,7 @@ def decode_to_errors(
                 note=f"{_NOTE[kategori]} ({target_ch or '-'} → {pred_ch or '-'})",
                 expected_char=target_ch,
                 actual_char=pred_ch,
+                kategori=kategori,
             )
         )
 
@@ -191,6 +192,7 @@ def _temuan_mad(
                 ),
                 expected_char=target[t_idx],
                 actual_char=target[t_idx],
+                kategori="panjang_pendek",
             )
         )
     return temuan

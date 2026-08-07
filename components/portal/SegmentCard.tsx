@@ -24,6 +24,15 @@ export interface SegmentCardProps {
   markedJaliy: string[];
   markedKhafiy: string[];
   onToggle: (severity: "jaliy" | "khafiy", raw: string) => void;
+  /**
+   * Kalimat opsi yang diusulkan mesin untuk segmen ini.
+   *
+   * SENGAJA TIDAK DICENTANG. Yang ditandai hanya perhatiannya; keputusan tetap
+   * milik pengajar. Kalau kotaknya tercentang duluan, orang cenderung menerima
+   * saja — dan penilaian jadi sepakat dengan mesin secara konstruksi, sehingga
+   * tidak ada lagi cara mengetahui apakah mesinnya benar.
+   */
+  usulan?: readonly string[];
 }
 
 /**
@@ -43,14 +52,18 @@ export function SegmentCard({
   markedJaliy,
   markedKhafiy,
   onToggle,
+  usulan,
 }: SegmentCardProps) {
   const jumlahJaliy = markedJaliy.length;
   const jumlahKhafiy = markedKhafiy.length;
   const bersih = jumlahJaliy + jumlahKhafiy === 0;
+  const adaUsulan = (usulan?.length ?? 0) > 0;
 
   // Nilai awal saja: begitu pengajar membuka kartu, kartunya tetap terbuka
-  // walau centangnya dia batalkan lagi.
-  const [open, setOpen] = useState(!bersih);
+  // walau centangnya dia batalkan lagi. Segmen yang punya usulan ikut dibuka:
+  // usulan yang tersembunyi di balik kartu terlipat tidak menghemat waktu
+  // siapa pun.
+  const [open, setOpen] = useState(!bersih || adaUsulan);
 
   const ringkasan = bersih
     ? "Bersih"
@@ -134,6 +147,7 @@ export function SegmentCard({
             {/* Khafiy lebih dulu: yang ringan jauh lebih sering ditemui, jadi
                 pengajar menemukan centangannya tanpa melewati daftar fatal. */}
             <OptionGroup
+              usulan={usulan}
               judul="Perlu Diperhatikan"
               warna="var(--warning)"
               options={optionsKhafiy}
@@ -141,6 +155,7 @@ export function SegmentCard({
               onToggle={(raw) => onToggle("khafiy", raw)}
             />
             <OptionGroup
+              usulan={usulan}
               judul="Fatal"
               warna="var(--danger)"
               options={optionsJaliy}
@@ -160,12 +175,14 @@ function OptionGroup({
   options,
   marked,
   onToggle,
+  usulan,
 }: {
   judul: string;
   warna: string;
   options: SegmentOption[];
   marked: string[];
   onToggle: (raw: string) => void;
+  usulan?: readonly string[];
 }) {
   if (options.length === 0) return null;
 
@@ -194,6 +211,9 @@ function OptionGroup({
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {options.map((opt) => {
           const checked = marked.includes(opt.raw);
+          // Diusulkan mesin tapi belum dicentang. Begitu pengajar mencentang,
+          // penandanya hilang — yang tersisa keputusan dia, bukan saran mesin.
+          const diusulkan = !checked && (usulan?.includes(opt.raw) ?? false);
           return (
             <label
               key={opt.raw}
@@ -206,8 +226,17 @@ function OptionGroup({
                 cursor: "pointer",
                 background: checked
                   ? `color-mix(in oklab, ${warna}, transparent 90%)`
-                  : "transparent",
-                border: `1px solid ${checked ? `color-mix(in oklab, ${warna}, transparent 70%)` : "transparent"}`,
+                  : diusulkan
+                    ? "color-mix(in oklab, var(--ink-mute), transparent 94%)"
+                    : "transparent",
+                border: `1px solid ${
+                  checked
+                    ? `color-mix(in oklab, ${warna}, transparent 70%)`
+                    : diusulkan
+                      ? "var(--line)"
+                      : "transparent"
+                }`,
+                borderStyle: !checked && diusulkan ? "dashed" : "solid",
                 transition: "background 0.15s, border-color 0.15s",
               }}
             >
@@ -226,6 +255,26 @@ function OptionGroup({
               />
               <span style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.55 }}>
                 {opt.text}
+                {/* Spasi eksplisit: tanpa ini nama aksesibel checkbox jadi
+                    "…kata اهدناdengar juga oleh mesin" — tersambung tanpa jeda
+                    bagi pembaca layar, walau di layar terlihat berjarak. */}
+                {diusulkan && " "}
+                {diusulkan && (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      padding: "2px 7px",
+                      borderRadius: 999,
+                      border: "1px dashed var(--line-strong)",
+                      color: "var(--ink-mute)",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    dengar juga oleh mesin
+                  </span>
+                )}
               </span>
               {opt.kategori && (
                 <span

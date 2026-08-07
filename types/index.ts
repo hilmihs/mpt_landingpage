@@ -29,6 +29,12 @@ export interface ErrorItem {
    */
   expected_char?: string;
   actual_char?: string;
+
+  /**
+   * Indikator asal temuan. Tersirat dari field `errors_*` yang memuatnya, tapi
+   * hilang begitu kelimanya digabung — seperti di `ai_evaluations.findings`.
+   */
+  kategori?: string;
 }
 
 export interface MLPredictInput {
