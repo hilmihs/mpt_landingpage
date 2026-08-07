@@ -82,6 +82,9 @@ def decode_to_errors(
     if not pred:
         return out
 
+    target, pemilik = ratakan_mad(target, pemilik)
+    pred, _ = ratakan_mad(pred, None)
+
     for op, t_idx, p_idx in align_semi_global(target, pred):
         if op == "match":
             continue
@@ -131,6 +134,41 @@ def _temuan_sifat(pred_sifa: dict[str, list[str]]) -> list[ErrorItem]:
         if selisih == 0:
             continue
     return temuan
+
+
+def ratakan_mad(teks: str, pemilik: tuple[int, ...] | None):
+    """
+    Ratakan pengulangan karakter mad: ۦۦۦۦ → ۦ.
+
+    Panjang mad adalah PILIHAN qiraah, bukan kesalahan: pembaca yang memanjangkan
+    4 harakat dan yang 5 harakat sama-sama benar. Model menuliskan panjang itu
+    sebagai pengulangan karakter, jadi tanpa perataan setiap perbedaan gaya
+    terhitung sebagai kesalahan.
+
+    Yang TIDAK hilang: ada atau tidaknya mad. Karakternya tetap satu, sehingga
+    pembaca yang memendekkan bacaan panjang tetap tertangkap.
+
+    Diukur pada 148 rekaman ber-ground-truth Ustadzah — meratakan penuh
+    mengalahkan semua varian batas maupun pencocokan multi-panjang:
+
+        tanpa perataan  Spearman 0,583 · median rekaman bersih 8,0
+        batas maks 2    Spearman 0,616 · median rekaman bersih 4,0
+        ratakan penuh   Spearman 0,628 · median rekaman bersih 4,0   ← dipakai
+
+    `pemilik` (nomor ayat per karakter) ikut dipangkas agar tetap sejajar.
+    """
+    if not teks:
+        return teks, pemilik
+
+    keluar: list[str] = []
+    keluar_pemilik: list[int] = []
+    for idx, ch in enumerate(teks):
+        if keluar and ch == keluar[-1] and ch in MAD:
+            continue
+        keluar.append(ch)
+        if pemilik is not None:
+            keluar_pemilik.append(pemilik[idx])
+    return "".join(keluar), (tuple(keluar_pemilik) if pemilik is not None else None)
 
 
 def align_semi_global(target: str, pred: str) -> list[tuple[str, int, int | None]]:

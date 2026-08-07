@@ -7,7 +7,7 @@ dilewati, bukan dianggap lulus.
 """
 import pytest
 
-from app.ml.qps_decoder import align_semi_global, klasifikasi
+from app.ml.qps_decoder import align_semi_global, klasifikasi, ratakan_mad
 
 try:
     from app.ml import alfatihah as af
@@ -57,6 +57,43 @@ def test_prefiks_dan_sufiks_sekaligus():
 def test_huruf_hilang_terdeteksi():
     ops = align_semi_global("بِسمِ", "بِمِ")
     assert "delete" in [o[0] for o in ops]
+
+
+# ── Perataan panjang mad ────────────────────────────────────────────────────
+def test_mad_berulang_diratakan():
+    teks, _ = ratakan_mad("ررَحِۦۦۦۦم", None)
+    assert teks == "ررَحِۦم"
+
+
+def test_perataan_tidak_menghapus_mad():
+    """Yang diratakan derajat panjangnya, bukan keberadaannya."""
+    teks, _ = ratakan_mad("بَاا", None)
+    assert "ا" in teks
+
+
+def test_huruf_ganda_bukan_mad_tidak_diratakan():
+    """ررَ menandai tasydid, bukan mad — jangan disentuh."""
+    teks, _ = ratakan_mad("ررَحمَاان", None)
+    assert teks.startswith("ررَ")
+
+
+def test_pemilik_ikut_dipangkas():
+    teks, pemilik = ratakan_mad("بَاا", (1, 1, 1, 1))
+    assert len(teks) == len(pemilik) == 3
+
+
+def test_beda_panjang_mad_bukan_kesalahan():
+    """Pembaca 4 harakat dan 5 harakat sama-sama benar."""
+    a, _ = ratakan_mad("حِۦۦۦۦم", None)
+    b, _ = ratakan_mad("حِۦۦم", None)
+    assert a == b
+
+
+def test_mad_dipendekkan_tetap_terdeteksi():
+    """Tapi memendekkan sampai hilang tetap kesalahan."""
+    a, _ = ratakan_mad("حِۦۦۦۦم", None)
+    b, _ = ratakan_mad("حِم", None)
+    assert a != b
 
 
 # ── Klasifikasi lima indikator ──────────────────────────────────────────────

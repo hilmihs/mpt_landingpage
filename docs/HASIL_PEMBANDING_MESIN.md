@@ -89,9 +89,26 @@ Lantai deraunya **turun separuh** dan korelasi peringkat naik. Pearson tidak
 bergerak, yang masuk akal: normalisasi ini memperbaiki derau, bukan membuat
 satuannya jadi sepadan.
 
-Perbaikan ini belum dipasang di `qps_decoder.py` — ia diuji di luar, pada
-prediksi yang tersimpan. Memasangnya adalah pekerjaan kecil dengan hasil
-terukur.
+**Sudah dipasang** di `qps_decoder.ratakan_mad()`. Diverifikasi lewat pipeline
+sungguhan (`decode_to_errors`) pada 148 prediksi tersimpan: Spearman 0,628,
+lantai derau 4,0 — sama persis dengan hasil eksperimen.
+
+Dua pendekatan lain diuji dan **kalah**, jadi jangan diulang:
+
+| Pendekatan | Spearman | Lantai derau |
+|---|---|---|
+| Batas panjang run maks 2 | 0,616 | 4,0 |
+| Cocokkan ke 6 varian panjang mad, ambil terbaik | 0,607 | 8,0 |
+| **Ratakan penuh** | **0,628** | **4,0** |
+
+Pencocokan multi-panjang tidak menurunkan lantai derau sama sekali. Artinya
+deraunya bukan dari *pilihan* panjang mad yang konsisten sepanjang bacaan,
+melainkan dari pemanjangan yang bervariasi di dalam satu rekaman — hal yang
+hanya bisa ditangani perataan.
+
+Kekhawatiran bahwa perataan menyembunyikan mad lazim ternyata tidak berdasar:
+meratakan ke satu karakter tetap membedakan *ada* dan *tidak ada* mad, yang
+hilang hanya derajat panjangnya.
 
 ### 2. Lahn khafiy belum benar-benar diukur
 
@@ -119,8 +136,13 @@ dataset ini bisa memvalidasi *hitungan*, tidak bisa memvalidasi *skor kepala*
 
 ## Langkah berikutnya, menurut nilai per usaha
 
-1. **Pasang normalisasi panjang mad** di `qps_decoder.py`. Sudah diuji di luar
-   dan terbukti memangkas lantai derau separuh — tinggal dipindahkan ke kode.
+1. ~~Pasang normalisasi panjang mad~~ — **selesai**, lihat §1 di atas.
+
+   Berikutnya di area yang sama: rincian per indikator menunjukkan
+   `ketepatan_huruf` menyerap 11,6 temuan per rekaman sementara empat indikator
+   lain di bawah 2. Kemungkinan besar `klasifikasi()` membuang terlalu banyak
+   ke kategori huruf karena ia jadi cabang terakhir. Perlu ditinjau sebelum
+   angka per indikator dipakai untuk apa pun.
 2. **Kelompokkan selisih menjadi "kesalahan"** supaya satuannya sama dengan cara
    Ustadzah menghitung. Setelah itu Pearson baru layak dibaca.
 3. **Petakan label sifat** target ↔ prediksi → lahn khafiy akhirnya terukur.
