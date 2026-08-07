@@ -89,19 +89,22 @@ def decode_to_errors(
         if op == "match":
             continue
         ti = min(max(t_idx, 0), len(pemilik) - 1)
-        ayat = pemilik[ti]
+        ayat, kata_idx = pemilik[ti]
         target_ch = target[t_idx] if op != "insert" and 0 <= t_idx < len(target) else None
         pred_ch = pred[p_idx] if p_idx is not None and 0 <= p_idx < len(pred) else None
 
         kategori = klasifikasi(op, pred_ch, target_ch, target, ti)
+        # `expected` diisi teks kata utuh, bukan satu karakter fonem. Yang perlu
+        # dilihat manusia — dan yang dipakai kalimat temuan di sisi Next.js —
+        # adalah katanya; karakter yang meleset disimpan di `note`.
         out[_CATEGORY_KEY[kategori]].append(
             ErrorItem(
                 ayat=ayat,
-                kata_idx=0,  # posisi kata belum dipetakan; lihat catatan di bawah
-                expected=target_ch or "",
+                kata_idx=kata_idx,
+                expected=af.kata(ayat)[kata_idx] if kata_idx < len(af.kata(ayat)) else "",
                 actual=pred_ch or "",
                 severity="major",
-                note=_NOTE[kategori],
+                note=f"{_NOTE[kategori]} ({target_ch or '-'} → {pred_ch or '-'})",
             )
         )
 
@@ -136,7 +139,7 @@ def _temuan_sifat(pred_sifa: dict[str, list[str]]) -> list[ErrorItem]:
     return temuan
 
 
-def ratakan_mad(teks: str, pemilik: tuple[int, ...] | None):
+def ratakan_mad(teks: str, pemilik: tuple[tuple[int, int], ...] | None):
     """
     Ratakan pengulangan karakter mad: ۦۦۦۦ → ۦ.
 
@@ -161,7 +164,7 @@ def ratakan_mad(teks: str, pemilik: tuple[int, ...] | None):
         return teks, pemilik
 
     keluar: list[str] = []
-    keluar_pemilik: list[int] = []
+    keluar_pemilik: list[tuple[int, int]] = []
     for idx, ch in enumerate(teks):
         if keluar and ch == keluar[-1] and ch in MAD:
             continue

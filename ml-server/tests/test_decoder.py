@@ -134,8 +134,61 @@ def test_dengung_berharakat_bukan_hukum_tajwid():
 def test_target_sepadan_dengan_pemiliknya():
     fonem, pemilik, sifat = af.build_target()
     assert len(fonem) == len(pemilik) > 0
-    assert set(pemilik) == set(range(1, 8)), "ketujuh ayat harus terwakili"
+    assert {a for a, _ in pemilik} == set(range(1, 8)), "ketujuh ayat harus terwakili"
     assert len(sifat) > 0
+
+
+# ── Posisi kata ─────────────────────────────────────────────────────────────
+@butuh_qt
+def test_jumlah_kata_per_ayat():
+    """
+    Harus tetap sama dengan WORDS_PER_AYAT di lib/ai-eval/segments.ts. Kalau
+    salah satu berubah sendirian, kata_idx dari mesin menunjuk kata yang berbeda
+    tanpa error apa pun.
+    """
+    assert [len(af.kata(a)) for a in range(1, 8)] == [4, 4, 2, 3, 4, 3, 9]
+
+
+@butuh_qt
+def test_kata_idx_selalu_dalam_jangkauan():
+    _, pemilik, _ = af.build_target()
+    for ayat, kata_idx in pemilik:
+        assert 0 <= kata_idx < len(af.kata(ayat)), f"ayat {ayat} kata {kata_idx}"
+
+
+@butuh_qt
+def test_setiap_kata_punya_fonem():
+    """Tidak boleh ada kata yang tidak terwakili — itu berarti pemetaan bolong."""
+    _, pemilik, _ = af.build_target()
+    for ayat in range(1, 8):
+        terlihat = {k for a, k in pemilik if a == ayat}
+        assert terlihat == set(range(len(af.kata(ayat)))), f"ayat {ayat}: {terlihat}"
+
+
+@butuh_qt
+def test_kata_terakhir_ayat_7_memetakan_benar():
+    """Titik uji paling rawan: kata terpanjang, penuh tasydid dan mad."""
+    fonem, pemilik, _ = af.build_target()
+    idx = [i for i, (a, k) in enumerate(pemilik) if a == 7 and k == 8]
+    potongan = fonem[idx[0] : idx[-1] + 1]
+    assert potongan.startswith("ضض"), potongan
+    assert potongan.endswith("ن"), potongan
+
+
+@butuh_qt
+def test_temuan_membawa_posisi_kata():
+    from app.ml.qps_decoder import decode_to_errors
+
+    fonem, _, _ = af.build_target()
+    rusak = fonem.replace("ص", "س", 1)  # ص dibaca س — kesalahan paling khas
+    errors = decode_to_errors(predicted_phonemes=rusak)
+    items = [e for v in errors.values() for e in v]
+    assert items
+    for e in items:
+        assert 1 <= e.ayat <= 7
+        assert 0 <= e.kata_idx < len(af.kata(e.ayat))
+        # expected berisi teks kata utuh, bukan satu karakter
+        assert e.expected in af.kata(e.ayat)
 
 
 @butuh_qt

@@ -66,7 +66,7 @@ def _moshaf():
 
 
 @lru_cache(maxsize=1)
-def build_target() -> tuple[str, tuple[int, ...], tuple[tuple[int, object], ...]]:
+def build_target() -> tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, object], ...]]:
     """
     Susun target Al-Fatihah sekali, lalu simpan di memori.
 
@@ -74,27 +74,59 @@ def build_target() -> tuple[str, tuple[int, ...], tuple[tuple[int, object], ...]
         (fonem, pemilik, sifat)
         - fonem   : satu untai karakter tanpa spasi, sama bentuknya dengan
                     keluaran model.
-        - pemilik : nomor ayat untuk TIAP karakter di `fonem`, panjangnya sama.
-                    Dipakai memetakan kesalahan kembali ke ayatnya.
+        - pemilik : (nomor_ayat, kata_idx) untuk TIAP karakter di `fonem`,
+                    panjangnya sama. Inilah yang membuat kesalahan bisa
+                    ditunjukkan ke katanya, bukan cuma ke ayatnya.
         - sifat   : (nomor_ayat, SifaOutput) per unit fonem. Perhatikan satu unit
                     sifat mencakup beberapa karakter (mis. 'بِ'), jadi jumlahnya
                     TIDAK sama dengan panjang `fonem`.
+
+    POSISI KATA datang dari `mappings` milik quran_phonetizer, bukan dihitung
+    sendiri. Tiap entri mappings sepadan satu karakter teks Uthmani dan menunjuk
+    rentang fonem yang dihasilkannya, jadi indeks kata bisa ditarik lewat sana.
+    Diverifikasi: kata terakhir ayat 7 (ٱلضَّآلِّينَ) memetakan tepat ke
+    'ضضَااااااللِۦۦۦۦن'.
+
+    `kata_idx` 0-based dan mengikuti pemisahan spasi teks Uthmani — harus tetap
+    sama dengan WORDS_PER_AYAT di lib/ai-eval/segments.ts.
     """
     import quran_transcript as qt
 
     moshaf = _moshaf()
     fonem: list[str] = []
-    pemilik: list[int] = []
+    pemilik: list[tuple[int, int]] = []
     sifat: list[tuple[int, object]] = []
 
     for ayat in range(1, JUMLAH_AYAT + 1):
         uthmani = qt.Aya(SURAH_ALFATIHAH, ayat).get().uthmani
         keluaran = qt.quran_phonetizer(uthmani, moshaf, remove_spaces=True)
-        for ch in keluaran.phonemes:
-            fonem.append(ch)
-            pemilik.append(ayat)
-        for unit in keluaran.sifat:
-            sifat.append((ayat, unit))
+
+        # Karakter Uthmani ke-i milik kata ke berapa. Spasi tidak dimiliki
+        # kata mana pun.
+        kata_dari_char: list[int | None] = []
+        k = 0
+        for ch in uthmani:
+            if ch.isspace():
+                kata_dari_char.append(None)
+                k += 1
+            else:
+                kata_dari_char.append(k)
+
+        # Balik arahnya: fonem ke-j milik kata mana.
+        kata_dari_fonem: list[int] = [0] * len(keluaran.phonemes)
+        for i, mp in enumerate(keluaran.mappings):
+            if mp.deleted or i >= len(kata_dari_char):
+                continue
+            kata = kata_dari_char[i]
+            if kata is None:
+                continue
+            awal, akhir = mp.pos
+            for j in range(awal, min(akhir, len(kata_dari_fonem))):
+                kata_dari_fonem[j] = kata
+
+        fonem.extend(keluaran.phonemes)
+        pemilik.extend((ayat, kata_dari_fonem[j]) for j in range(len(keluaran.phonemes)))
+        sifat.extend((ayat, unit) for unit in keluaran.sifat)
 
     return "".join(fonem), tuple(pemilik), tuple(sifat)
 

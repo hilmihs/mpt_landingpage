@@ -119,12 +119,30 @@ dan pemetaannya belum dibakukan. Sampai itu selesai, angka khafiy belum ada.
 Ini berbeda dari anggapan sebelumnya bahwa modelnya tidak mampu. Modelnya mampu;
 yang belum ada adalah jembatannya.
 
-### 3. Posisi kata belum dipetakan
+### 3. ~~Posisi kata belum dipetakan~~ — selesai
 
-`ErrorItem.kata_idx` masih 0 untuk semua temuan. `quran_phonetizer` mengembalikan
-`mappings` yang bisa dipakai memetakan karakter ke kata, tapi belum dipasang.
-Akibatnya penilaian per-segmen — yang dibutuhkan untuk skor 1-10 seperti
-instrumen pengajar — belum bisa dihasilkan dari jalur ini.
+`ErrorItem.kata_idx` sekarang terisi benar, ditarik dari `mappings` milik
+`quran_phonetizer` (satu entri per karakter Uthmani, menunjuk rentang fonem yang
+dihasilkannya). Diverifikasi kata per kata: `ٱلْمَغْضُوبِ` → `لمَغضُۥۥبِ`,
+`ٱلضَّآلِّينَ` → `ضضَااااااللِۦۦۦۦن`.
+
+Jumlah kata per ayat `{1:4, 2:4, 3:2, 4:3, 5:4, 6:3, 7:9}` cocok dengan
+`WORDS_PER_AYAT` di `lib/ai-eval/segments.ts`, sehingga penilaian per segmen
+sudah bisa dihasilkan dari jalur ini.
+
+Temuan mendarat di kata yang memang dinamai katalog:
+
+| Kata | Temuan/rekaman | Opsi katalog |
+|---|---|---|
+| ٱلضَّآلِّينَ | 1,91 | "Hilangnya tasydid di huruf ض" |
+| ٱلصِّرَٰطَ | 1,72 | "Membaca ص menjadi س atau ش pada kata الصراط" |
+| ٱلْمَغْضُوبِ | 1,53 | "Membaca huruf ض menjadi د pada kata المغضوب" |
+| صِرَٰطَ | 1,16 | "Membaca ص menjadi س ,ش atau ز pada kata صراط" |
+| أَنْعَمْتَ | 0,89 | "Membaca ع menjadi أ pada kata أنعمت" |
+| نَسْتَعِينُ | 0,57 | "Membaca ع menjadi ء pada kata نستعين" |
+
+Sebaran per segmen juga masuk akal: `ayat_7_part_2` tertinggi (4,64/rekaman),
+memuat المغضوب dan الضالين — dua kata tersulit.
 
 ### 4. Ground truth-nya total, bukan per segmen
 
@@ -141,8 +159,12 @@ dataset ini bisa memvalidasi *hitungan*, tidak bisa memvalidasi *skor kepala*
 2. **Kelompokkan selisih menjadi "kesalahan"** supaya satuannya sama dengan cara
    Ustadzah menghitung. Setelah itu Pearson baru layak dibaca.
 3. **Petakan label sifat** target ↔ prediksi → lahn khafiy akhirnya terukur.
-4. **Pasang `mappings`** untuk posisi kata → penilaian per segmen → skor 1-10
-   yang sebanding dengan pengajar.
+4. ~~Pasang `mappings` untuk posisi kata~~ — **selesai**, lihat §3.
+
+   Berikutnya di area yang sama: `mappings` juga membawa `tajweed_rules`, yang
+   bisa memberi tahu JENIS mad di tiap posisi. Itu prasyarat toleransi mad
+   per-jenis — satu-satunya jalan memulihkan indikator `panjang_pendek` yang
+   gagal dipulihkan aturan global (lihat §5).
 
 Butir 1 dan 2 tidak butuh GPU: prediksi mentah 120 rekaman sudah disimpan
 (`hasil2.jsonl`) supaya metriknya bisa disetel ulang tanpa menyalakan VM.
