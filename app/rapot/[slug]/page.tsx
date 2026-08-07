@@ -307,11 +307,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: "Rekaman sedang diperiksa pengajar.",
     };
   }
+  // Angka skor sengaja TIDAK dimasukkan ke judul maupun preview.
+  //
+  // Preview tautan terbaca semua orang di grup, bukan cuma peserta — dan skor
+  // kepala diambil dari bagian terlemah, sehingga satu kesalahan tasydid dan
+  // dua puluh kesalahan sama-sama menghasilkan 4/10 (90% peserta ada di angka
+  // itu, diukur pada 762 rekaman). Angka telanjang tanpa konteks terbaca
+  // seperti nilai ujian yang nyaris gagal, dan yang paling dirugikan justru
+  // peserta yang bacaannya hampir bersih.
+  //
+  // Halaman rapotnya sendiri menjelaskan angka itu dengan benar; preview cukup
+  // mengundang orang membukanya.
   return {
-    title: `Rapot Bacaan: ${ev.scoreMin}/10 — Muhajir Project Tilawah`,
+    title: "Rapot Bacaan Al-Fatihah — Muhajir Project Tilawah",
     description: ev.labelMin ?? "Rapot Assessment Al-Fatihah",
     openGraph: {
-      title: `Rapot Assessment Al-Fatihah: ${ev.scoreMin}/10`,
+      title: "Rapot Assessment Al-Fatihah",
       description: "Dinilai langsung oleh pengajar Muhajir Project Tilawah",
     },
   };
@@ -442,7 +453,7 @@ export default async function RapotPage({ params, searchParams }: Props) {
                 gap: 10,
               }}
             >
-              <ShareButtons slug={slug} skor={teacherEval.scoreMin} />
+              <ShareButtons slug={slug} />
               <PrintButton label="Simpan PDF" />
             </div>
           </>
@@ -671,11 +682,7 @@ export default async function RapotPage({ params, searchParams }: Props) {
 
       {/* Share row */}
       <div style={{ marginBottom: 26 }}>
-        {/* Tanpa skor: yang dilihat di sini rapot AI (skala 1-5), sedangkan
-            ShareButtons menulis "/10" karena diperuntukkan bagi nilai pengajar.
-            Mengoper skor AI ke sini membuat pesan yang dibagikan menyebut angka
-            di skala yang salah. */}
-        <ShareButtons slug={slug} skor={null} />
+        <ShareButtons slug={slug} />
       </div>
 
       {/* Tinjauan per Ayat */}

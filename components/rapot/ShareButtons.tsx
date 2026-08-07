@@ -5,16 +5,9 @@ import { useState } from "react";
 
 interface Props {
   slug: string;
-  /**
-   * Skor pengajar, skala 1-10. Boleh null kalau belum dinilai.
-   *
-   * Sengaja BUKAN skor AI: pesan ini dibagikan ke grup WhatsApp, sedangkan
-   * skor AI adalah bahan pembanding internal sampai Januari.
-   */
-  skor: number | null;
 }
 
-export function ShareButtons({ slug, skor }: Props) {
+export function ShareButtons({ slug }: Props) {
   const [copied, setCopied] = useState(false);
 
   // Resolve the absolute URL lazily at click time so server and client render
@@ -24,11 +17,22 @@ export function ShareButtons({ slug, skor }: Props) {
       ? `${window.location.origin}/rapot/${slug}`
       : `/rapot/${slug}`;
 
+  /**
+   * Pesan bagikan TIDAK memuat angka skor.
+   *
+   * Skor kepala diambil dari bagian terlemah, jadi satu kesalahan tasydid dan
+   * dua puluh kesalahan sama-sama menghasilkan 4/10 — diukur pada 762 rekaman,
+   * 90% peserta mendarat di angka itu. Angka telanjang tanpa konteks, dikirim
+   * ke grup keluarga, terbaca seperti nilai ujian yang nyaris gagal. Peserta
+   * yang bacaannya hampir bersih justru paling dirugikan.
+   *
+   * Rapotnya sendiri sudah menjelaskan angka itu dengan benar — jumlah bagian
+   * yang sudah baik, jumlah catatan, dan bagian mana yang perlu dibenahi. Jadi
+   * biarkan tautannya yang bicara, bukan potongan angkanya.
+   */
   const shareWhatsApp = () => {
     const text = encodeURIComponent(
-      skor != null
-        ? `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan mendapat skor ${skor}/10. Cek rapot saya: ${resolveUrl()}`
-        : `Alhamdulillah, saya baru saja mengikuti Assessment Al-Fatihah di Muhajir Project Tilawah. Cek rapot saya: ${resolveUrl()}`,
+      `Alhamdulillah, saya baru saja menyelesaikan Assessment Al-Fatihah di Muhajir Project Tilawah dan sudah menerima rapot bacaan dari pengajar. Cek rapot saya: ${resolveUrl()}`,
     );
     window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
   };
