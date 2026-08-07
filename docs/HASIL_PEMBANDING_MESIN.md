@@ -137,12 +137,7 @@ dataset ini bisa memvalidasi *hitungan*, tidak bisa memvalidasi *skor kepala*
 ## Langkah berikutnya, menurut nilai per usaha
 
 1. ~~Pasang normalisasi panjang mad~~ — **selesai**, lihat §1 di atas.
-
-   Berikutnya di area yang sama: rincian per indikator menunjukkan
-   `ketepatan_huruf` menyerap 11,6 temuan per rekaman sementara empat indikator
-   lain di bawah 2. Kemungkinan besar `klasifikasi()` membuang terlalu banyak
-   ke kategori huruf karena ia jadi cabang terakhir. Perlu ditinjau sebelum
-   angka per indikator dipakai untuk apa pun.
+   Tinjauan `klasifikasi()` juga selesai — hasilnya di §5 di bawah.
 2. **Kelompokkan selisih menjadi "kesalahan"** supaya satuannya sama dengan cara
    Ustadzah menghitung. Setelah itu Pearson baru layak dibaca.
 3. **Petakan label sifat** target ↔ prediksi → lahn khafiy akhirnya terukur.
@@ -163,3 +158,92 @@ Butir 1 dan 2 tidak butuh GPU: prediksi mentah 120 rekaman sudah disimpan
   kelamin — tanpa nama maupun nomor WhatsApp.
 - VM: GCE Spot T4 `asia-southeast2-a`, dimatikan setelah run selesai. Biaya
   keseluruhan di bawah $1.
+
+---
+
+## Tinjauan klasifikasi — apa yang sebenarnya ditemukan mesin
+
+Rincian awal memunculkan kecurigaan: `ketepatan_huruf` menyerap 11,6 temuan per
+rekaman sementara empat indikator lain di bawah 2. Dugaannya `klasifikasi()`
+membuang terlalu banyak ke kategori huruf karena ia cabang terakhir.
+
+**Dugaan itu salah.** Setelah 1.511 substitusi dari 148 rekaman dibongkar,
+yang ditemukan mesin adalah kesalahan yang justru dinamai katalog pengajar:
+
+| Substitusi | Frekuensi | Opsi katalog |
+|---|---|---|
+| ط → ت | 162× | ط pada الصراط |
+| ض → د | 138× | "Membaca huruf ض menjadi د pada kata المغضوب" |
+| ص → س | 115× | "Membaca ص menjadi س ,ش atau ز pada kata صراط" |
+| ع → ء | 113× | "Membaca ع menjadi أ pada kata عليهم" |
+| ص → ش | 87× | idem |
+| د → ت | 60× | "Membaca د menjadi ت" |
+| ح → ه | 54× | "Membaca ح menjadi ه‍ atau خ" |
+| ق → ك | 36× | "Membaca ق menjadi ك pada kata المستقيم" |
+| ن → م | 31× | "Membaca ن menjadi م … pada kata أنعمت [Tajwid]" |
+
+Posisi paling sering meleset juga persis kata yang disebut katalog: indeks 192
+adalah ض pada المغضوب, indeks 134 adalah ص pada الصراط, indeks 148 adalah ق pada
+المستقيم.
+
+Dominasi `ketepatan_huruf` sebagian memang nyata: dari 53 opsi jaliy di katalog,
+**28 (53%) bertag [Ketepatan Huruf]**. Instrumen pengajar sendiri memang berat
+ke sana.
+
+| Indikator | Katalog (jaliy) | Mesin |
+|---|---|---|
+| Ketepatan Huruf | 53% | 71% |
+| Panjang Pendek | 19% | 6% |
+| Tasydid | 17% | 8% |
+| Harakat | 9% | 12% |
+| Hukum Tajwid | 2% | 1% |
+
+### Harga yang dibayar perataan mad
+
+Kekurangan `panjang_pendek` (6% vs 19%) adalah **akibat langsung** perataan mad
+di §1: meratakan pengulangan membuang sinyal mad itu sendiri. Korelasi
+keseluruhan naik, akurasi per-indikator turun.
+
+Tiga varian ambang selisih panjang run diuji untuk memulihkannya:
+
+| Ambang | Pearson | Spearman | Lantai derau | Temuan mad/rekaman |
+|---|---|---|---|---|
+| abaikan mad (sekarang) | 0,451 | 0,627 | 4,0 | 0,00 |
+| selisih ≥ 4 | 0,454 | 0,627 | 4,0 | 0,07 |
+| selisih ≥ 3 | 0,452 | 0,625 | 4,0 | 0,19 |
+| selisih ≥ 2 | 0,476 | 0,610 | 6,0 | 3,66 |
+
+Tidak ada yang memulihkan `panjang_pendek` tanpa merusak yang lain, jadi **tidak
+ada yang dipasang**. Ambang ≥2 menaikkan Pearson tapi menurunkan Spearman dan
+menaikkan lantai derau — 3,66 temuan mad per rekaman hampir pasti variasi gaya,
+bukan kesalahan.
+
+Sebabnya: aturan panjang run yang berlaku global tidak bisa membedakan mad yang
+panjangnya **tetap** (mad lazim 6 harakat, mad thabi'i 2) dari yang **boleh
+bervariasi** (mad jaiz munfasil 2–5). Yang dibutuhkan adalah toleransi per-jenis
+mad, dan `quran_phonetizer` mengembalikan `mappings` yang bisa memberi tahu
+jenisnya. Itu pekerjaan berikutnya di area ini.
+
+### Kelayakan pra-isi form
+
+Karena temuan mesin ternyata sudah menyerupai opsi katalog, kelayakan skema A
+diuji langsung: peta tangan berisi **20 pasangan huruf** dicocokkan ke temuan.
+
+```
+1.511 substitusi dari 148 rekaman
+  991 (65%) punya nama di katalog
+  520 (34%) belum terpetakan — ekor panjang pasangan langka
+  6,70 usulan bernama per rekaman
+  89%  rekaman dapat minimal satu usulan bernama
+```
+
+Sebagai pembanding, median lahn jaliy menurut Ustadzah adalah 7 — jadi jumlah
+usulan mesin berada di kisaran yang masuk akal, bukan membanjiri.
+
+Ini membuat **skema A jauh lebih murah daripada perkiraan awal**. Tidak perlu
+memetakan 110 opsi satu per satu; sebagian besar bobotnya ada di belasan
+pasangan huruf yang berulang.
+
+**Yang belum diketahui: presisi.** Dari 6,7 usulan itu, berapa yang benar-benar
+dipertahankan pengajar? Tidak bisa dijawab dengan dataset ini — jawabannya butuh
+penilaian native dari portal, yang saat ini baru 2 baris.
