@@ -120,6 +120,29 @@ export function NativeEvaluationReport({
       ? SEGMENT_KEYS.filter((key) => ev.perSegment[key] === ev.scoreTen)
       : [];
 
+  /**
+   * Dua angka yang membuat skor kepala bisa dibaca.
+   *
+   * Skor diambil dari segmen TERLEMAH, jadi satu kesalahan dan dua puluh
+   * kesalahan menghasilkan angka yang sama persis. Diukur pada 762 rekaman
+   * ber-ground-truth: peserta dengan 1 kesalahan dan peserta dengan 47
+   * kesalahan sama-sama menerima 4/10, dengan kalimat yang sama. Tanpa dua
+   * angka ini, rapotnya tidak membedakan keduanya sama sekali.
+   *
+   * `bagianBaik` menyebut yang sudah benar lebih dulu. Itu fakta dari data yang
+   * sama — dan justru kebenaran yang paling disembunyikan angka kepala: rapot
+   * dengan tujuh dari delapan bagian sempurna tetap berbunyi "Perlu Bimbingan".
+   */
+  const jumlahTemuan = ev.ayat
+    ? SEGMENT_KEYS.reduce(
+        (n, key) => n + ev.ayat![key].jaliy.length + ev.ayat![key].khafiy.length,
+        0,
+      )
+    : null;
+  const bagianBaik = segmenLengkap
+    ? SEGMENT_KEYS.filter((key) => ev.perSegment[key] === 10).length
+    : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <IdentitasCard
@@ -135,6 +158,9 @@ export function NativeEvaluationReport({
         judul={ev.labelMin ?? band?.title ?? null}
         deskripsi={band?.description ?? null}
         warna={bandColor}
+        jumlah={jumlahTemuan}
+        bagianBaik={bagianBaik}
+        totalBagian={SEGMENT_KEYS.length}
       />
 
       {terlemah.length > 0 && ev.scoreTen != null && (
@@ -249,11 +275,19 @@ function SkorCard({
   judul,
   deskripsi,
   warna,
+  jumlah,
+  bagianBaik,
+  totalBagian,
 }: {
   scoreTen: number | null;
   judul: string | null;
   deskripsi: string | null;
   warna: string;
+  /** Total catatan pengajar. Membedakan 1 kesalahan dari 20 pada skor yang sama. */
+  jumlah: number | null;
+  /** Berapa bagian yang sudah sempurna. */
+  bagianBaik: number | null;
+  totalBagian: number;
 }) {
   if (scoreTen == null) {
     return (
@@ -293,6 +327,45 @@ function SkorCard({
         </span>
         <span style={{ fontSize: 20, fontWeight: 700, color: "var(--ink-mute)" }}>/10</span>
       </div>
+
+      {/* Dua kalimat yang membuat angka di atas bisa dibaca. Tanpa keduanya,
+          rapot dengan satu catatan dan rapot dengan dua puluh catatan tampil
+          identik — angka sama, judul sama, deskripsi sama. */}
+      {(bagianBaik != null || jumlah != null) && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: "4px 10px",
+            marginTop: 12,
+            fontSize: 13.5,
+            color: "var(--ink-soft)",
+          }}
+        >
+          {bagianBaik != null && (
+            <span>
+              <strong style={{ color: "var(--ink)" }}>
+                {bagianBaik} dari {totalBagian} bagian
+              </strong>{" "}
+              sudah baik
+            </span>
+          )}
+          {bagianBaik != null && jumlah != null && <span aria-hidden="true">·</span>}
+          {jumlah != null && (
+            <span>
+              {jumlah === 0 ? (
+                "tanpa catatan"
+              ) : (
+                <>
+                  <strong style={{ color: "var(--ink)" }}>{jumlah} catatan</strong>{" "}
+                  untuk diperbaiki
+                </>
+              )}
+            </span>
+          )}
+        </div>
+      )}
 
       {judul && (
         <div
@@ -398,9 +471,27 @@ function SegmenTerlemahCard({
           </>
         ) : (
           <>
-            Skor Anda mengikuti bagian yang paling perlu diperbaiki:{" "}
-            <strong style={{ color: "var(--ink)" }}>{daftar}</strong>. Perbaiki
-            bagian itu lebih dulu, dan angkanya akan ikut naik.
+            {/* Tindakannya dinaikkan jadi kalimat pertama dan berdiri sendiri.
+                Sebelumnya "perbaiki bagian itu lebih dulu" menempel di ekor
+                penjelasan tentang cara skor dihitung — dan yang paling perlu
+                dibawa pulang peserta justru satu kalimat itu. */}
+            <div
+              className="font-display"
+              style={{
+                fontSize: 15,
+                fontWeight: 800,
+                color: "var(--ink)",
+                letterSpacing: "-0.01em",
+                marginBottom: 5,
+              }}
+            >
+              Mulai perbaiki dari {daftar}
+            </div>
+            {/* Cara skor dihitung sudah dijelaskan di kartu skor; mengulangnya
+                di sini membuat peserta membaca hal yang sama dua kali dan
+                menenggelamkan tindakannya. */}
+            Bagian itulah yang menahan angka Anda. Begitu ia dibereskan, skornya
+            ikut naik.
           </>
         )}
       </div>
