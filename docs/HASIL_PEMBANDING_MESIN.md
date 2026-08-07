@@ -269,3 +269,58 @@ pasangan huruf yang berulang.
 **Yang belum diketahui: presisi.** Dari 6,7 usulan itu, berapa yang benar-benar
 dipertahankan pengajar? Tidak bisa dijawab dengan dataset ini — jawabannya butuh
 penilaian native dari portal, yang saat ini baru 2 baris.
+
+---
+
+## Skema A — temuan mesin dicocokkan ke opsi katalog bernama
+
+Dipasang di `lib/ai-eval/catalog-match.ts`. Temuan yang dikenali memakai
+**kalimat katalog apa adanya**; yang tidak dikenali tetap dilaporkan dengan
+kalimat buatan sendiri, tidak dibuang.
+
+Alasannya khusus untuk pra-isi formulir: usulan yang berbunyi persis seperti
+pilihan di formulir bisa langsung diterima atau ditolak pengajar. Kalimat
+karangan sendiri menuntut ia membaca dan menafsirkan sesuatu yang baru — itu
+menambah waktu, bukan menghemat.
+
+Diukur ujung-ke-ujung (decoder Python → matcher TypeScript) atas 148 rekaman:
+
+```
+2.403 temuan
+  991 (41%) cocok opsi katalog
+6,70 usulan katalog per rekaman (median 6)
+ 91% rekaman dapat minimal satu usulan
+  36 opsi katalog berbeda pernah terpakai, dari 53 opsi jaliy
+```
+
+Sebagai pembanding, median lahn jaliy menurut Ustadzah adalah 7 — jumlah usulan
+berada di kisaran yang wajar, tidak membanjiri.
+
+**Usulan paling sering:**
+
+| | Opsi katalog |
+|---|---|
+| 87× | Terjadi salah membaca harakat [Harakat] |
+| 83× | Membaca ص menjadi س atau ش pada kata الصراط [Ketepatan Huruf] |
+| 79× | Membaca huruf ض menjadi د pada kata المغضوب [Ketepatan Huruf] |
+| 66× | Membaca ص menjadi س ,ش atau ز pada kata صراط [Ketepatan Huruf] |
+| 51× | Hilangnya tasydid di huruf ض pada kata ولا الضالين [Tasydid] |
+
+### Catatan rancangan
+
+Aturan merujuk opsi katalog lewat **(segmen, indeks)**, bukan mencocokkan
+teksnya. Kalimat katalog memuat ZWJ (`ه‍`), spasi ganda, dan apostrof melengkung
+yang sengaja dipertahankan sebagai identitas temuan; mencocokkan teks berarti
+bergantung pada detail yang mudah berubah tanpa disadari. Tiap aturan membawa
+potongan `bukti`, dan ada tes yang memastikan rujukannya masih menunjuk opsi
+yang benar — kalau katalog diurutkan ulang, tes gagal sebelum pengajar menerima
+usulan yang salah.
+
+### Yang belum terjawab
+
+59% temuan masih belum bernama. Untuk pra-isi formulir kemungkinan besar hanya
+yang **bernama** yang layak ditampilkan — sisanya tidak punya kotak untuk
+dicentang dan hanya jadi kebisingan. Itu keputusan rancangan yang belum diambil.
+
+Dan yang paling penting tetap belum terjawab: dari 6,7 usulan itu, berapa yang
+dipertahankan pengajar. Butuh penilaian native dari portal.

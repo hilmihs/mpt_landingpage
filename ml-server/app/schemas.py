@@ -20,10 +20,17 @@ from pydantic import BaseModel, Field
 class ErrorItem(BaseModel):
     ayat: int = Field(..., ge=1, le=7)
     kata_idx: int = Field(..., ge=0)
+    # Teks kata utuh — yang dibaca manusia dan dipakai menyusun kalimat temuan.
     expected: str
     actual: str
     severity: Literal["major", "minor"]
     note: str | None = None
+
+    # Pasangan huruf yang meleset, terpisah dari teks kata. Sisi Next.js
+    # memakainya untuk mencocokkan temuan ke opsi katalog bernama; tanpa ini
+    # pencocokan harus mengurai `note`, yang rapuh.
+    expected_char: str | None = None
+    actual_char: str | None = None
 
 
 class PredictRequest(BaseModel):

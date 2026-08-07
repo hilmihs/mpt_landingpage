@@ -1,5 +1,6 @@
 import { emptyAyat, type EvaluationAyat } from "@/lib/teacher-eval/types";
 import { segmentFor } from "@/lib/ai-eval/segments";
+import { cocokkanKeKatalog } from "@/lib/ai-eval/catalog-match";
 import { AI_CATEGORIES, type AiCategory } from "@/lib/ai-eval/types";
 import type { ErrorItem, MLPredictResult } from "@/types";
 
@@ -53,6 +54,10 @@ export interface ProjectionResult {
   ayat: EvaluationAyat;
   /** Temuan yang dibuang karena koordinatnya di luar Al-Fatihah. */
   dibuang: number;
+  /** Temuan yang cocok dengan opsi katalog bernama — kandidat pra-isi formulir. */
+  bernama: number;
+  /** Temuan yang hanya bisa dilaporkan dengan kalimat karangan sendiri. */
+  takBernama: number;
 }
 
 /**
@@ -73,6 +78,8 @@ export function projectToEvaluationAyat(result: MLPredictResult): ProjectionResu
   const ayat = emptyAyat();
   const seen = new Set<string>();
   let dibuang = 0;
+  let bernama = 0;
+  let takBernama = 0;
 
   for (const kategori of AI_CATEGORIES) {
     const items = (result[FIELD[kategori]] as ErrorItem[] | undefined) ?? [];
@@ -84,7 +91,14 @@ export function projectToEvaluationAyat(result: MLPredictResult): ProjectionResu
       }
 
       const severity = item.severity === "minor" ? "khafiy" : "jaliy";
-      const kalimat = kalimatTemuan(kategori, item);
+
+      // Kalimat katalog didahulukan. Bagi pengajar, usulan yang berbunyi persis
+      // seperti pilihan di formulirnya bisa langsung diterima atau ditolak;
+      // kalimat karangan sendiri menuntut ia membaca dan menafsirkan hal baru.
+      const dariKatalog = cocokkanKeKatalog(segment, kategori, item);
+      if (dariKatalog) bernama++;
+      else takBernama++;
+      const kalimat = dariKatalog ?? kalimatTemuan(kategori, item);
 
       const kunci = `${segment}|${severity}|${kalimat}`;
       if (seen.has(kunci)) continue;
@@ -94,5 +108,5 @@ export function projectToEvaluationAyat(result: MLPredictResult): ProjectionResu
     }
   }
 
-  return { ayat, dibuang };
+  return { ayat, dibuang, bernama, takBernama };
 }

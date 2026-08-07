@@ -105,6 +105,8 @@ def decode_to_errors(
                 actual=pred_ch or "",
                 severity="major",
                 note=f"{_NOTE[kategori]} ({target_ch or '-'} → {pred_ch or '-'})",
+                expected_char=target_ch,
+                actual_char=pred_ch,
             )
         )
 

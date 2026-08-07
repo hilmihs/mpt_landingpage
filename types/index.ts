@@ -17,10 +17,18 @@ export type IndikatorKey =
 export interface ErrorItem {
   ayat: number;
   kata_idx: number;
+  /** Teks kata utuh — untuk ditampilkan. */
   expected: string;
   actual: string;
   severity: Severity;
   note?: string;
+
+  /**
+   * Pasangan huruf yang meleset, terpisah dari teks kata. Dipakai mencocokkan
+   * temuan ke opsi katalog bernama (lib/ai-eval/catalog-match.ts).
+   */
+  expected_char?: string;
+  actual_char?: string;
 }
 
 export interface MLPredictInput {
