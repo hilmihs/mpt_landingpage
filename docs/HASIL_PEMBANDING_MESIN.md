@@ -343,3 +343,81 @@ dicentang dan hanya jadi kebisingan. Itu keputusan rancangan yang belum diambil.
 
 Dan yang paling penting tetap belum terjawab: dari 6,7 usulan itu, berapa yang
 dipertahankan pengajar. Butuh penilaian native dari portal.
+
+---
+
+## Putaran ulang 762 rekaman dengan pipeline lengkap (8 Agustus 2026)
+
+Dijalankan ulang setelah empat perbaikan masuk: perataan mad, toleransi mad
+per-jenis, posisi kata lewat `mappings`, dan pencocokan katalog. Kali ini
+memakai `decode_to_errors` apa adanya — yang diukur benar-benar pipeline yang
+dipakai produksi, bukan jarak edit mentah.
+
+```
+762 rekaman · 762 berhasil · 0 gagal
+```
+
+| | Ustadzah | Mesin |
+|---|---|---|
+| Satuan | jumlah lahn jaliy | jumlah temuan |
+| Median | 7 | 18 |
+| Rata-rata | 8,12 | 21,85 |
+| Maksimum | 47 | 142 |
+
+**Pearson 0,443 · Spearman 0,604 · lantai derau 4,0**
+
+Median temuan mesin per kelompok penilaian Ustadzah — monotonik tanpa kecuali:
+
+| Lahn jaliy (Ustadzah) | n | Median temuan mesin |
+|---|---|---|
+| 0 | 73 | 4,0 |
+| 1–2 | 98 | 7,0 |
+| 3–5 | 164 | 15,0 |
+| 6–10 | 197 | 20,0 |
+| 11–15 | 114 | 23,5 |
+| 16–47 | 116 | 29,5 |
+
+### Yang harus dikatakan terus terang
+
+**Empat perbaikan itu TIDAK menaikkan korelasi.** Putaran sebelumnya, dengan
+jarak edit mentah, mencatat Spearman 0,625. Sekarang 0,604. Kedua angka mengukur
+hal yang sedikit berbeda — jarak karakter versus jumlah temuan — jadi tidak
+sepadan persis, tapi kesimpulannya jelas: keduanya berada di kisaran 0,6 dan
+tidak ada perbaikan yang menggesernya.
+
+Yang berubah adalah **kegunaannya**, bukan ketepatannya:
+
+- temuan sekarang menunjuk kata, bukan cuma ayat
+- 43% temuan bisa dinamai memakai kalimat katalog pengajar
+- mad yang panjangnya tetap dibedakan dari yang boleh bervariasi
+
+Itu yang membuat pra-isi formulir mungkin. Tapi kalau tujuannya menaikkan
+kesepakatan dengan Ustadzah, tidak satu pun dari empat perbaikan itu
+menyentuhnya.
+
+### Sebaran indikator masih timpang
+
+| Indikator | Katalog (jaliy) | Mesin |
+|---|---|---|
+| Ketepatan Huruf | 53% | **66%** |
+| Harakat | 9% | 12% |
+| Panjang Pendek | 19% | **11%** |
+| Tasydid | 17% | **7%** |
+| Hukum Tajwid | 2% | 1% |
+
+Tasydid paling parah: 7% dibanding 17%. Mesin melewatkan sebagian besar
+kesalahan tasydid.
+
+### Kata paling sering bermasalah
+
+الضالين (2,92/rekaman), الصراط (2,07), المغضوب (1,65), صراط (1,35), أنعمت (1,09)
+— sama persis dengan kata yang dinamai katalog pengajar.
+
+### Yang paling berharga dari putaran ini
+
+**Sepuluh level sifat tersimpan untuk 762 rekaman.** Itu bahan lahn khafiy, dan
+sekarang ada di berkas, bukan cuma di GPU. Pemetaan label sifat — satu-satunya
+hal yang menghalangi khafiy terukur — kini bisa dikerjakan di laptop tanpa
+menyalakan VM lagi.
+
+Begitu pula setiap penyetelan metrik berikutnya.
