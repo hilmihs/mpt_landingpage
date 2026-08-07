@@ -10,11 +10,15 @@ const RETENTION_DAYS = 7;
 const BATCH_SIZE = 100;
 
 function authorized(req: Request): boolean {
-  const secret = process.env.CLEANUP_SECRET;
+  // Spasi dan newline dipangkas di kedua sisi: rahasia di Secret Manager sering
+  // tersimpan dengan newline di ujung, dan Cloud Run menyuntikkannya apa adanya
+  // — membuat setiap permintaan ditolak 401 yang terlihat seperti salah
+  // rahasia. Terjadi di produksi pada /api/worker.
+  const secret = process.env.CLEANUP_SECRET?.trim();
   if (!secret) return false;
-  const auth = req.headers.get("authorization");
+  const auth = req.headers.get("authorization")?.trim();
   if (auth === `Bearer ${secret}`) return true;
-  const x = req.headers.get("x-cleanup-secret");
+  const x = req.headers.get("x-cleanup-secret")?.trim();
   if (x === secret) return true;
   return false;
 }

@@ -48,12 +48,18 @@ function jsonb(value: unknown) {
 }
 
 function authorized(req: Request): boolean {
-  // Vercel cron uses Bearer token; manual trigger uses x-worker-secret
-  const secret = process.env.WORKER_SECRET;
+  // Spasi dan newline dipangkas di KEDUA sisi.
+  //
+  // Rahasia di Secret Manager sering tersimpan dengan newline di ujung — cukup
+  // menekan Enter sekali saat membuatnya. Cloud Run menyuntikkannya apa adanya,
+  // sehingga nilai di container tidak pernah sama dengan yang dikirim
+  // pemanggil, dan worker menolak SEMUA permintaan dengan 401 yang terlihat
+  // seperti salah rahasia. Terjadi di produksi; ditemukan saat uji asap.
+  const secret = process.env.WORKER_SECRET?.trim();
   if (!secret) return false;
-  const auth = req.headers.get("authorization");
+  const auth = req.headers.get("authorization")?.trim();
   if (auth === `Bearer ${secret}`) return true;
-  const x = req.headers.get("x-worker-secret");
+  const x = req.headers.get("x-worker-secret")?.trim();
   if (x === secret) return true;
   return false;
 }

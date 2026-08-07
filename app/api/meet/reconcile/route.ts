@@ -8,11 +8,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 function authorized(req: Request): boolean {
-  const secret = process.env.WORKER_SECRET;
+  // Spasi dan newline dipangkas di kedua sisi: rahasia di Secret Manager sering
+  // tersimpan dengan newline di ujung, dan Cloud Run menyuntikkannya apa adanya
+  // — membuat setiap permintaan ditolak 401 yang terlihat seperti salah
+  // rahasia. Terjadi di produksi pada /api/worker.
+  const secret = process.env.WORKER_SECRET?.trim();
   if (!secret) return false;
-  const auth = req.headers.get("authorization");
+  const auth = req.headers.get("authorization")?.trim();
   if (auth === `Bearer ${secret}`) return true;
-  const x = req.headers.get("x-worker-secret");
+  const x = req.headers.get("x-worker-secret")?.trim();
   if (x === secret) return true;
   return false;
 }
