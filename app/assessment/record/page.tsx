@@ -542,6 +542,45 @@ export default function RecordPage() {
               Dengarkan kembali rekaman Anda sebelum mengirim.
             </p>
 
+            {/* Peringatan bacaan yang tampaknya belum selesai.
+                Lima dari delapan rekaman pertama di produksi berdurasi di bawah
+                12 detik, padahal Al-Fatihah butuh sekitar 45-55 detik. Mereka
+                menunggu berhari-hari untuk rapot yang tidak akan pernah sahih.
+                Sengaja TIDAK memblokir: sebagian orang membaca cepat, dan
+                menjebak peserta di halaman ini lebih buruk daripada satu
+                rekaman pendek. */}
+            {durationSec > 0 && durationSec < 25 && (
+              <div
+                role="status"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  textAlign: "left",
+                  maxWidth: 420,
+                  margin: "0 auto 18px",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--warning)",
+                  background: "color-mix(in oklab, var(--warning), transparent 92%)",
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  color: "var(--ink)",
+                }}
+              >
+                <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1.2 }}>
+                  ⚠️
+                </span>
+                <span>
+                  Rekaman Anda <strong>{fmt(durationSec)}</strong>, sementara
+                  Al-Fatihah biasanya butuh sekitar 45–55 detik. Coba dengarkan
+                  dulu — kalau bacaannya belum sampai selesai,{" "}
+                  <strong>rekam ulang</strong> supaya pengajar bisa menilainya
+                  utuh.
+                </span>
+              </div>
+            )}
+
             {audioUrl && (
               <audio
                 src={audioUrl}

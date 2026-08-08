@@ -86,6 +86,41 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Rekaman yang terlalu kecil untuk durasinya sendiri ditolak di sini.
+  //
+  // Dua peserta pernah kehilangan bacaannya tanpa ada yang tahu: timer di
+  // browser mencatat 42 dan 58 detik, tapi berkas yang sampai hanya 20.000 byte
+  // dan tidak bisa dibaca ffmpeg sama sekali. Rekamannya diterima, disimpan,
+  // dan salah satunya bahkan sempat dinilai pengajar — pengajar menilai sesuatu
+  // yang tidak bisa diputar.
+  //
+  // Penyebab di sisi perangkat belum diketahui, tapi menolaknya di sini benar
+  // apa pun penyebabnya: peserta langsung tahu dan bisa merekam ulang, alih-alih
+  // menunggu berhari-hari untuk rapot yang tidak akan pernah sahih.
+  //
+  // Ambangnya 1.000 byte per detik ≈ 8 kbps, di bawah codec suara mana pun.
+  // Sebagai pembanding: rekaman browser yang sehat ~15.800 B/dtk, voice note
+  // WhatsApp yang paling irit ~2.300 B/dtk.
+  const MIN_BYTES_PER_SEC = 1000;
+  if (audioDuration !== null && audioDuration >= 5) {
+    const perDetik = audio.size / audioDuration;
+    if (perDetik < MIN_BYTES_PER_SEC) {
+      console.error(
+        `[submit] audio tidak wajar: ${audio.size} byte untuk ${audioDuration}s ` +
+          `(${perDetik.toFixed(0)} B/dtk)`,
+      );
+      return NextResponse.json(
+        {
+          error: "validation_failed",
+          details:
+            "Rekaman tidak tersimpan dengan utuh. Mohon rekam ulang — " +
+            "pastikan halaman tidak ditutup sampai rekaman selesai diunggah.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const submissionId = crypto.randomUUID();
   const rapotSlug = nanoid(12);
   const audioPath = `${submissionId}.webm`;
