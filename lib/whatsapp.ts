@@ -181,3 +181,31 @@ export function tplPesertaSubmitted(args: {
     `Jazakumullahu khairan.`,
   ].join("\n");
 }
+
+/**
+ * Konfirmasi pendaftaran HITS Darsyafii. Isinya petunjuk teknis yang dulu
+ * tampil di halaman "terima kasih" Google Form dan diminta di-screenshot —
+ * lewat WhatsApp peserta tidak perlu menyimpannya sendiri.
+ */
+export function tplHitsPendaftaranDiterima(args: {
+  pesertaNama: string;
+  programNama: string;
+  angkatanLabel: string;
+  jadwal: string;
+  adminWaLabel: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.pesertaNama},`,
+    ``,
+    `Pendaftaran ${args.programNama} angkatan ${args.angkatanLabel} beserta rekaman ujian masuk Anda sudah kami terima.`,
+    `Jam belajar pilihan: ${args.jadwal}`,
+    ``,
+    `Supaya pesan admin tidak tertolak, mohon:`,
+    `1. WhatsApp → Setelan → Privasi → Grup → "Siapa yang dapat menambahkan saya ke grup" pilih "Semua Orang".`,
+    `2. Simpan nomor Admin Muhajir Project Tilawah: ${args.adminWaLabel}.`,
+    ``,
+    `Peserta yang terpilih maupun tidak, insya Allah dikabari admin sebelum hari pertama KBM. Peserta terpilih akan menerima link grup WhatsApp.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join("\n");
+}

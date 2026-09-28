@@ -11,6 +11,7 @@ import {
   UserCheck,
   ClipboardCheck,
   Activity,
+  BookOpen,
   LogOut,
   Menu,
   X,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/admin/cohort", label: "Cohort Tahsin", icon: GraduationCap },
   { href: "/admin/peserta", label: "Peserta", icon: UserCheck },
   { href: "/admin/assessment", label: "Assessment", icon: ClipboardCheck },
+  { href: "/admin/hits-dar-syafii", label: "HITS Darsyafii", icon: BookOpen },
   { href: "/admin/analytics", label: "Analytics", icon: Activity },
 ];
 

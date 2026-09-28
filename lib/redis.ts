@@ -45,6 +45,11 @@ export function enrollRatelimit(): Ratelimit {
   return getOrCreateLimiter("enroll", 5, 600);
 }
 
+/** 5 pendaftaran HITS (dengan rekaman) per 10 menit per IP. */
+export function hitsDaftarRatelimit(): Ratelimit {
+  return getOrCreateLimiter("hits-daftar", 5, 600);
+}
+
 /** 10 HITS click-through per 5 menit per IP. */
 export function hitsClickRatelimit(): Ratelimit {
   return getOrCreateLimiter("hits", 10, 300);
