@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
-import { DAR_SYAFII, daftarSchema, findJadwal } from "@/lib/hits-dar-syafii";
+import { DAR_SYAFII, daftarSchema, findJadwal, perluRekaman } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
 import { Pembuka } from "./Pembuka";
 import { StepDataDiri } from "./StepDataDiri";
@@ -24,7 +24,17 @@ import {
 
 const STORAGE_KEY = "hits-dar-syafii:v1";
 
-const STEPS = ["Data diri", "Kelas", "Rekaman", "Kirim"] as const;
+const STEPS = [
+  { n: 1, label: "Data diri" },
+  { n: 2, label: "Kelas" },
+  { n: 3, label: "Rekaman" },
+  { n: 4, label: "Kirim" },
+] as const;
+
+/** Langkah yang dilalui peserta — tanpa langkah rekaman kalau levelnya tidak memerlukannya. */
+function langkahUntuk(level: string) {
+  return perluRekaman(level) ? STEPS : STEPS.filter((l) => l.n !== 3);
+}
 
 const STEP_FIELDS: Record<1 | 2, FieldKey[]> = {
   1: ["email", "nama", "nama_anak", "kelas_anak", "jenis_kelamin", "nomor_wa", "usia", "kota"],
@@ -70,7 +80,7 @@ export function DaftarDarSyafii() {
   const [audio, setAudio] = useState<AudioTake | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [send, setSend] = useState<SendState>({ kind: "idle" });
-  const [done, setDone] = useState<{ nama: string; waTerkirim: boolean } | null>(null);
+  const [done, setDone] = useState<{ nama: string; waTerkirim: boolean; denganRekaman: boolean } | null>(null);
   const [restored, setRestored] = useState(false);
   const formTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,6 +97,7 @@ export function DaftarDarSyafii() {
         const saved = JSON.parse(raw) as { form?: Partial<FormState>; step?: number };
         if (saved.form) setForm({ ...EMPTY_FORM, ...saved.form });
         if (typeof saved.step === "number" && saved.step >= 1 && saved.step <= 3) target = saved.step;
+        if (target === 3 && !perluRekaman(saved.form?.level ?? "")) target = 2;
       }
     } catch {
       // Mode privat atau storage diblokir — mulai dari kosong saja.
@@ -104,15 +115,20 @@ export function DaftarDarSyafii() {
     }
   }, [form, step, restored, done]);
 
+  const denganRekaman = perluRekaman(form.level);
+  // Rekaman yang tersisa setelah peserta pindah ke level tanpa rekaman tidak
+  // ikut dikirim, jadi tidak perlu dijaga.
+  const adaRekaman = Boolean(audio) && denganRekaman;
+
   // Peringatkan sebelum menutup tab kalau sudah ada rekaman yang belum dikirim.
   useEffect(() => {
-    if (!audio || done) return;
+    if (!adaRekaman || done) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [audio, done]);
+  }, [adaRekaman, done]);
 
   const goTo = useCallback(
     (next: number) => {
@@ -165,7 +181,7 @@ export function DaftarDarSyafii() {
       document.getElementById(`ds-${first}`)?.focus({ preventScroll: false });
       return;
     }
-    goTo(from + 1);
+    goTo(from === 2 && !perluRekaman(form.level) ? 4 : from + 1);
   }
 
   function submit() {
@@ -176,7 +192,7 @@ export function DaftarDarSyafii() {
       goTo(stepOf(first));
       return;
     }
-    if (!audio) {
+    if (denganRekaman && !audio) {
       setAudioError("Rekaman bacaan belum ada.");
       goTo(3);
       return;
@@ -184,10 +200,12 @@ export function DaftarDarSyafii() {
 
     const fd = new FormData();
     (Object.keys(form) as (keyof FormState)[]).forEach((k) => fd.append(k, form[k]));
-    const ext = audio.fileName?.split(".").pop() ?? (audio.blob.type.includes("mp4") ? "m4a" : "webm");
-    fd.append("audio", audio.blob, audio.fileName ?? `rekaman.${ext}`);
-    fd.append("audio_sumber", audio.sumber);
-    if (audio.durationSec !== null) fd.append("audio_duration_sec", audio.durationSec.toFixed(1));
+    if (denganRekaman && audio) {
+      const ext = audio.fileName?.split(".").pop() ?? (audio.blob.type.includes("mp4") ? "m4a" : "webm");
+      fd.append("audio", audio.blob, audio.fileName ?? `rekaman.${ext}`);
+      fd.append("audio_sumber", audio.sumber);
+      if (audio.durationSec !== null) fd.append("audio_duration_sec", audio.durationSec.toFixed(1));
+    }
 
     // XHR, bukan fetch: fetch belum bisa melaporkan progres unggah, dan di
     // jaringan HP rekaman 1-2 MB bisa makan waktu — peserta perlu melihat
@@ -214,7 +232,7 @@ export function DaftarDarSyafii() {
         } catch {
           // abaikan
         }
-        setDone({ nama: form.nama.trim(), waTerkirim: Boolean(body.wa_terkirim) });
+        setDone({ nama: form.nama.trim(), waTerkirim: Boolean(body.wa_terkirim), denganRekaman });
         setSend({ kind: "idle" });
         goTo(5);
         return;
@@ -262,8 +280,9 @@ export function DaftarDarSyafii() {
           {inFlow && (
             <StepHeader
               step={step}
-              adaRekaman={Boolean(audio)}
-              onBack={() => goTo(step - 1)}
+              langkah={langkahUntuk(form.level)}
+              adaRekaman={adaRekaman}
+              onBack={() => goTo(step === 4 && !denganRekaman ? 2 : step - 1)}
               onJump={(n) => n < step && goTo(n)}
             />
           )}
@@ -306,12 +325,15 @@ export function DaftarDarSyafii() {
                 <StepTinjau
                   form={form}
                   audio={audio}
+                  denganRekaman={denganRekaman}
                   send={send}
                   onEdit={goTo}
                   onSubmit={submit}
                 />
               )}
-              {step === 5 && done && <Selesai nama={done.nama} waTerkirim={done.waTerkirim} />}
+              {step === 5 && done && (
+                <Selesai nama={done.nama} waTerkirim={done.waTerkirim} denganRekaman={done.denganRekaman} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -362,16 +384,19 @@ const STEP_HEAD: Record<1 | 2 | 3 | 4, { eyebrow: string; title: React.ReactNode
 
 function StepHeader({
   step,
+  langkah,
   adaRekaman,
   onBack,
   onJump,
 }: {
   step: number;
+  langkah: readonly { n: number; label: string }[];
   adaRekaman: boolean;
   onBack: () => void;
   onJump: (n: number) => void;
 }) {
   const head = STEP_HEAD[step as 1 | 2 | 3 | 4];
+  const posisi = langkah.findIndex((l) => l.n === step) + 1;
   return (
     <header className={s.stepHead}>
       <div className={`${s.stepHeadInner} ${s.col}`}>
@@ -398,24 +423,27 @@ function StepHeader({
             <Image src="/logo-mpt.png" alt="" width={34} height={34} className={s.logo} priority />
           </Link>
           <span className={s.stepCount} aria-hidden="true">
-            {step} / {STEPS.length}
+            {posisi} / {langkah.length}
           </span>
         </div>
 
-        <nav className={s.bars} aria-label="Langkah pendaftaran">
-          {STEPS.map((label, i) => {
-            const n = i + 1;
+        <nav
+          className={s.bars}
+          aria-label="Langkah pendaftaran"
+          style={{ gridTemplateColumns: `repeat(${langkah.length}, 1fr)` }}
+        >
+          {langkah.map(({ n, label }, i) => {
             const state = n < step ? "done" : n === step ? "current" : "todo";
             return (
               <button
-                key={label}
+                key={n}
                 type="button"
                 className={s.bar}
                 data-state={state}
                 onClick={() => onJump(n)}
                 disabled={state !== "done"}
                 aria-current={state === "current" ? "step" : undefined}
-                aria-label={`Langkah ${n}: ${label}${state === "done" ? " (selesai, buka lagi)" : ""}`}
+                aria-label={`Langkah ${i + 1}: ${label}${state === "done" ? " (selesai, buka lagi)" : ""}`}
               />
             );
           })}

@@ -24,7 +24,15 @@ const VCARD = [
   "END:VCARD",
 ].join("\n");
 
-export function Selesai({ nama, waTerkirim }: { nama: string; waTerkirim: boolean }) {
+export function Selesai({
+  nama,
+  waTerkirim,
+  denganRekaman,
+}: {
+  nama: string;
+  waTerkirim: boolean;
+  denganRekaman: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -51,8 +59,8 @@ export function Selesai({ nama, waTerkirim }: { nama: string; waTerkirim: boolea
             Alhamdulillah, <em>terkirim</em>
           </h2>
           <p className={x.lead}>
-            Barakallahu fiikum, {nama}. Pendaftaran {DAR_SYAFII.nama} dan rekaman
-            ujian masuk Anda sudah kami terima.
+            Barakallahu fiikum, {nama}. Pendaftaran {DAR_SYAFII.nama}
+            {denganRekaman ? " dan rekaman ujian masuk" : ""} Anda sudah kami terima.
           </p>
 
           {waTerkirim ? (

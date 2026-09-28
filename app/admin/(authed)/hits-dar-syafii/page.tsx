@@ -22,9 +22,10 @@ interface Row {
   kota: string;
   jadwal: string;
   level: string;
-  audio_path: string;
+  /** null untuk level yang mendaftar tanpa rekaman (selain HITS Lanjutan). */
+  audio_path: string | null;
   audio_duration_sec: string | null;
-  audio_sumber: string;
+  audio_sumber: string | null;
   wa_sent_at: Date | null;
   wa_error: string | null;
   audio_masih_ada: boolean;
@@ -61,7 +62,7 @@ export default async function HitsDarSyafiiAdminPage() {
   const rows = await fetchRows();
   const urls = await Promise.all(
     rows.map((r) =>
-      r.audio_masih_ada ? signedAudioUrl(r.audio_path, 3600).catch(() => null) : null,
+      r.audio_path && r.audio_masih_ada ? signedAudioUrl(r.audio_path, 3600).catch(() => null) : null,
     ),
   );
   const levelNama = new Map<string, string>(LEVELS.map((l) => [l.id, l.nama]));
@@ -191,6 +192,10 @@ export default async function HitsDarSyafiiAdminPage() {
                             {r.audio_duration_sec ? ` · ${durasi(r.audio_duration_sec)}` : ""}
                           </div>
                         </>
+                      ) : !r.audio_path ? (
+                        <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>
+                          tanpa rekaman (bukan HITS Lanjutan)
+                        </span>
                       ) : (
                         <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>
                           terhapus (lewat {RETENSI_HARI} hari)

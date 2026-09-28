@@ -193,11 +193,14 @@ export function tplHitsPendaftaranDiterima(args: {
   angkatanLabel: string;
   jadwal: string;
   adminWaLabel: string;
+  /** false untuk level yang mendaftar tanpa setoran rekaman. */
+  denganRekaman?: boolean;
 }): string {
+  const diterima = args.denganRekaman === false ? "" : " beserta rekaman ujian masuk";
   return [
     `Assalamu'alaikum ${args.pesertaNama},`,
     ``,
-    `Pendaftaran ${args.programNama} angkatan ${args.angkatanLabel} beserta rekaman ujian masuk Anda sudah kami terima.`,
+    `Pendaftaran ${args.programNama} angkatan ${args.angkatanLabel}${diterima} Anda sudah kami terima.`,
     `Jam belajar pilihan: ${args.jadwal}`,
     ``,
     `Supaya pesan admin tidak tertolak, mohon:`,

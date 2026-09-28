@@ -10,7 +10,7 @@ import p from "./pembuka.module.css";
 // "Gratis" sengaja tidak ditampilkan di sini; info bebas biaya tetap ada di
 // "Yang perlu diketahui".
 const FACTS = [
-  { icon: MapPin, big: "Offline", small: "tatap muka di sekolah" },
+  { icon: MapPin, big: "Offline", small: `di ${DAR_SYAFII.tempat}` },
   { icon: Clock, big: "45 menit", small: "tiap pertemuan" },
   { icon: Users, big: "Terpisah", small: "kelas ikhwan & akhwat" },
 ];
@@ -26,7 +26,7 @@ const LANGKAH = [
   },
   {
     title: "Rekam ujian masuk",
-    body: "Baca Asy-Syura ayat 1–6 langsung di halaman ini.",
+    body: "Khusus HITS Lanjutan: baca Asy-Syura ayat 1–6 langsung di halaman ini. HITS Dasar dan Alumni HITS tanpa rekaman.",
   },
 ];
 
@@ -113,7 +113,7 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
               Mulai daftar
               <ArrowRight size={18} strokeWidth={2.6} aria-hidden="true" />
             </button>
-            <span className={p.ctaNote}>± 5 menit · siapkan tempat yang tenang untuk merekam</span>
+            <span className={p.ctaNote}>± 5 menit · pendaftar HITS Lanjutan siapkan tempat tenang untuk merekam</span>
           </div>
         </div>
       </section>

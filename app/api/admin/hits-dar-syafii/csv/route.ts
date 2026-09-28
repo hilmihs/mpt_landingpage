@@ -31,7 +31,7 @@ export async function GET() {
       jadwal: string;
       level: string;
       audio_duration_sec: string | null;
-      audio_sumber: string;
+      audio_sumber: string | null;
     }[]
   >`
     SELECT created_at, email, nama, nama_anak, kelas_anak, jenis_kelamin, nomor_wa, usia, kota, jadwal,
@@ -81,7 +81,7 @@ export async function GET() {
       r.jadwal,
       levelNama.get(r.level) ?? r.level,
       r.audio_duration_sec ?? "",
-      r.audio_sumber,
+      r.audio_sumber ?? "tanpa rekaman",
     ]
       .map(cell)
       .join(","),

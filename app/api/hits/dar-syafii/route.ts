@@ -12,6 +12,7 @@ import {
   daftarSchema,
   findJadwal,
   jadwalLabel,
+  perluRekaman,
 } from "@/lib/hits-dar-syafii";
 
 export const runtime = "nodejs";
@@ -100,38 +101,47 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const audio = form.get("audio");
+  // Rekaman hanya diminta dari HITS Lanjutan. Level lain mendaftar tanpa
+  // rekaman; kalau klien tetap mengirim berkas (mis. peserta sempat merekam
+  // lalu ganti level), berkasnya diabaikan dan tidak disimpan.
+  const denganRekaman = perluRekaman(data.level);
+  const audioRaw = form.get("audio");
+  const audio = denganRekaman && audioRaw instanceof Blob ? audioRaw : null;
   const sumber = form.get("audio_sumber") === "unggah" ? "unggah" : "rekam";
-  if (!(audio instanceof Blob) || audio.size === 0) {
-    return fail(400, "audio_missing", "Rekaman bacaan belum ada.");
-  }
-  if (audio.size > MAX_AUDIO_BYTES) {
-    return fail(400, "audio_too_large", "Berkas rekaman terlalu besar (maks. 25 MB).");
-  }
-  if (!isAudioLike(audio)) {
-    return fail(400, "audio_type", "Berkas yang dipilih bukan rekaman suara.");
-  }
+  let durasi: number | null = null;
 
-  const durRaw = form.get("audio_duration_sec");
-  const durasi = durRaw ? Number(durRaw) : null;
-  if (durasi !== null && (!Number.isFinite(durasi) || durasi < 0 || durasi > MAX_DURATION_SEC)) {
-    return fail(400, "audio_duration", "Durasi rekaman tidak wajar (maks. 10 menit).");
-  }
+  if (denganRekaman) {
+    if (!audio || audio.size === 0) {
+      return fail(400, "audio_missing", "Rekaman bacaan belum ada.");
+    }
+    if (audio.size > MAX_AUDIO_BYTES) {
+      return fail(400, "audio_too_large", "Berkas rekaman terlalu besar (maks. 25 MB).");
+    }
+    if (!isAudioLike(audio)) {
+      return fail(400, "audio_type", "Berkas yang dipilih bukan rekaman suara.");
+    }
 
-  // Penjaga yang sama dengan /api/submit: rekaman browser yang jauh lebih kecil
-  // dari durasinya sendiri berarti tidak tersimpan utuh (pernah terjadi — 20.000
-  // byte untuk 58 detik, tidak bisa diputar). Hanya untuk rekaman di halaman;
-  // berkas unggahan dari aplikasi perekam HP bisa memakai codec yang sangat
-  // irit (AMR ~600 B/dtk) dan tetap sah.
-  if (sumber === "rekam" && durasi !== null && durasi >= 5 && audio.size / durasi < 1000) {
-    console.error(
-      `[hits-daftar] audio tidak wajar: ${audio.size} byte untuk ${durasi}s`,
-    );
-    return fail(
-      400,
-      "audio_corrupt",
-      "Rekaman tidak tersimpan dengan utuh. Mohon rekam ulang, dan jangan tutup halaman sampai selesai terkirim.",
-    );
+    const durRaw = form.get("audio_duration_sec");
+    durasi = durRaw ? Number(durRaw) : null;
+    if (durasi !== null && (!Number.isFinite(durasi) || durasi < 0 || durasi > MAX_DURATION_SEC)) {
+      return fail(400, "audio_duration", "Durasi rekaman tidak wajar (maks. 10 menit).");
+    }
+
+    // Penjaga yang sama dengan /api/submit: rekaman browser yang jauh lebih kecil
+    // dari durasinya sendiri berarti tidak tersimpan utuh (pernah terjadi — 20.000
+    // byte untuk 58 detik, tidak bisa diputar). Hanya untuk rekaman di halaman;
+    // berkas unggahan dari aplikasi perekam HP bisa memakai codec yang sangat
+    // irit (AMR ~600 B/dtk) dan tetap sah.
+    if (sumber === "rekam" && durasi !== null && durasi >= 5 && audio.size / durasi < 1000) {
+      console.error(
+        `[hits-daftar] audio tidak wajar: ${audio.size} byte untuk ${durasi}s`,
+      );
+      return fail(
+        400,
+        "audio_corrupt",
+        "Rekaman tidak tersimpan dengan utuh. Mohon rekam ulang, dan jangan tutup halaman sampai selesai terkirim.",
+      );
+    }
   }
 
   const jadwal = findJadwal(data.jadwal)!;
@@ -159,17 +169,19 @@ export async function POST(req: NextRequest) {
   }
 
   const id = crypto.randomUUID();
-  const audioPath = `hits-pendaftaran/${DAR_SYAFII.angkatan}/${id}.${extFor(audio)}`;
+  const audioPath = audio ? `hits-pendaftaran/${DAR_SYAFII.angkatan}/${id}.${extFor(audio)}` : null;
 
-  try {
-    await uploadAudio(
-      audioPath,
-      Buffer.from(await audio.arrayBuffer()),
-      audio.type || "application/octet-stream",
-    );
-  } catch (err) {
-    console.error("[hits-daftar] upload error", err);
-    return fail(500, "storage_failed", "Rekaman gagal disimpan. Coba kirim lagi.");
+  if (audio && audioPath) {
+    try {
+      await uploadAudio(
+        audioPath,
+        Buffer.from(await audio.arrayBuffer()),
+        audio.type || "application/octet-stream",
+      );
+    } catch (err) {
+      console.error("[hits-daftar] upload error", err);
+      return fail(500, "storage_failed", "Rekaman gagal disimpan. Coba kirim lagi.");
+    }
   }
 
   try {
@@ -181,11 +193,11 @@ export async function POST(req: NextRequest) {
         ${id}, ${DAR_SYAFII.program}, ${DAR_SYAFII.angkatan}, ${data.email},
         ${data.nama}, ${data.nama_anak}, ${data.kelas_anak}, ${data.jenis_kelamin}, ${nomorWa}, ${data.usia}, ${data.kota},
         ${jadwalLabel(jadwal)}, ${data.level}, ${audioPath},
-        ${durasi === null ? null : Math.round(durasi * 10) / 10}, ${sumber}
+        ${durasi === null ? null : Math.round(durasi * 10) / 10}, ${audio ? sumber : null}
       )
     `;
   } catch (err) {
-    await removeAudio([audioPath]);
+    if (audioPath) await removeAudio([audioPath]);
     if ((err as { code?: string }).code === "23505") {
       return fail(
         409,
@@ -208,6 +220,7 @@ export async function POST(req: NextRequest) {
         angkatanLabel: DAR_SYAFII.angkatanLabel,
         jadwal: jadwalLabel(jadwal),
         adminWaLabel: DAR_SYAFII.adminWaLabel,
+        denganRekaman: Boolean(audio),
       }),
     );
     waTerkirim = send.ok;

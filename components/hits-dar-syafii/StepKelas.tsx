@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, MapPin } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { LEVELS, jadwalUntuk } from "@/lib/hits-dar-syafii";
+import { LEVELS, jadwalUntuk, perluRekaman } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
 import k from "./kelas.module.css";
 import { Sheet } from "./Shared";
@@ -162,6 +162,9 @@ export function StepKelas({ form, errors, update, onBack, onNext }: Props) {
                 <span className={k.levelText}>
                   <span className={k.levelName}>{l.nama}</span>
                   <span className={k.levelDesc}>{l.untuk}</span>
+                  <span className={k.levelTag} data-rekam={perluRekaman(l.id) ? "ya" : "tidak"}>
+                    {perluRekaman(l.id) ? "Setor rekaman bacaan" : "Tanpa rekaman"}
+                  </span>
                 </span>
               </button>
             );
@@ -180,7 +183,7 @@ export function StepKelas({ form, errors, update, onBack, onNext }: Props) {
           Kembali
         </button>
         <button type="button" className={s.btnGreen} onClick={onNext}>
-          Lanjut ke rekaman
+          {perluRekaman(form.level) ? "Lanjut ke rekaman" : "Lanjut, periksa"}
           <ArrowRight size={18} strokeWidth={2.6} />
         </button>
       </div>

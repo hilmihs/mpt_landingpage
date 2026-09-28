@@ -11,7 +11,8 @@ import { isKotaValid } from "@/lib/kota-indonesia";
  *
  * Bedanya dengan HITS reguler (/daftar-hits): di sini tidak ada tes pilihan
  * ganda. Ujian masuknya satu rekaman bacaan Surat Asy-Syura (42) ayat 1–6,
- * didengarkan admin/pengajar.
+ * didengarkan admin/pengajar — dan hanya untuk level HITS Lanjutan (lihat
+ * perluRekaman).
  */
 
 export type Gender = "ikhwan" | "akhwat";
@@ -47,7 +48,8 @@ export const DAR_SYAFII = {
    */
   retensiHari: 14,
   materi: "perbaikan bacaan, pendalaman huruf-huruf, dan materi lainnya",
-  tempat: "Darsyafii Islamic School",
+  /** Kelas berlangsung di masjid, bukan di gedung sekolah. */
+  tempat: "Masjid Dar Syafi'i",
   /** Nomor admin yang diminta disimpan peserta — dari pengumuman program. */
   adminWa: "6281212055054",
   adminWaLabel: "0812 1205 5054",
@@ -95,6 +97,15 @@ export function jadwalUntuk(gender: Gender | ""): readonly Jadwal[] {
 
 export function findLevel(id: string): Level | undefined {
   return LEVELS.find((l) => l.id === id);
+}
+
+/**
+ * Setoran rekaman hanya untuk HITS Lanjutan — pengajar perlu mendengar apakah
+ * pendaftar memang sudah lepas dari kesalahan fatal. HITS Dasar dan Alumni
+ * HITS langsung ditempatkan tanpa ujian masuk.
+ */
+export function perluRekaman(level: string): boolean {
+  return level === "lanjutan";
 }
 
 /** Tiap bagian yang dibaca di rekaman, sesuai urutan di formulir lama. */

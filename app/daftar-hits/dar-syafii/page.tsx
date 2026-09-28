@@ -14,7 +14,7 @@ const sans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: `Daftar ${DAR_SYAFII.nama} — Muhajir Project Tilawah`,
   description:
-    "Kelas HITS untuk orang tua dan wali murid Darsyafii: perbaikan bacaan dan pendalaman huruf-huruf Al-Qur'an, offline di Darsyafii Islamic School, bebas biaya. Daftar dan rekam ujian masuk langsung dari HP.",
+    "Kelas HITS untuk orang tua dan wali murid Darsyafii: perbaikan bacaan dan pendalaman huruf-huruf Al-Qur'an, offline di Masjid Dar Syafi'i, bebas biaya. Daftar langsung dari HP.",
 };
 
 export default function DaftarDarSyafiiPage() {

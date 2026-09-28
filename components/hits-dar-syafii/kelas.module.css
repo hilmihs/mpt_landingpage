@@ -179,6 +179,22 @@
   color: var(--ds-ink-soft);
 }
 
+/* Penanda apakah level ini perlu setoran rekaman. */
+.levelTag {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ds-ink-soft);
+  background: rgba(46, 64, 59, 0.07);
+}
+.levelTag[data-rekam="ya"] {
+  color: var(--ds-green);
+  background: rgba(212, 190, 116, 0.28);
+}
+
 /* Jenis kelamin belum dipilih — tidak ada jadwal yang bisa ditampilkan. */
 .empty {
   display: flex;

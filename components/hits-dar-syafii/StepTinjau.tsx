@@ -13,6 +13,8 @@ import type { AudioTake, FormState, SendState } from "./types";
 interface Props {
   form: FormState;
   audio: AudioTake | null;
+  /** false untuk HITS Dasar/Alumni — mereka mendaftar tanpa rekaman. */
+  denganRekaman: boolean;
   send: SendState;
   onEdit: (step: number) => void;
   onSubmit: () => void;
@@ -58,7 +60,7 @@ function Section({
   );
 }
 
-export function StepTinjau({ form, audio, send, onEdit, onSubmit }: Props) {
+export function StepTinjau({ form, audio, denganRekaman, send, onEdit, onSubmit }: Props) {
   const jadwal = findJadwal(form.jadwal);
   const level = findLevel(form.level);
   const sending = send.kind === "sending";
@@ -98,37 +100,40 @@ export function StepTinjau({ form, audio, send, onEdit, onSubmit }: Props) {
             </dl>
           </Section>
 
-          <Section title="Ujian masuk" editLabel="Ubah rekaman ujian masuk" step={3} onEdit={onEdit}>
-            {audio ? (
-              <>
-                <AudioPill src={audio.url} durationSec={audio.durationSec} tone="light" />
-                <p className={t.audioMeta}>
-                  {sumberRekaman}
-                  {audio.durationSec != null && (
-                    <span className={s.srOnly}>, durasi {fmtDurasi(audio.durationSec)}</span>
-                  )}
-                </p>
-              </>
-            ) : (
-              <div className={t.empty}>
-                <p className={t.emptyText}>
-                  Belum ada rekaman. Pendaftaran baru bisa dikirim setelah Anda merekam
-                  bacaan ujian masuk.
-                </p>
-                <button type="button" className={t.emptyBtn} onClick={() => onEdit(3)}>
-                  <Mic size={16} strokeWidth={2.4} aria-hidden="true" />
-                  Rekam sekarang
-                </button>
-              </div>
-            )}
-          </Section>
+          {denganRekaman && (
+            <Section title="Ujian masuk" editLabel="Ubah rekaman ujian masuk" step={3} onEdit={onEdit}>
+              {audio ? (
+                <>
+                  <AudioPill src={audio.url} durationSec={audio.durationSec} tone="light" />
+                  <p className={t.audioMeta}>
+                    {sumberRekaman}
+                    {audio.durationSec != null && (
+                      <span className={s.srOnly}>, durasi {fmtDurasi(audio.durationSec)}</span>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <div className={t.empty}>
+                  <p className={t.emptyText}>
+                    Belum ada rekaman. Pendaftaran baru bisa dikirim setelah Anda merekam
+                    bacaan ujian masuk.
+                  </p>
+                  <button type="button" className={t.emptyBtn} onClick={() => onEdit(3)}>
+                    <Mic size={16} strokeWidth={2.4} aria-hidden="true" />
+                    Rekam sekarang
+                  </button>
+                </div>
+              )}
+            </Section>
+          )}
         </div>
 
         <p className={t.privacy}>
           <ShieldCheck size={18} strokeWidth={2.2} className={t.privacyIcon} aria-hidden="true" />
           <span>
-            Data hanya dipakai panitia untuk seleksi. Rekaman disimpan di server Indonesia dan
-            terhapus otomatis setelah {DAR_SYAFII.retensiHari} hari.
+            Data hanya dipakai panitia untuk seleksi.
+            {denganRekaman &&
+              ` Rekaman disimpan di server Indonesia dan terhapus otomatis setelah ${DAR_SYAFII.retensiHari} hari.`}
           </span>
         </p>
 
@@ -144,7 +149,7 @@ export function StepTinjau({ form, audio, send, onEdit, onSubmit }: Props) {
             type="button"
             className={`${s.btnGold} ${s.btnBlock}`}
             onClick={onSubmit}
-            disabled={sending || !audio}
+            disabled={sending || (denganRekaman && !audio)}
             aria-busy={sending}
           >
             {sending ? (
