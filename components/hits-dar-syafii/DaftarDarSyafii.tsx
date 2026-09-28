@@ -243,9 +243,11 @@ export function DaftarDarSyafii() {
   const slide = reduce
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
     : {
-        initial: { opacity: 0, y: 24, filter: "blur(6px)" },
-        animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-        exit: { opacity: 0, y: -16, filter: "blur(4px)" },
+        // Tanpa filter blur: di HP kelas bawah blur pada kartu setinggi ini
+        // membuat transisi tersendat.
+        initial: { opacity: 0, y: 24 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -16 },
       };
 
   const inFlow = step >= 1 && step <= 4;

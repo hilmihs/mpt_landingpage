@@ -65,17 +65,23 @@ export async function POST(req: NextRequest) {
     return fail(400, "validation_failed", "Data formulir tidak terbaca.");
   }
 
+  // Isian yang tidak terkirim sama sekali diperlakukan sebagai kosong, supaya
+  // pesan galatnya tetap pesan kita ("Wajib…"), bukan pesan bawaan zod.
+  const field = (k: string) => {
+    const v = form.get(k);
+    return typeof v === "string" ? v : "";
+  };
   const parsed = daftarSchema.safeParse({
-    email: form.get("email"),
-    nama: form.get("nama"),
-    nama_anak: form.get("nama_anak"),
-    kelas_anak: form.get("kelas_anak"),
-    jenis_kelamin: form.get("jenis_kelamin"),
-    nomor_wa: form.get("nomor_wa"),
-    usia: form.get("usia"),
-    kota: form.get("kota"),
-    jadwal: form.get("jadwal"),
-    level: form.get("level"),
+    email: field("email"),
+    nama: field("nama"),
+    nama_anak: field("nama_anak"),
+    kelas_anak: field("kelas_anak"),
+    jenis_kelamin: field("jenis_kelamin"),
+    nomor_wa: field("nomor_wa"),
+    usia: field("usia"),
+    kota: field("kota"),
+    jadwal: field("jadwal"),
+    level: field("level"),
   });
   if (!parsed.success) {
     const fields: Record<string, string> = {};

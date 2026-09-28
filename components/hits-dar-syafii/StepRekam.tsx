@@ -141,8 +141,8 @@ export function StepRekam({ nama, audio, onAudio, error, onBack, onNext }: Props
           <div>
             Bacaan yang diminta: <strong>Surat Asy-Syura</strong>, ayat 1–6.
             <br />
-            Hati-hati, surat ini <strong>berbeda</strong> dengan Surat
-            Asy-Syu&apos;ara (surat ke-26).
+            Hati-hati, surat ini <strong>berbeda</strong>{" "}
+            dengan Surat Asy-Syu&apos;ara (surat ke-26).
             <div className={s.surahMeta}>
               <span>Surat ke-42</span>
               <span>Halaman 483</span>
