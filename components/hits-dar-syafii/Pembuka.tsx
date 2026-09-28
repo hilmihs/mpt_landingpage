@@ -2,16 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BookOpen, MapPin, MessageCircle, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Clock, MapPin, MessageCircle, Users } from "lucide-react";
 import { DAR_SYAFII, JADWAL, type Gender } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
 import p from "./pembuka.module.css";
 
+// "Gratis" sengaja tidak ditampilkan di sini; info bebas biaya tetap ada di
+// "Yang perlu diketahui".
 const FACTS = [
-  { big: "Gratis", small: "tanpa biaya apa pun" },
-  { big: "Offline", small: "di sekolah" },
-  { big: "45 mnt", small: "tiap pertemuan" },
-  { big: "Terpisah", small: "ikhwan & akhwat" },
+  { icon: MapPin, big: "Offline", small: "tatap muka di sekolah" },
+  { icon: Clock, big: "45 menit", small: "tiap pertemuan" },
+  { icon: Users, big: "Terpisah", small: "kelas ikhwan & akhwat" },
 ];
 
 const LANGKAH = [
@@ -96,15 +97,20 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
           <ul className={`${p.facts} ${p.rise}`} style={d(5)}>
             {FACTS.map((f) => (
               <li key={f.big} className={p.fact}>
-                <div className={p.factBig}>{f.big}</div>
-                <div className={p.factSmall}>{f.small}</div>
+                <span className={p.factIcon} aria-hidden="true">
+                  <f.icon size={18} strokeWidth={2.4} />
+                </span>
+                <div>
+                  <div className={p.factBig}>{f.big}</div>
+                  <div className={p.factSmall}>{f.small}</div>
+                </div>
               </li>
             ))}
           </ul>
 
           <div className={`${p.ctaWrap} ${p.rise}`} style={d(6)}>
             <button type="button" className={`${s.btnGold} ${s.btnBlock} ${p.cta}`} onClick={onStart}>
-              Bismillah, mulai daftar
+              Mulai daftar
               <ArrowRight size={18} strokeWidth={2.6} aria-hidden="true" />
             </button>
             <span className={p.ctaNote}>± 5 menit · siapkan tempat yang tenang untuk merekam</span>

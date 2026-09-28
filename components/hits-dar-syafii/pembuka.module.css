@@ -176,32 +176,73 @@
 }
 
 /* Grid fakta 2×2 */
+/* Tiga fakta: ubin berlencana bintang delapan (dua persegi bertumpuk, satu
+   diputar 45°) — motif rub el hizb, bukan kotak tabel. */
 .facts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
   margin: 28px 0 0;
   padding: 0;
   list-style: none;
-  border: 1px solid rgba(212, 190, 116, 0.22);
-  border-radius: 20px;
-  overflow: hidden;
 }
 .fact {
-  padding: 16px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 8px 16px;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid rgba(212, 190, 116, 0.22);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(212, 190, 116, 0.14), rgba(212, 190, 116, 0) 70%),
+    rgba(246, 241, 227, 0.03);
+  transition: transform 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
 }
-.fact:nth-child(odd) { border-right: 1px solid rgba(212, 190, 116, 0.18); }
-.fact:nth-child(-n + 2) { border-bottom: 1px solid rgba(212, 190, 116, 0.18); }
+/* Ubin tengah sedikit naik — ritme, bukan deretan kotak seragam. */
+.fact:nth-child(2) { transform: translateY(-8px); }
+
+.factIcon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--ds-deep);
+}
+.factIcon::before,
+.factIcon::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 6px;
+  background: var(--ds-gold-grad);
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.factIcon::after { transform: rotate(45deg); }
+.factIcon svg { position: relative; z-index: 1; }
+
 .factBig {
   font-weight: 800;
   letter-spacing: -0.02em;
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1.1;
   color: var(--ds-gold-soft);
 }
 .factSmall {
-  margin-top: 6px;
+  margin-top: 5px;
   font-size: 11.5px;
-  color: rgba(246, 241, 227, 0.6);
+  line-height: 1.4;
+  color: rgba(246, 241, 227, 0.62);
+  text-wrap: balance;
+}
+
+@media (hover: hover) {
+  .fact:hover { border-color: rgba(212, 190, 116, 0.5); }
+  .fact:hover .factIcon::before { transform: rotate(45deg); }
+  .fact:hover .factIcon::after { transform: rotate(90deg); }
 }
 
 /* Tombol mulai */
@@ -429,15 +470,30 @@
   .title { grid-area: title; font-size: clamp(52px, 5vw, 68px); }
   .lead { grid-area: lead; max-width: 500px; font-size: 16.5px; }
   .ctaWrap { grid-area: cta; align-items: flex-start; max-width: 440px; padding-top: 32px; }
-  /* Dasar kotak fakta sejajar dengan catatan di bawah tombol. */
+  /* Fakta jadi tangga menurun di kolom kanan. */
   .facts {
     grid-area: facts;
-    align-self: end;
-    margin: 0 0 30px;
+    align-self: center;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin: 72px 0 0;
   }
-  .fact { padding: 26px 24px; }
-  .factBig { font-size: 30px; }
-  .factSmall { font-size: 13px; }
+  .fact {
+    flex-direction: row;
+    gap: 18px;
+    padding: 20px 24px;
+    text-align: left;
+    background-color: rgba(30, 43, 39, 0.88);
+  }
+  .fact:nth-child(1) { transform: none; margin-right: 64px; }
+  .fact:nth-child(2) { transform: none; margin: 0 32px 0 32px; }
+  .fact:nth-child(3) { margin-left: 64px; }
+  .factIcon { width: 52px; height: 52px; flex: none; }
+  .factBig { font-size: 26px; }
+  .factSmall { font-size: 13.5px; }
+  @media (hover: hover) {
+    .fact:hover { transform: translateX(6px); }
+  }
 
   .hero + .sheet {
     max-width: var(--ds-wide, 1120px);
