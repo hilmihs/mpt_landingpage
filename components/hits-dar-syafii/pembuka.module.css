@@ -389,14 +389,6 @@
   margin-top: 24px;
 }
 
-.ayat {
-  margin: 26px 0 0;
-  text-align: center;
-  font-family: var(--ds-arabic);
-  font-size: 26px;
-  line-height: 1.6;
-  color: var(--ds-gold-deep);
-}
 
 /* ---------------------------------------------------------------------
  * Layar lebar
@@ -457,9 +449,8 @@
     grid-template-areas:
       "jadwal langkah"
       "jadwal info"
-      "cta cta"
-      "ayat ayat";
-    grid-template-rows: auto 1fr auto auto;
+      "cta cta";
+    grid-template-rows: auto 1fr auto;
     column-gap: 72px;
   }
   .secJadwal { grid-area: jadwal; }
@@ -473,7 +464,6 @@
     min-width: 340px;
     margin-top: 40px;
   }
-  .ayat { grid-area: ayat; font-size: 30px; }
 }
 
 /* ---------------------------------------------------------------------

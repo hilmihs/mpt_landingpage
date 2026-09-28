@@ -427,9 +427,6 @@ function StepHeader({
 
         {/* Hanya tampil di layar lebar, mengisi dasar panel hijau. */}
         <div className={s.stepAside} aria-hidden="true">
-          <p className={s.stepAyat} lang="ar" dir="rtl">
-            وَرَتِّلِ ٱلْقُرْءَانَ تَرْتِيلًا
-          </p>
           <span>Muhajir Project Tilawah × Darsyafii</span>
         </div>
       </div>

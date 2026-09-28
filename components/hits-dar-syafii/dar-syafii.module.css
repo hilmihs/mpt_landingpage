@@ -458,16 +458,6 @@
     text-transform: uppercase;
     color: rgba(246, 241, 227, 0.45);
   }
-  .stepAyat {
-    margin: 0;
-    font-family: var(--ds-arabic);
-    font-size: 26px;
-    font-weight: 400;
-    letter-spacing: 0;
-    text-transform: none;
-    text-align: left;
-    color: var(--ds-gold);
-  }
 
   .flow .sheet {
     max-width: 656px;

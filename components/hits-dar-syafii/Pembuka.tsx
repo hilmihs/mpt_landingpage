@@ -214,9 +214,6 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
           <ArrowRight size={18} strokeWidth={2.6} aria-hidden="true" />
         </button>
 
-        <p className={p.ayat} lang="ar" dir="rtl">
-          وَرَتِّلِ ٱلْقُرْءَانَ تَرْتِيلًا
-        </p>
       </div>
     </>
   );
