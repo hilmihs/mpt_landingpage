@@ -71,18 +71,35 @@ Migrasi **tidak** dijalankan saat container start — Cloud Run bisa menaikkan b
 
 ---
 
-## 3. Cloud Storage + retensi 7 hari
+## 3. Cloud Storage + retensi 7 / 14 hari
 
 ```bash
 gcloud storage buckets create gs://mpt-audio --location=asia-southeast2 --uniform-bucket-level-access
 
 cat > lifecycle.json <<'JSON'
-{"rule":[{"action":{"type":"Delete"},"condition":{"age":7}}]}
+{"rule":[
+  {"action":{"type":"Delete"},"condition":{"age":14}},
+  {"action":{"type":"Delete"},"condition":{"age":7,"matchesPrefix":[
+    "0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f",
+    "hits-recordings/"
+  ]}}
+]}
 JSON
 gcloud storage buckets update gs://mpt-audio --lifecycle-file=lifecycle.json
 ```
 
-Aturan ini yang memenuhi `audio_retention: 7 hari`. Karena berlaku per objek di level bucket, ia juga menutup bug lama di mana rekaman HITS tidak pernah terhapus — cron `/api/cleanup` hanya menyapu audio yang dirujuk `submissions.audio_path`.
+Dua aturan, dan GCS menghapus objek begitu **salah satu** terpenuhi:
+
+| Objek | Path | Umur |
+|---|---|---|
+| Rekaman assessment Al-Fatihah | `<uuid>.webm` di root — selalu diawali 0-9/a-f | 7 hari |
+| Rekaman HITS Lanjutan | `hits-recordings/…` | 7 hari |
+| Rekaman pendaftaran HITS Darsyafii | `hits-pendaftaran/…` | 14 hari |
+| Apa pun selain itu | — | 14 hari |
+
+Pendaftaran HITS diberi 14 hari (keputusan 28 September 2026) supaya admin sempat mendengarkan semua pendaftar sebelum membagi kelas.
+
+Sengaja disusun terbalik — aturan 14 hari untuk **semua** objek, lalu aturan 7 hari yang menyempit — karena lifecycle GCS tidak punya kondisi "kecuali prefix". Kalau dibalik (7 hari untuk semua lalu pengecualian), prefix baru yang lupa didaftarkan akan tersimpan **selamanya**, persis bug lama `/api/cleanup` yang tidak pernah menghapus rekaman HITS. Dengan susunan ini, yang terburuk hanyalah 14 hari. Tambah prefix baru yang harus 7 hari ke `matchesPrefix`.
 
 Beri service account Cloud Run akses:
 
@@ -161,4 +178,4 @@ Dari rapat 3 Agustus: **domain landing page harus berasal dari Raihan.** Setelah
 4. Buka tautan di pesan itu → login pengajar → rekaman bisa diputar
 5. Tempel kode unik → baris `teacher_evaluations` bertambah, WA ke peserta terkirim
 6. Buka `/rapot/<slug>` sebagai peserta → nilai pengajar tampil, **skor AI tidak muncul di mana pun**
-7. Cek bucket punya lifecycle rule: `gcloud storage buckets describe gs://mpt-audio --format='value(lifecycle)'`
+7. Cek bucket punya **dua** lifecycle rule (14 hari untuk semua, 7 hari untuk prefix assessment): `gcloud storage buckets describe gs://mpt-audio --format='value(lifecycle)'`

@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
   const parsed = daftarSchema.safeParse({
     email: form.get("email"),
     nama: form.get("nama"),
+    nama_anak: form.get("nama_anak"),
+    kelas_anak: form.get("kelas_anak"),
     jenis_kelamin: form.get("jenis_kelamin"),
     nomor_wa: form.get("nomor_wa"),
     usia: form.get("usia"),
@@ -167,11 +169,11 @@ export async function POST(req: NextRequest) {
   try {
     await sql`
       INSERT INTO hits_pendaftaran (
-        id, program, angkatan, email, nama, jenis_kelamin, nomor_wa, usia, kota,
-        jadwal, level, audio_path, audio_duration_sec, audio_sumber
+        id, program, angkatan, email, nama, nama_anak, kelas_anak, jenis_kelamin,
+        nomor_wa, usia, kota, jadwal, level, audio_path, audio_duration_sec, audio_sumber
       ) VALUES (
         ${id}, ${DAR_SYAFII.program}, ${DAR_SYAFII.angkatan}, ${data.email},
-        ${data.nama}, ${data.jenis_kelamin}, ${nomorWa}, ${data.usia}, ${data.kota},
+        ${data.nama}, ${data.nama_anak}, ${data.kelas_anak}, ${data.jenis_kelamin}, ${nomorWa}, ${data.usia}, ${data.kota},
         ${jadwalLabel(jadwal)}, ${data.level}, ${audioPath},
         ${durasi === null ? null : Math.round(durasi * 10) / 10}, ${sumber}
       )

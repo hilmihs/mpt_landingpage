@@ -39,6 +39,13 @@ export const DAR_SYAFII = {
   sasaran: "orang tua / wali murid Darsyafii",
   genderDibuka: ["ikhwan", "akhwat"] as readonly Gender[],
   usiaMin: 15,
+  /**
+   * Umur rekaman sebelum dihapus lifecycle rule bucket. HITS diberi 14 hari
+   * (assessment tetap 7) supaya admin sempat mendengarkan semua pendaftar
+   * sebelum membagi kelas. Aturannya di docs/DEPLOY_GCP.md §3 — angka ini
+   * hanya untuk teks dan halaman admin, penghapusannya tetap oleh GCS.
+   */
+  retensiHari: 14,
   materi: "perbaikan bacaan, pendalaman huruf-huruf, dan materi lainnya",
   tempat: "Darsyafii Islamic School",
   /** Nomor admin yang diminta disimpan peserta — dari pengumuman program. */
@@ -107,6 +114,10 @@ export const DURASI_WAJAR_MIN_SEC = 30;
 export const daftarSchema = z.object({
   email: z.string().trim().toLowerCase().email("Format email tidak valid").max(120),
   nama: z.string().trim().min(2, "Nama minimal 2 karakter").max(80),
+  // Program khusus wali murid — admin memakai dua isian ini untuk memastikan
+  // pendaftar memang orang tua/wali murid Darsyafii.
+  nama_anak: z.string().trim().min(2, "Nama anak minimal 2 karakter").max(160),
+  kelas_anak: z.string().trim().min(1, "Isi kelas anak").max(60),
   jenis_kelamin: z
     .enum(["ikhwan", "akhwat"], { message: "Konfirmasi jenis kelamin Anda" })
     .refine((g) => DAR_SYAFII.genderDibuka.includes(g), {

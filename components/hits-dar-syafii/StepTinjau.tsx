@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Send, ShieldCheck } from "lucide-react";
-import { findJadwal, findLevel, jadwalLabel } from "@/lib/hits-dar-syafii";
+import { DAR_SYAFII, findJadwal, findLevel, jadwalLabel } from "@/lib/hits-dar-syafii";
 import { normalizeWaNumber } from "@/lib/whatsapp";
 import s from "./dar-syafii.module.css";
 import { Sheet } from "./StepDataDiri";
@@ -69,6 +69,7 @@ export function StepTinjau({ form, audio, send, onEdit, onSubmit }: Props) {
       <div className={s.ticket}>
         <Section title="Data diri" step={1} onEdit={onEdit}>
           <Row label="Nama" value={form.nama.trim()} />
+          <Row label="Anak" value={`${form.nama_anak.trim()} · kelas ${form.kelas_anak.trim()}`} />
           <Row label="Email" value={form.email.trim().toLowerCase()} />
           <Row label="WhatsApp" value={normalizeWaNumber(form.nomor_wa) ?? form.nomor_wa} />
           <Row label="Usia" value={`${form.usia} tahun`} />
@@ -97,7 +98,8 @@ export function StepTinjau({ form, audio, send, onEdit, onSubmit }: Props) {
         <ShieldCheck size={18} strokeWidth={2.2} style={{ color: "var(--ds-green)" }} />
         <span>
           Data Anda hanya dipakai panitia untuk seleksi dan menghubungi Anda.
-          Rekaman disimpan di server Indonesia dan terhapus otomatis setelah 7 hari.
+          Rekaman disimpan di server Indonesia dan terhapus otomatis setelah{" "}
+          {DAR_SYAFII.retensiHari} hari.
         </span>
       </p>
 

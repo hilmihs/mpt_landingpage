@@ -11,8 +11,9 @@ import { siteUrl } from "@/lib/site-url";
  *   - GCS_BUCKET diset  -> Google Cloud Storage (produksi)
  *   - tidak diset       -> disk lokal di .data/audio (dev, tanpa kredensial GCP)
  *
- * Retensi 7 hari TIDAK diurus di sini. Di produksi itu tugas lifecycle rule
- * bucket GCS, yang berlaku per-objek tanpa peduli tabel mana yang merujuknya —
+ * Retensi (7 hari; 14 hari untuk hits-pendaftaran/) TIDAK diurus di sini. Di
+ * produksi itu tugas lifecycle rule bucket GCS (docs/DEPLOY_GCP.md §3), yang
+ * berlaku per-objek tanpa peduli tabel mana yang merujuknya —
  * justru itu yang menutup bug "rekaman HITS tidak pernah terhapus".
  * Lihat docs/MIGRATION_SUPABASE_TO_GCP.md 2.2.
  */

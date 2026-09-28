@@ -351,7 +351,7 @@ ML Engineer Anda kerja paralel di Python project terpisah:
 ```yaml
 audio_format: WebM/Opus
 audio_max_duration: 5 menit
-audio_retention: 7 hari (GCS lifecycle rule, bukan cron — berlaku per bucket)
+audio_retention: 7 hari assessment, 14 hari pendaftaran HITS Darsyafii (GCS lifecycle rule, bukan cron — docs/DEPLOY_GCP.md §3)
 slug_length: 12 karakter (nanoid)
 form_required: nama, jenis_kelamin, nomor_wa
 nomor_wa_format: Indonesia (+62, 0, atau 62)
@@ -413,7 +413,7 @@ muhajir-tilawah/
 - JANGAN jalankan migrasi saat container start; Cloud Run menaikkan banyak instance sekaligus
 - JANGAN pakai Whisper sebagai engine utama (tidak detect 4 indikator)
 - JANGAN hardcode API key di code (gunakan env vars)
-- JANGAN simpan audio peserta lebih dari 7 hari
+- JANGAN simpan audio peserta lebih dari 7 hari (pengecualian: rekaman pendaftaran HITS di `hits-pendaftaran/`, 14 hari)
 - JANGAN kirim audio peserta ke third-party
 - JANGAN expose Supabase service_role key ke client
 - JANGAN process ML inference di Next.js (butuh GPU)

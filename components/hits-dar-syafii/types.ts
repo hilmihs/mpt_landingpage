@@ -3,6 +3,8 @@ import type { Gender } from "@/lib/hits-dar-syafii";
 export interface FormState {
   email: string;
   nama: string;
+  nama_anak: string;
+  kelas_anak: string;
   jenis_kelamin: Gender | "";
   nomor_wa: string;
   usia: string;
@@ -27,6 +29,8 @@ export interface AudioTake {
 export const EMPTY_FORM: FormState = {
   email: "",
   nama: "",
+  nama_anak: "",
+  kelas_anak: "",
   jenis_kelamin: "",
   nomor_wa: "",
   usia: "",

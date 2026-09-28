@@ -22,6 +22,8 @@ export async function GET() {
       created_at: Date;
       email: string;
       nama: string;
+      nama_anak: string;
+      kelas_anak: string;
       jenis_kelamin: string;
       nomor_wa: string;
       usia: number;
@@ -32,7 +34,7 @@ export async function GET() {
       audio_sumber: string;
     }[]
   >`
-    SELECT created_at, email, nama, jenis_kelamin, nomor_wa, usia, kota, jadwal,
+    SELECT created_at, email, nama, nama_anak, kelas_anak, jenis_kelamin, nomor_wa, usia, kota, jadwal,
            level, audio_duration_sec, audio_sumber
       FROM hits_pendaftaran
      WHERE program = ${DAR_SYAFII.program}
@@ -54,6 +56,8 @@ export async function GET() {
     "Waktu (WIB)",
     "Email",
     "Nama",
+    "Nama anak",
+    "Kelas anak",
     "Jenis kelamin",
     "WhatsApp",
     "Usia",
@@ -68,6 +72,8 @@ export async function GET() {
       r.created_at.toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" }),
       r.email,
       r.nama,
+      r.nama_anak,
+      r.kelas_anak,
       r.jenis_kelamin === "ikhwan" ? "Laki-laki" : "Perempuan",
       r.nomor_wa,
       r.usia,

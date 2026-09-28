@@ -27,7 +27,7 @@ const STORAGE_KEY = "hits-dar-syafii:v1";
 const STEPS = ["Data diri", "Kelas", "Rekaman", "Kirim"] as const;
 
 const STEP_FIELDS: Record<1 | 2, FieldKey[]> = {
-  1: ["email", "nama", "jenis_kelamin", "nomor_wa", "usia", "kota"],
+  1: ["email", "nama", "nama_anak", "kelas_anak", "jenis_kelamin", "nomor_wa", "usia", "kota"],
   2: ["jadwal", "level"],
 };
 

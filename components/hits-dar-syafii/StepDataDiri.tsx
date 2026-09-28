@@ -121,6 +121,39 @@ export function StepDataDiri({ form, errors, update, onBlur, onNext }: Props) {
           />
         </Field>
 
+        <Field
+          id="ds-nama_anak"
+          label="Nama anak di Darsyafii"
+          error={errors.nama_anak}
+          hint="Lebih dari satu anak? Tulis semuanya, pisahkan dengan koma."
+        >
+          <input
+            id="ds-nama_anak"
+            className={s.input}
+            autoCapitalize="words"
+            placeholder="Nama lengkap anak"
+            value={form.nama_anak}
+            onChange={(e) => update("nama_anak", e.target.value)}
+            onBlur={() => onBlur("nama_anak")}
+            aria-invalid={Boolean(errors.nama_anak)}
+            aria-describedby="ds-nama_anak-msg"
+          />
+        </Field>
+
+        <Field id="ds-kelas_anak" label="Kelas anak" error={errors.kelas_anak} hint="Contoh: 2B SD, atau 1A, 4C untuk dua anak.">
+          <input
+            id="ds-kelas_anak"
+            className={s.input}
+            autoCapitalize="characters"
+            placeholder="Kelas di Darsyafii"
+            value={form.kelas_anak}
+            onChange={(e) => update("kelas_anak", e.target.value)}
+            onBlur={() => onBlur("kelas_anak")}
+            aria-invalid={Boolean(errors.kelas_anak)}
+            aria-describedby="ds-kelas_anak-msg"
+          />
+        </Field>
+
         <div className={s.field}>
           <span className={s.label} id="ds-jenis_kelamin-label">
             Konfirmasi jenis kelamin

@@ -18,8 +18,10 @@
 -- angkatan dan tidak ada tabelnya; admin harus tetap bisa membaca pilihan
 -- peserta walau jadwal itu sudah dihapus dari daftar.
 --
--- Rekaman ikut aturan retensi 7 hari (lifecycle rule bucket GCS). `audio_path`
--- tetap tercatat setelah objeknya terhapus; halaman admin menandainya.
+-- Rekaman di prefix hits-pendaftaran/ dihapus lifecycle rule bucket GCS
+-- setelah 14 hari (assessment tetap 7 hari) — lihat docs/DEPLOY_GCP.md §3.
+-- `audio_path` tetap tercatat setelah objeknya terhapus; halaman admin
+-- menandainya.
 
 CREATE TABLE IF NOT EXISTS hits_pendaftaran (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,6 +38,10 @@ CREATE TABLE IF NOT EXISTS hits_pendaftaran (
   nomor_wa           TEXT NOT NULL CHECK (nomor_wa ~ '^62[0-9]{8,13}$'),
   usia               INT  NOT NULL CHECK (usia BETWEEN 15 AND 100),
   kota               TEXT NOT NULL,
+  -- Program khusus wali murid Darsyafii; bisa lebih dari satu anak,
+  -- dipisah koma, jadi disimpan apa adanya.
+  nama_anak          TEXT NOT NULL,
+  kelas_anak         TEXT NOT NULL,
 
   jadwal             TEXT NOT NULL,
   level              TEXT NOT NULL CHECK (level IN ('dasar', 'lanjutan', 'alumni')),

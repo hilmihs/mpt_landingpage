@@ -8,13 +8,15 @@ import { DAR_SYAFII, LEVELS } from "@/lib/hits-dar-syafii";
 export const dynamic = "force-dynamic";
 
 // Sama dengan lifecycle rule bucket; setelah ini objek rekamannya sudah hilang.
-const RETENSI_HARI = 7;
+const RETENSI_HARI = DAR_SYAFII.retensiHari;
 
 interface Row {
   id: string;
   created_at: Date;
   email: string;
   nama: string;
+  nama_anak: string;
+  kelas_anak: string;
   nomor_wa: string;
   usia: number;
   kota: string;
@@ -30,7 +32,7 @@ interface Row {
 
 async function fetchRows(): Promise<Row[]> {
   return sql<Row[]>`
-    SELECT id, created_at, email, nama, nomor_wa, usia, kota, jadwal, level,
+    SELECT id, created_at, email, nama, nama_anak, kelas_anak, nomor_wa, usia, kota, jadwal, level,
            audio_path, audio_duration_sec, audio_sumber, wa_sent_at, wa_error,
            created_at > now() - make_interval(days => ${RETENSI_HARI}) AS audio_masih_ada
       FROM hits_pendaftaran
@@ -135,6 +137,7 @@ export default async function HitsDarSyafiiAdminPage() {
                 <tr style={{ background: "var(--surface-soft)" }}>
                   <Th>Waktu</Th>
                   <Th>Nama</Th>
+                  <Th>Anak · kelas</Th>
                   <Th>WhatsApp</Th>
                   <Th>Usia · Kota</Th>
                   <Th>Jam belajar</Th>
@@ -155,6 +158,10 @@ export default async function HitsDarSyafiiAdminPage() {
                     <Td>
                       <div style={{ fontWeight: 700, color: "var(--ink)" }}>{r.nama}</div>
                       <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>{r.email}</div>
+                    </Td>
+                    <Td>
+                      {r.nama_anak}
+                      <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>kelas {r.kelas_anak}</div>
                     </Td>
                     <Td>
                       <a
