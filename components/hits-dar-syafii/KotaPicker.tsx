@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { KOTA_OPTIONS, type KotaOption } from "@/lib/kota-indonesia";
 import s from "./dar-syafii.module.css";
+import k from "./kota-picker.module.css";
 
 /** Saran saat kolom masih kosong. */
 const SEKITAR_JAKARTA = [
@@ -106,11 +107,11 @@ export function KotaPicker({
   }
 
   return (
-    <div className={s.combo}>
+    <div className={k.combo} data-open={open}>
       <input
         ref={inputRef}
         id={id}
-        className={s.input}
+        className={`${s.input} ${k.input}`}
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}
@@ -127,7 +128,17 @@ export function KotaPicker({
           setOpen(true);
           if (value) onChange("");
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          // Di HP, naikkan isian ke atas layar setelah keyboard muncul supaya
+          // daftar saran di bawahnya tidak tertutup keyboard.
+          if (window.matchMedia("(pointer: coarse)").matches) {
+            window.setTimeout(() => {
+              const el = inputRef.current;
+              if (el && document.activeElement === el) el.scrollIntoView({ block: "start", behavior: "smooth" });
+            }, 300);
+          }
+        }}
         onBlur={() => {
           // Tunda supaya klik pada item sempat terbaca.
           window.setTimeout(() => {
@@ -136,12 +147,11 @@ export function KotaPicker({
           }, 150);
         }}
         onKeyDown={onKeyDown}
-        style={{ paddingRight: 48 }}
       />
       {query && (
         <button
           type="button"
-          className={s.comboClear}
+          className={k.clear}
           aria-label="Hapus pilihan kota"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
@@ -154,11 +164,13 @@ export function KotaPicker({
           <X size={16} strokeWidth={2.4} />
         </button>
       )}
+      {/* Sesudah tombol hapus: CSS menyembunyikannya selama tombol itu tampil. */}
+      <ChevronDown className={k.chev} size={16} strokeWidth={2.2} aria-hidden />
       {open && (
-        <ul ref={listRef} id={listId} className={s.comboList} role="listbox">
-          {kosong && <li className={s.comboHead} role="presentation">Pilihan cepat · Jabodetabek</li>}
+        <ul ref={listRef} id={listId} className={k.list} role="listbox">
+          {kosong && <li className={k.head} role="presentation">Pilihan cepat · Jabodetabek</li>}
           {results.length === 0 ? (
-            <li className={s.comboEmpty} role="presentation">
+            <li className={k.empty} role="presentation">
               Tidak ditemukan. Coba nama kabupaten/kota tanpa singkatan.
             </li>
           ) : (
@@ -168,15 +180,19 @@ export function KotaPicker({
                 id={`${listId}-${i}`}
                 role="option"
                 aria-selected={i === active}
-                className={s.comboItem}
+                data-current={o.kota === value || undefined}
+                className={k.item}
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(o)}
               >
-                <span>
-                  <Highlight text={o.kota} q={query === value ? "" : query} />
+                <span className={k.itemText}>
+                  <span className={k.kota}>
+                    <Highlight text={o.kota} q={query === value ? "" : query} />
+                  </span>
+                  <span className={k.prov}>{o.provinsi}</span>
                 </span>
-                <span className={s.comboProv}>{o.provinsi}</span>
+                {o.kota === value && <Check className={k.check} size={18} strokeWidth={2.6} aria-hidden />}
               </li>
             ))
           )}

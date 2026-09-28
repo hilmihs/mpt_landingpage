@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, BookOpen, Mic, Pause, Play, RotateCcw, Square, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mic, Pause, Play, RotateCcw } from "lucide-react";
 import { ASY_SYURA_1_6 } from "@/lib/arabic";
 import { BASMALAH, DURASI_WAJAR_MIN_SEC, TAAWUDZ } from "@/lib/hits-dar-syafii";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import s from "./dar-syafii.module.css";
-import { Star8 } from "./Ornaments";
-import { Sheet } from "./StepDataDiri";
-import { HaloVisualizer } from "./HaloVisualizer";
+import x from "./rekam.module.css";
+import { Sheet } from "./Shared";
+import { AudioPill, LiveWave } from "./Wave";
 import type { AudioTake } from "./types";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -104,11 +104,17 @@ export function StepRekam({ nama, audio, onAudio, error, onBack, onNext }: Props
   else if (rec.status === "recording")
     status = (
       <>
-        <span className={s.recDot} />
+        <span className={x.recDot} aria-hidden />
         Merekam — gulir teks sambil membaca
       </>
     );
-  else if (rec.status === "paused") status = "Dijeda. Lanjutkan kalau sudah siap.";
+  else if (rec.status === "paused")
+    status = (
+      <>
+        <span className={x.pausedDot} aria-hidden />
+        Dijeda. Lanjutkan kalau sudah siap.
+      </>
+    );
   else if (ready && audio)
     status =
       audio.sumber === "unggah"
@@ -124,197 +130,202 @@ export function StepRekam({ nama, audio, onAudio, error, onBack, onNext }: Props
         : "—"
       : "0:00";
 
+  const namaTampil = nama.trim() || "…";
+
   return (
     <>
       <Sheet>
-        <div className={s.stepEyebrow}>Langkah 3 dari 4 · Ujian masuk</div>
-        <h2 className={s.stepTitle}>
-          Rekam <em>bacaan</em> Anda
-        </h2>
-        <p className={s.stepDesc}>
-          Rekaman ini didengarkan pengajar untuk menempatkan Anda di kelas yang
-          sesuai. Bacalah dengan tenang — tidak ada yang dinilai dari kecepatan.
-        </p>
-
-        <div className={s.callout}>
-          <BookOpen size={20} strokeWidth={2.2} className={s.calloutIcon} />
-          <div>
-            Bacaan yang diminta: <strong>Surat Asy-Syura</strong>, ayat 1–6.
-            <br />
-            Hati-hati, surat ini <strong>berbeda</strong>{" "}
-            dengan Surat Asy-Syu&apos;ara (surat ke-26).
-            <div className={s.surahMeta}>
-              <span>Surat ke-42</span>
-              <span>Halaman 483</span>
-              <span>Ayat 1–6</span>
-            </div>
+        <div className={x.body}>
+          <div className={x.chips}>
+            <span className={`${x.chip} ${x.chipMain}`}>Asy-Syura · surat ke-42</span>
+            <span className={x.chip}>Hal. 483</span>
+            <span className={x.chip}>Ayat 1–6</span>
           </div>
-        </div>
+          <p className={x.caution}>
+            Berbeda dengan <b>Asy-Syu&rsquo;ara</b> (surat ke-26) — pastikan membuka
+            surat yang benar.
+          </p>
 
-        <ol className={s.script}>
-          <li className={s.scriptItem}>
-            <Star8 size={32} className={s.scriptNum}>1</Star8>
-            <div>
-              <div className={s.scriptTitle}>Salam &amp; perkenalan</div>
-              <div className={s.scriptSay}>
-                &ldquo;Assalamu&apos;alaikum warahmatullahi wabarakatuh. Nama saya{" "}
-                <b>{nama.trim() || "…"}</b>.&rdquo;
+          <ol className={x.script} aria-label="Urutan bacaan">
+            <li className={x.scriptItem}>
+              <span className={x.num} aria-hidden>1</span>
+              <div className={x.say}>
+                <span className={x.scriptLabel}>Salam &amp; perkenalan</span>
+                &ldquo;Assalamu&rsquo;alaikum warahmatullahi wabarakatuh. Nama saya{" "}
+                <b>{namaTampil}</b>.&rdquo;
               </div>
-            </div>
-          </li>
-          <li className={s.scriptItem}>
-            <Star8 size={32} className={s.scriptNum}>2</Star8>
-            <div>
-              <div className={s.scriptTitle}>Ta&apos;awudz</div>
-              <div className={s.scriptSay}>
-                <div className={s.scriptArabic} lang="ar" dir="rtl">
+            </li>
+            <li className={x.scriptItem}>
+              <span className={x.num} aria-hidden>2</span>
+              <div>
+                <span className={s.srOnly}>Ta&rsquo;awudz: </span>
+                <div className={x.arabic} lang="ar" dir="rtl">
                   {TAAWUDZ}
                 </div>
               </div>
-            </div>
-          </li>
-          <li className={s.scriptItem}>
-            <Star8 size={32} className={s.scriptNum}>3</Star8>
-            <div>
-              <div className={s.scriptTitle}>Basmalah</div>
-              <div className={s.scriptSay}>
-                <div className={s.scriptArabic} lang="ar" dir="rtl">
+            </li>
+            <li className={x.scriptItem}>
+              <span className={x.num} aria-hidden>3</span>
+              <div>
+                <span className={s.srOnly}>Basmalah: </span>
+                <div className={x.arabic} lang="ar" dir="rtl">
                   {BASMALAH}
                 </div>
               </div>
-            </div>
-          </li>
-          <li className={s.scriptItem}>
-            <Star8 size={32} className={s.scriptNum}>4</Star8>
-            <div>
-              <div className={s.scriptTitle} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span>Asy-Syura · ayat 1–6</span>
-                <button type="button" className={s.linkBtn} onClick={() => setLatin((v) => !v)}>
-                  {latin ? "Sembunyikan latin" : "Tampilkan latin"}
-                </button>
-              </div>
-              <div className={s.mushaf}>
-                <div className={s.scriptArabic} lang="ar" dir="rtl">
-                  {ASY_SYURA_1_6.map((a) => (
-                    <span key={a.number}>
-                      {a.arabic}
-                      <span className={s.ayahNum}>{angkaArab(a.number)}</span>{" "}
-                    </span>
-                  ))}
-                </div>
-                {latin && (
-                  <div className={s.translit}>
-                    {ASY_SYURA_1_6.map((a) => `(${a.number}) ${a.transliterasi}`).join("  ")}
-                  </div>
-                )}
-              </div>
-            </div>
-          </li>
-        </ol>
+            </li>
+          </ol>
 
-        <details className={s.details}>
-          <summary>Belum bisa membaca Asy-Syura?</summary>
-          <p>
-            Tidak apa-apa. Setelah salam dan memperkenalkan nama, sampaikan saja
-            bahwa Anda belum bisa membaca surat dan ayat yang diminta, lalu tetap
-            kirim rekamannya. Semoga Allah ta&apos;ala mudahkan.
-          </p>
-        </details>
-        <details className={s.details}>
-          <summary>Tips supaya rekaman jelas</summary>
-          <p>
-            Cari tempat yang tenang, pegang HP sekitar sejengkal dari mulut, dan
-            jangan tutup halaman ini selama merekam. Batas rekaman 5 menit.
-          </p>
-        </details>
+          <div className={x.ayatHead}>
+            <h3 className={x.ayatTitle}>4 · Asy-Syura ayat 1–6</h3>
+            <button
+              type="button"
+              className={x.latinBtn}
+              aria-expanded={latin}
+              aria-controls={latin ? "ds-rekam-latin" : undefined}
+              onClick={() => setLatin((v) => !v)}
+            >
+              {latin ? "Sembunyikan latin" : "Tampilkan latin"}
+            </button>
+          </div>
+          <div className={x.mushaf}>
+            <p className={x.ayat} lang="ar" dir="rtl">
+              {ASY_SYURA_1_6.map((a) => (
+                <span key={a.number}>
+                  {a.arabic}
+                  <span className={x.ayahNum}>{angkaArab(a.number)}</span>{" "}
+                </span>
+              ))}
+            </p>
+            {latin && (
+              <p className={x.latin} id="ds-rekam-latin">
+                {ASY_SYURA_1_6.map((a) => `(${a.number}) ${a.transliterasi}`).join("  ")}
+              </p>
+            )}
+          </div>
 
-        <div className={s.uploadAlt}>
-          Sudah merekam dengan aplikasi perekam di HP?
-          <button
-            type="button"
-            className={s.linkBtn}
-            disabled={recording}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload size={13} strokeWidth={2.6} style={{ verticalAlign: -2, marginRight: 4 }} />
-            Unggah berkasnya
+          <div className={x.accordion}>
+            <details className={x.details}>
+              <summary>Belum bisa membaca Asy-Syura?</summary>
+              <p>
+                Tidak apa-apa. Setelah salam dan memperkenalkan nama, sampaikan saja
+                bahwa Anda belum bisa membaca surat dan ayat yang diminta, lalu tetap
+                kirim rekamannya. Semoga Allah ta&apos;ala mudahkan.
+              </p>
+            </details>
+            <details className={x.details}>
+              <summary>Tips supaya rekaman jelas</summary>
+              <p>
+                Cari tempat yang tenang, pegang HP sekitar sejengkal dari mulut, dan
+                jangan tutup halaman ini selama merekam. Batas rekaman 5 menit.
+              </p>
+            </details>
+          </div>
+
+          <p className={x.upload}>
+            Sudah merekam di aplikasi lain?{" "}
+            <button
+              type="button"
+              disabled={recording}
+              onClick={() => fileRef.current?.click()}
+            >
+              Unggah berkas
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm,.3gp,.amr"
+              hidden
+              onChange={onFile}
+            />
+          </p>
+          {uploadError && (
+            <p className={`${s.error} ${x.uploadError}`} role="alert">
+              {uploadError}
+            </p>
+          )}
+
+          {/* Pita hijau juga punya tombol kembali; yang ini untuk yang sudah
+              menggulir sampai bawah. Dimatikan saat merekam supaya rekaman
+              yang sedang berjalan tidak hilang karena salah ketuk. */}
+          <button type="button" className={x.back} onClick={onBack} disabled={recording}>
+            <ArrowLeft size={15} strokeWidth={2.4} />
+            Ubah pilihan kelas
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="audio/*,.m4a,.mp3,.aac,.wav,.ogg,.opus,.webm,.3gp,.amr"
-            hidden
-            onChange={onFile}
-          />
         </div>
-        {uploadError && (
-          <p className={s.error} role="alert" style={{ justifyContent: "center" }}>
-            {uploadError}
-          </p>
-        )}
       </Sheet>
 
-      <div className={s.dock}>
-        <div className={s.dockInner}>
-          <div className={s.dockRow}>
-            <div className={s.micWrap}>
-              <HaloVisualizer analyser={rec.analyser} active={rec.status === "recording"} />
-              {recording ? (
-                <button
-                  type="button"
-                  className={s.micBtn}
-                  data-state="recording"
-                  onClick={rec.stop}
-                  aria-label="Selesai merekam"
-                >
-                  <Square size={20} strokeWidth={0} fill="currentColor" />
-                </button>
-              ) : ready ? (
-                <button
-                  type="button"
-                  className={s.micBtn}
-                  data-state="ready"
-                  onClick={ulangi}
-                  aria-label="Rekam ulang"
-                >
-                  <RotateCcw size={22} strokeWidth={2.4} />
+      <div className={x.dock}>
+        <div className={x.dockInner}>
+          <div className={x.dockRow}>
+            {recording ? (
+              <button
+                type="button"
+                className={x.mic}
+                data-state="recording"
+                onClick={rec.stop}
+                aria-label="Selesai merekam"
+              >
+                <span className={x.stopIcon} aria-hidden />
+              </button>
+            ) : ready ? (
+              <button
+                type="button"
+                className={x.mic}
+                data-state="ready"
+                onClick={ulangi}
+                aria-label="Rekam ulang"
+              >
+                <RotateCcw size={22} strokeWidth={2.4} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={x.mic}
+                data-state="idle"
+                onClick={() => void rec.start()}
+                disabled={rec.status === "requesting"}
+                aria-label="Mulai merekam"
+              >
+                <Mic size={24} strokeWidth={2.4} />
+              </button>
+            )}
+
+            <div className={x.readout}>
+              {/* role=timer tidak diumumkan tiap detik; yang diumumkan hanya
+                  perubahan status di bawahnya. */}
+              <div className={x.timer} role="timer">
+                {timerText}
+              </div>
+              <div className={x.status} aria-live="polite">
+                {status}
+              </div>
+            </div>
+
+            {recording &&
+              (rec.status === "recording" ? (
+                <button type="button" className={x.iconBtn} onClick={rec.pause} aria-label="Jeda">
+                  <Pause size={16} strokeWidth={0} fill="currentColor" />
                 </button>
               ) : (
                 <button
                   type="button"
-                  className={s.micBtn}
-                  data-state="idle"
-                  onClick={() => void rec.start()}
-                  disabled={rec.status === "requesting"}
-                  aria-label="Mulai merekam"
+                  className={x.iconBtn}
+                  onClick={rec.resume}
+                  aria-label="Lanjutkan merekam"
                 >
-                  <Mic size={24} strokeWidth={2.4} />
+                  <Play size={16} strokeWidth={0} fill="currentColor" />
                 </button>
-              )}
-            </div>
-
-            <div aria-live="polite">
-              <div className={s.dockTimer}>{timerText}</div>
-              <div className={s.dockStatus}>{status}</div>
-            </div>
-
-            {recording && (
-              <div className={s.dockSide}>
-                {rec.status === "recording" ? (
-                  <button type="button" className={s.iconBtn} onClick={rec.pause} aria-label="Jeda">
-                    <Pause size={18} strokeWidth={2.4} />
-                  </button>
-                ) : (
-                  <button type="button" className={s.iconBtn} onClick={rec.resume} aria-label="Lanjutkan merekam">
-                    <Play size={18} strokeWidth={2.4} />
-                  </button>
-                )}
-              </div>
-            )}
+              ))}
           </div>
 
+          {recording && (
+            <div className={x.wave}>
+              <LiveWave analyser={rec.analyser} active={rec.status === "recording"} />
+            </div>
+          )}
+
           {(rec.errorMessage || error) && !recording && (
-            <div className={s.dockError} role="alert">
+            <div className={x.dockError} role="alert">
               {error ?? rec.errorMessage}
               {rec.status === "denied" && (
                 <>
@@ -322,8 +333,7 @@ export function StepRekam({ nama, audio, onAudio, error, onBack, onNext }: Props
                   Atau{" "}
                   <button
                     type="button"
-                    className={s.linkBtn}
-                    style={{ color: "#ffd9cc" }}
+                    className={x.dockLink}
                     onClick={() => fileRef.current?.click()}
                   >
                     unggah rekaman dari HP
@@ -336,36 +346,27 @@ export function StepRekam({ nama, audio, onAudio, error, onBack, onNext }: Props
 
           {ready && audio && (
             <>
-              <audio className={s.player} src={audio.url} controls preload="metadata" />
+              <div className={x.wave}>
+                <AudioPill src={audio.url} durationSec={audio.durationSec} tone="dark" />
+              </div>
               {pendek && (
-                <div className={s.warn}>
+                <div className={x.warn}>
                   Rekaman ini hanya {fmtDurasi(audio.durationSec!)}. Salam sampai
                   ayat 6 biasanya butuh 1–1,5 menit. Kalau memang belum bisa membaca
                   Asy-Syura dan sudah menyampaikannya di rekaman, tidak apa-apa —
                   silakan lanjut.
                 </div>
               )}
-              <div className={s.dockActions}>
-                <button type="button" className={s.btnGhost} onClick={ulangi}>
+              <div className={x.actions}>
+                <button type="button" className={x.btnRedo} onClick={ulangi}>
                   Ulangi
                 </button>
-                <button type="button" className={s.btnGold} onClick={onNext}>
-                  Lanjut, tinjau pendaftaran
-                  <ArrowRight size={18} strokeWidth={2.6} />
+                <button type="button" className={x.btnNext} onClick={onNext}>
+                  Lanjut, tinjau
+                  <ArrowRight size={16} strokeWidth={2.6} />
                 </button>
               </div>
             </>
-          )}
-
-          {!ready && !recording && (
-            <button
-              type="button"
-              className={s.backLink}
-              onClick={onBack}
-              style={{ marginTop: 6, fontSize: 12 }}
-            >
-              ← Ubah pilihan kelas
-            </button>
           )}
         </div>
       </div>

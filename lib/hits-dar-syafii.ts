@@ -127,7 +127,7 @@ export const daftarSchema = z.object({
     .string()
     .trim()
     .transform((v) => v.replace(/[\s-]/g, ""))
-    .pipe(z.string().regex(WA_REGEX, "Format nomor WA tidak valid (cth. 6281234567890)")),
+    .pipe(z.string().regex(WA_REGEX, "Nomor WA belum benar — ketik setelah +62, cth. 81234567890")),
   usia: z.coerce
     .number({ message: "Usia harus berupa angka" })
     .int("Usia harus bilangan bulat")

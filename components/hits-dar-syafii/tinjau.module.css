@@ -1,0 +1,206 @@
+/* Langkah 4 · Tinjau & kirim — kartu tiket ringkasan + tombol kirim. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------------------------------------------------------------------
+ * Tiket
+ * ------------------------------------------------------------------- */
+
+.ticket {
+  border-radius: 22px;
+  background: var(--ds-paper);
+  border: 1px solid rgba(156, 133, 64, 0.28);
+  padding: 4px 18px;
+}
+
+.section {
+  padding: 14px 0;
+  min-width: 0;
+}
+.section:last-child { padding-bottom: 16px; }
+/* Garis sobekan tiket antar bagian. */
+.section + .section { border-top: 2px dashed rgba(156, 133, 64, 0.25); }
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.section:last-child .sectionHead { margin-bottom: 10px; }
+
+.sectionTitle {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-gold-deep);
+}
+
+/* Terlihat kecil seperti di mockup, tapi area sentuhnya 44px: margin
+   negatif menyerap kelebihan tinggi supaya jarak kepala tidak bergeser. */
+.editBtn {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -14px -10px -14px 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: 700 12px var(--ds-sans);
+  color: var(--ds-green);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s, background 0.18s;
+}
+.editBtn:hover {
+  color: var(--ds-gold-deep);
+  background: rgba(156, 133, 64, 0.08);
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  row-gap: 7px;
+  column-gap: 10px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.rowLabel {
+  color: var(--ds-ink-mute);
+}
+.rowValue {
+  margin: 0;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--ds-ink);
+  overflow-wrap: anywhere;
+}
+
+/* Sumber rekaman di bawah pemutar. */
+.audioMeta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ds-ink-mute);
+  overflow-wrap: anywhere;
+}
+
+/* Belum ada rekaman. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(156, 133, 64, 0.4);
+  background: var(--ds-cream-2);
+}
+.emptyText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ds-ink-soft);
+}
+.emptyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ds-green);
+  color: var(--ds-cream);
+  font: 800 14px var(--ds-sans);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s;
+}
+.emptyBtn:hover { background: #354a44; }
+
+/* ---------------------------------------------------------------------
+ * Privasi, galat, kirim
+ * ------------------------------------------------------------------- */
+
+.privacy {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ds-ink-mute);
+}
+.privacyIcon {
+  color: var(--ds-ok);
+  flex: none;
+}
+
+.formError {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(184, 101, 74, 0.3);
+  background: rgba(184, 101, 74, 0.08);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ds-danger);
+}
+.formError svg { flex: none; margin-top: 2px; }
+
+.submitWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.progressText {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ds-ink-soft);
+}
+.progressPct {
+  flex: none;
+  font-weight: 800;
+  color: var(--ds-green);
+  font-variant-numeric: tabular-nums;
+}
+.progressTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ds-cream-2);
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ds-gold-grad);
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressFill,
+  .editBtn,
+  .emptyBtn { transition: none; }
+}

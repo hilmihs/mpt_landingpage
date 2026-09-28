@@ -1,0 +1,442 @@
+/* =====================================================================
+ * Pembuka (layar 1a) — hero hijau tua + lembar krem jadwal & langkah.
+ * Token warna dari .shell di dar-syafii.module.css.
+ * ===================================================================== */
+
+/* ---------------------------------------------------------------------
+ * Hero gelap — selebar layar; isinya di dalam kolom.
+ * ------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--ds-deep);
+  color: var(--ds-cream);
+  /* 34px jarak ke lembar + 30px yang ditumpangi lembar krem. */
+  padding-bottom: 64px;
+}
+
+/* Pola girih, memudar ke bawah supaya teks tetap tenang. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.07;
+  background-image: var(--ds-girih-ring), var(--ds-girih);
+  background-size: 48px 48px;
+  -webkit-mask-image: linear-gradient(180deg, #000, transparent 55%);
+  mask-image: linear-gradient(180deg, #000, transparent 55%);
+  pointer-events: none;
+}
+
+/* Cahaya emas di atas judul. */
+.hero::after {
+  content: "";
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  z-index: 0;
+  width: 520px;
+  height: 520px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(212, 190, 116, 0.22), rgba(212, 190, 116, 0) 62%);
+  pointer-events: none;
+  animation: glow 1.4s ease-out both;
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+  padding: max(24px, env(safe-area-inset-top)) 24px 0;
+}
+
+/* Cincin fokus bawaan (emas tua) kurang terlihat di atas hijau tua. */
+.hero a:focus-visible,
+.hero button:focus-visible {
+  outline-color: var(--ds-gold-soft);
+}
+
+/* Baris atas: logo + nama, "× Darsyafii" */
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.brandLogo {
+  display: block;
+  flex: none;
+  border-radius: 11px;
+  box-shadow: 0 0 0 1px rgba(212, 190, 116, 0.35);
+}
+
+.brandName {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  color: rgba(246, 241, 227, 0.7);
+  transition: color 0.18s;
+}
+.brand:hover .brandName { color: var(--ds-cream); }
+
+.partner {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(246, 241, 227, 0.6);
+  white-space: nowrap;
+}
+
+/* Pill status pendaftaran */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 40px 0 0;
+  padding: 7px 14px 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 190, 116, 0.4);
+  background: rgba(212, 190, 116, 0.08);
+  color: var(--ds-gold-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.pillDot {
+  position: relative;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-ok-soft);
+  box-shadow: 0 0 0 4px rgba(143, 211, 164, 0.18);
+}
+/* Denyut pelan: tanda "sedang dibuka", bukan hiasan. */
+.pillDot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ds-ok-soft);
+  animation: pulse 2.4s ease-out 1.2s infinite;
+}
+
+/* Label HITS + garis emas */
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 36px 0 0;
+}
+.kickerText {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  color: var(--ds-gold);
+}
+.kickerLine {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(212, 190, 116, 0.5), rgba(212, 190, 116, 0));
+}
+
+.title {
+  margin: 14px 0 0;
+  font-family: var(--ds-sans);
+  font-weight: 800;
+  font-size: clamp(34px, 10.3vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--ds-cream);
+  text-wrap: balance;
+}
+.titleAccent { color: var(--ds-gold-soft); }
+
+.lead {
+  margin: 16px 0 0;
+  max-width: 320px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: rgba(246, 241, 227, 0.72);
+  text-wrap: pretty;
+}
+
+/* Grid fakta 2×2 */
+.facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid rgba(212, 190, 116, 0.22);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.fact {
+  padding: 16px;
+}
+.fact:nth-child(odd) { border-right: 1px solid rgba(212, 190, 116, 0.18); }
+.fact:nth-child(-n + 2) { border-bottom: 1px solid rgba(212, 190, 116, 0.18); }
+.factBig {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--ds-gold-soft);
+}
+.factSmall {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: rgba(246, 241, 227, 0.6);
+}
+
+/* Tombol mulai */
+.ctaWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 22px;
+}
+/* Di atas hijau tua, bayangan emas terang lebih pas daripada emas tua bawaan. */
+.hero .cta {
+  box-shadow: 0 16px 30px -14px rgba(212, 190, 116, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.ctaNote {
+  font-size: 12px;
+  text-align: center;
+  color: rgba(246, 241, 227, 0.55);
+}
+
+/* ---------------------------------------------------------------------
+ * Lembar krem — menumpang 30px di atas hero.
+ * ------------------------------------------------------------------- */
+
+.sheet {
+  position: relative;
+  z-index: 1;
+  margin-top: -30px;
+  background: var(--ds-cream);
+  color: var(--ds-ink);
+  border-radius: 30px 30px 0 0;
+  padding: 28px 24px max(40px, env(safe-area-inset-bottom));
+}
+
+.sheetTitle {
+  margin: 6px 0 16px;
+  font-family: var(--ds-sans);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--ds-ink);
+}
+.sheetTitle em { font-style: normal; color: var(--ds-gold-deep); }
+
+/* Judul bagian berikutnya memakai gaya eyebrow. */
+.subHead {
+  margin: 28px 0 0;
+}
+
+/* Jadwal */
+.jadwal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.groupLabel {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+}
+.group + .group .groupLabel { margin-top: 10px; }
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--ds-paper);
+  border: 1px solid var(--ds-line-soft);
+}
+.rowAbbr {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 22px;
+  color: var(--ds-green);
+}
+.rowDay {
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.rowTime {
+  font-size: 12.5px;
+  color: var(--ds-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ds-green);
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(46, 64, 59, 0.08);
+}
+
+/* Tiga langkah */
+.steps {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.stepItem {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ds-line-soft);
+}
+.stepItem:last-child { border-bottom: 0; }
+.stepNum {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--ds-gold-deep);
+}
+.stepName {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.stepBody {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ds-ink-soft);
+}
+
+/* Yang perlu diketahui — fakta dari versi lama yang tidak ada di mockup. */
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 16px;
+  list-style: none;
+  border-radius: 18px;
+  background: var(--ds-paper);
+  border: 1px solid var(--ds-line-soft);
+}
+.infoItem {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ds-ink-soft);
+}
+.infoItem svg {
+  margin-top: 2px;
+  color: var(--ds-gold-deep);
+}
+.infoItem b { color: var(--ds-ink); font-weight: 700; }
+.infoLink {
+  font-weight: 700;
+  color: var(--ds-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.infoLink:hover { color: var(--ds-gold-deep); }
+
+.bottomCta {
+  margin-top: 24px;
+}
+
+.ayat {
+  margin: 26px 0 0;
+  text-align: center;
+  font-family: var(--ds-arabic);
+  font-size: 26px;
+  line-height: 1.6;
+  color: var(--ds-gold-deep);
+}
+
+/* ---------------------------------------------------------------------
+ * Layar lebar
+ * ------------------------------------------------------------------- */
+
+@media (min-width: 720px) {
+  .heroInner { padding-top: 32px; }
+  .pill { margin-top: 56px; }
+  .lead { max-width: 420px; font-size: 15px; }
+  .hero { padding-bottom: 80px; }
+}
+
+/* ---------------------------------------------------------------------
+ * Animasi masuk — halus, bertahap dari atas ke bawah.
+ * ------------------------------------------------------------------- */
+
+.rise {
+  animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes glow {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(2.8); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .hero::after,
+  .pillDot::after {
+    animation: none;
+  }
+  .pillDot::after { opacity: 0; }
+}

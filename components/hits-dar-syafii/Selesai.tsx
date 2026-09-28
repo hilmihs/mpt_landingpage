@@ -2,24 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, Copy, MessageCircle, UserPlus } from "lucide-react";
+import { Camera, Check } from "lucide-react";
 import { DAR_SYAFII } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
-import { Star8 } from "./Ornaments";
-import { Sheet } from "./StepDataDiri";
+import x from "./selesai.module.css";
+import { Sheet } from "./Shared";
 
-/** Titik-titik bintang segi-8 untuk lencana — sama dengan Star8, skala 100. */
+/** Bintang 16 titik untuk lencana, viewBox 40×40. */
 const BADGE_STAR = Array.from({ length: 16 }, (_, i) => {
-  const r = i % 2 === 0 ? 72 : 54;
+  const r = i % 2 === 0 ? 19 : 14;
   const a = ((-90 + i * 22.5) * Math.PI) / 180;
-  return `${(75 + r * Math.cos(a)).toFixed(2)},${(75 + r * Math.sin(a)).toFixed(2)}`;
+  return `${(20 + r * Math.cos(a)).toFixed(2)},${(20 + r * Math.sin(a)).toFixed(2)}`;
 }).join(" ");
 
-const SPARKS = Array.from({ length: 14 }, (_, i) => {
-  const a = (i / 14) * Math.PI * 2;
-  const d = 90 + (i % 3) * 22;
-  return { dx: Math.round(Math.cos(a) * d), dy: Math.round(Math.sin(a) * d), delay: 0.45 + (i % 4) * 0.06 };
-});
+const CRUMBS = ["⋮", "Setelan", "Privasi", "Grup", "Semua Orang"];
 
 const VCARD = [
   "BEGIN:VCARD",
@@ -43,117 +39,127 @@ export function Selesai({ nama, waTerkirim }: { nama: string; waTerkirim: boolea
   }
 
   return (
-    <Sheet>
-      <div className={s.done}>
-        <div className={s.doneBadge} aria-hidden="true">
-          {SPARKS.map((sp, i) => (
-            <span
-              key={i}
-              className={s.spark}
-              style={
-                {
-                  "--dx": `${sp.dx}px`,
-                  "--dy": `${sp.dy}px`,
-                  animationDelay: `${sp.delay}s`,
-                } as React.CSSProperties
-              }
-            >
-              <Star8 size={10} />
-            </span>
-          ))}
-          <svg viewBox="0 0 150 150">
-            <polygon points={BADGE_STAR} className={s.doneStar} />
-            <path d="M48 77 L67 95 L103 57" className={s.doneCheck} pathLength={1} />
+    <>
+      <div className={x.hero}>
+        <div className={x.glow} aria-hidden="true" />
+        <div className={`${x.heroInner} ${s.col}`}>
+          <svg viewBox="0 0 40 40" className={x.badge} aria-hidden="true">
+            <polygon points={BADGE_STAR} className={x.star} />
+            <path d="M13 20.5 L18 25.5 L27.5 15" className={x.check} pathLength={1} />
           </svg>
-        </div>
 
-        <h2 className={s.doneTitle}>
-          Alhamdulillah, <em>terkirim</em>
-        </h2>
-        <p className={s.doneLead}>
-          Barakallahu fiikum, {nama}. Pendaftaran {DAR_SYAFII.nama} dan rekaman
-          ujian masuk Anda sudah kami terima.
-        </p>
-
-        {waTerkirim ? (
-          <div className={s.waBadge}>
-            <Check size={16} strokeWidth={3} />
-            Petunjuk di bawah juga sudah dikirim ke WhatsApp Anda
-          </div>
-        ) : (
-          <p className={s.hint} style={{ marginTop: -10, marginBottom: 18 }}>
-            Mohon screenshot dan simpan petunjuk di bawah ini.
+          <h2 className={x.title}>
+            Alhamdulillah, <em>terkirim</em>
+          </h2>
+          <p className={x.lead}>
+            Barakallahu fiikum, {nama}. Pendaftaran {DAR_SYAFII.nama} dan rekaman
+            ujian masuk Anda sudah kami terima.
           </p>
-        )}
 
-        <div className={s.tips}>
-          <div className={s.tip}>
-            <Star8 size={30} className={s.scriptNum}>1</Star8>
-            <div>
-              <h3>Izinkan admin memasukkan Anda ke grup</h3>
-              <p>Supaya undangan grup kelas tidak tertolak oleh WhatsApp Anda:</p>
-              <div className={s.crumbs}>
-                {["⋮", "Setelan", "Privasi", "Grup", "Semua Orang"].map((c, i, arr) => (
+          {waTerkirim ? (
+            <div className={x.pill}>
+              <Check size={14} strokeWidth={3} aria-hidden="true" />
+              Petunjuk juga dikirim ke WhatsApp
+            </div>
+          ) : (
+            <div className={`${x.pill} ${x.pillWarn}`}>
+              <Camera size={14} strokeWidth={2.4} aria-hidden="true" />
+              Mohon screenshot dan simpan petunjuk di bawah ini.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Sheet>
+        <div className={x.stack}>
+          <div className={s.eyebrow}>Sebelum hari pertama</div>
+
+          <ol className={x.steps}>
+            <li className={x.card}>
+              <div className={x.cardHead}>
+                <span className={x.num} aria-hidden="true">1</span>
+                <h3 className={x.cardTitle}>Izinkan admin memasukkan Anda ke grup</h3>
+              </div>
+              <p className={x.cardText}>
+                Supaya undangan grup kelas tidak tertolak oleh WhatsApp Anda:
+              </p>
+              <div className={x.crumbs}>
+                {CRUMBS.map((c, i) => (
                   <span key={c} style={{ display: "contents" }}>
-                    <span className={s.crumb}>{c}</span>
-                    {i < arr.length - 1 && <span className={s.crumbSep}>›</span>}
+                    {c === "⋮" ? (
+                      <span className={x.crumb}>
+                        <span aria-hidden="true">⋮</span>
+                        <span className={s.srOnly}>Menu titik tiga</span>
+                      </span>
+                    ) : (
+                      <span className={x.crumb}>{c}</span>
+                    )}
+                    {i < CRUMBS.length - 1 && (
+                      <span className={x.crumbSep} aria-hidden="true">›</span>
+                    )}
                   </span>
                 ))}
               </div>
-            </div>
-          </div>
+            </li>
 
-          <div className={s.tip}>
-            <Star8 size={30} className={s.scriptNum}>2</Star8>
-            <div>
-              <h3>Simpan nomor admin</h3>
-              <p>Pesan dari nomor yang tidak tersimpan sering masuk arsip atau tertolak.</p>
-              <div className={s.adminNum}>
-                <code>{DAR_SYAFII.adminWaLabel}</code>
+            <li className={x.card}>
+              <div className={x.cardHead}>
+                <span className={x.num} aria-hidden="true">2</span>
+                <h3 className={x.cardTitle}>Simpan nomor admin</h3>
               </div>
-              <div className={s.adminNum}>
-                <button type="button" className={s.smallBtn} onClick={copy}>
-                  {copied ? <Check size={14} strokeWidth={3} /> : <Copy size={14} strokeWidth={2.4} />}
+              <p className={x.cardText}>
+                Pesan dari nomor yang tidak tersimpan sering masuk arsip atau tertolak.
+              </p>
+              <div className={x.adminNum}>{DAR_SYAFII.adminWaLabel}</div>
+              <div className={x.actions}>
+                <button
+                  type="button"
+                  className={x.chip}
+                  data-copied={copied}
+                  onClick={copy}
+                >
                   {copied ? "Tersalin" : "Salin"}
                 </button>
                 <a
-                  className={s.smallBtn}
+                  className={x.chip}
                   href={`data:text/vcard;charset=utf-8,${encodeURIComponent(VCARD)}`}
                   download="Admin Muhajir Project Tilawah.vcf"
                 >
-                  <UserPlus size={14} strokeWidth={2.4} />
                   Simpan kontak
                 </a>
                 <a
-                  className={s.smallBtn}
+                  className={`${x.chip} ${x.chipDark}`}
                   href={`https://wa.me/${DAR_SYAFII.adminWa}`}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <MessageCircle size={14} strokeWidth={2.4} />
                   Buka chat
                 </a>
               </div>
-            </div>
-          </div>
+              {/* Umpan balik salin untuk pembaca layar; tombolnya sendiri sudah berganti label. */}
+              <span className={s.srOnly} role="status">
+                {copied ? "Nomor admin tersalin" : ""}
+              </span>
+            </li>
 
-          <div className={s.tip}>
-            <Star8 size={30} className={s.scriptNum}>3</Star8>
-            <div>
-              <h3>Tunggu kabar sebelum hari pertama</h3>
-              <p>
-                Peserta yang terpilih maupun yang tidak, insya Allah dikabari admin
-                sebelum hari pertama kegiatan belajar. Peserta terpilih akan
-                menerima tautan grup WhatsApp kelas.
+            <li className={x.card}>
+              <div className={x.cardHead}>
+                <span className={x.num} aria-hidden="true">3</span>
+                <h3 className={x.cardTitle}>Tunggu kabar dari admin</h3>
+              </div>
+              <p className={x.cardText}>
+                Terpilih maupun tidak, insya Allah dikabari admin sebelum hari
+                pertama kegiatan belajar. Peserta terpilih menerima tautan grup
+                WhatsApp kelas.
               </p>
-            </div>
-          </div>
-        </div>
+            </li>
+          </ol>
 
-        <Link href="/" className={`${s.btnGhost} ${s.btnBlock}`} style={{ textDecoration: "none" }}>
-          Kembali ke beranda
-        </Link>
-      </div>
-    </Sheet>
+          <Link href="/" className={`${s.btnGhost} ${s.btnBlock} ${x.home}`}>
+            Kembali ke beranda
+          </Link>
+        </div>
+      </Sheet>
+    </>
   );
 }

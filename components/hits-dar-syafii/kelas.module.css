@@ -1,0 +1,229 @@
+/* =====================================================================
+ * Langkah 2 · Jadwal & level (layar 1c). Token --ds-* datang dari .shell
+ * di dar-syafii.module.css.
+ * ===================================================================== */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Mockup: jarak antarbagian 12px gap + 14px margin. */
+.groupLevel { margin-top: 26px; }
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(46, 64, 59, 0.08);
+  color: var(--ds-green);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.levelList { gap: 10px; }
+
+/* ---------------------------------------------------------------------
+ * Kartu radio (jadwal & level)
+ * Latar terpilih berupa gradien, yang tidak bisa di-transisi langsung —
+ * jadi gradien dipasang di ::before dan opasitasnya yang dianimasikan.
+ * ------------------------------------------------------------------- */
+
+.jadwalCard,
+.levelCard {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1.5px solid rgba(26, 36, 32, 0.1);
+  background: var(--ds-paper);
+  color: var(--ds-ink);
+  font-family: var(--ds-sans);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.18s ease;
+}
+
+.jadwalCard::before,
+.levelCard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ds-selected-grad);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.jadwalCard:hover,
+.levelCard:hover { border-color: rgba(26, 36, 32, 0.22); }
+
+.jadwalCard:active,
+.levelCard:active { transform: scale(0.985); }
+
+.jadwalCard[aria-checked="true"],
+.levelCard[aria-checked="true"] {
+  border-color: var(--ds-gold-deep);
+  box-shadow: var(--ds-selected-ring);
+}
+.jadwalCard[aria-checked="true"]::before,
+.levelCard[aria-checked="true"]::before { opacity: 1; }
+
+/* Jadwal: tile hari · hari + jam · dot radio */
+.jadwalCard {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.dayTile {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: var(--ds-cream-2);
+  color: var(--ds-green);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  transition: background-color 0.22s ease, color 0.22s ease;
+}
+.jadwalCard[aria-checked="true"] .dayTile {
+  background: var(--ds-green);
+  color: var(--ds-gold-soft);
+}
+
+.jadwalText,
+.levelText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.jadwalHari,
+.levelName {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.jadwalJam {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ds-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 36, 32, 0.22);
+  background: transparent;
+  color: #fff;
+  transition: border-color 0.22s ease, background-color 0.22s ease;
+}
+.jadwalCard[aria-checked="true"] .dot {
+  border-color: var(--ds-gold-deep);
+  background: var(--ds-gold-deep);
+}
+.dot svg { animation: centang 0.24s cubic-bezier(0.3, 1.5, 0.6, 1); }
+
+@keyframes centang {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Level: numeral romawi · nama + deskripsi */
+.levelCard {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+}
+
+.numeral {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ds-gold-deep);
+}
+
+.levelDesc {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ds-ink-soft);
+}
+
+/* Jenis kelamin belum dipilih — tidak ada jadwal yang bisa ditampilkan. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1.5px dashed var(--ds-line);
+  background: var(--ds-paper);
+}
+.empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ds-ink-soft);
+}
+
+.emptyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1.5px solid var(--ds-line);
+  background: transparent;
+  color: var(--ds-green);
+  font: 700 14px var(--ds-sans);
+  cursor: pointer;
+  transition: border-color 0.18s ease;
+}
+.emptyBtn:hover { border-color: var(--ds-green); }
+
+/* Mockup memberi jarak 12 + 14px di atas tombol (navRow bersama 22px). */
+.navRow { margin-top: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jadwalCard,
+  .levelCard,
+  .jadwalCard::before,
+  .levelCard::before,
+  .dayTile,
+  .dot { transition: none; }
+  .jadwalCard:active,
+  .levelCard:active { transform: none; }
+  .dot svg { animation: none; }
+}

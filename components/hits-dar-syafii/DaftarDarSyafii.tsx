@@ -1,12 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
-import { daftarSchema, findJadwal } from "@/lib/hits-dar-syafii";
+import { ChevronLeft } from "lucide-react";
+import { DAR_SYAFII, daftarSchema, findJadwal } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
-import { Crescent, Star8, StarField } from "./Ornaments";
 import { Pembuka } from "./Pembuka";
 import { StepDataDiri } from "./StepDataDiri";
 import { StepKelas } from "./StepKelas";
@@ -74,14 +74,15 @@ export function DaftarDarSyafii() {
   const [restored, setRestored] = useState(false);
   const formTopRef = useRef<HTMLDivElement | null>(null);
 
-  // Isian yang sudah diketik disimpan di sessionStorage supaya muat ulang
-  // halaman tidak menghapusnya; dipulihkan saat peserta menekan "Mulai daftar"
+  // Isian yang sudah diketik disimpan di localStorage supaya muat ulang atau
+  // tab yang tertutup tidak menghapusnya (dihapus setelah berhasil terkirim);
+  // dipulihkan saat peserta menekan "Mulai daftar"
   // (bukan saat mount, supaya HTML server dan klien tetap sama). Rekaman tidak
   // ikut disimpan — terlalu besar.
   function mulai() {
     let target = 1;
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as { form?: Partial<FormState>; step?: number };
         if (saved.form) setForm({ ...EMPTY_FORM, ...saved.form });
@@ -97,7 +98,7 @@ export function DaftarDarSyafii() {
   useEffect(() => {
     if (!restored || done) return;
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ form, step: Math.min(step, 3) }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, step: Math.min(step, 3) }));
     } catch {
       // abaikan
     }
@@ -209,7 +210,7 @@ export function DaftarDarSyafii() {
       };
       if (xhr.status >= 200 && xhr.status < 300 && body.ok) {
         try {
-          sessionStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_KEY);
         } catch {
           // abaikan
         }
@@ -254,113 +255,176 @@ export function DaftarDarSyafii() {
 
   return (
     <div className={s.shell}>
-      <div className={s.sky} aria-hidden="true">
-        <StarField />
-        <Crescent size={58} className={s.moon} />
-        <div className={s.groundPattern} />
-      </div>
+      {step === 0 && <Pembuka onStart={mulai} />}
 
-      <div className={s.content}>
-        <div className={s.topbar}>
-          {inFlow ? (
-            <button type="button" className={s.backLink} onClick={() => goTo(step - 1)}>
-              <ArrowLeft size={15} strokeWidth={2.4} />
-              {step === 1 ? "Tentang program" : "Kembali"}
-            </button>
-          ) : (
-            <Link href="/" className={s.backLink}>
-              <ArrowLeft size={15} strokeWidth={2.4} />
-              Beranda
-            </Link>
+      {step >= 1 && (
+        <div ref={formTopRef}>
+          {inFlow && (
+            <StepHeader
+              step={step}
+              adaRekaman={Boolean(audio)}
+              onBack={() => goTo(step - 1)}
+              onJump={(n) => n < step && goTo(n)}
+            />
           )}
-          <span className={s.brand}>Muhajir Project Tilawah</span>
+
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={step}
+              {...slide}
+              transition={{ duration: reduce ? 0.15 : 0.4, ease: [0.2, 0.8, 0.2, 1] }}
+            >
+              {step === 1 && (
+                <StepDataDiri
+                  form={form}
+                  errors={errors}
+                  update={update}
+                  onBlur={blurValidate}
+                  onNext={() => next(1)}
+                />
+              )}
+              {step === 2 && (
+                <StepKelas
+                  form={form}
+                  errors={errors}
+                  update={update}
+                  onBack={() => goTo(1)}
+                  onNext={() => next(2)}
+                />
+              )}
+              {step === 3 && (
+                <StepRekam
+                  nama={form.nama}
+                  audio={audio}
+                  onAudio={gantiAudio}
+                  error={audioError}
+                  onBack={() => goTo(2)}
+                  onNext={() => goTo(4)}
+                />
+              )}
+              {step === 4 && (
+                <StepTinjau
+                  form={form}
+                  audio={audio}
+                  send={send}
+                  onEdit={goTo}
+                  onSubmit={submit}
+                />
+              )}
+              {step === 5 && done && <Selesai nama={done.nama} waTerkirim={done.waTerkirim} />}
+            </motion.div>
+          </AnimatePresence>
         </div>
-
-        {step === 0 && <Pembuka onStart={mulai} />}
-
-        {step >= 1 && (
-          <div className={s.formArea} ref={formTopRef}>
-            {inFlow && <Progress step={step} onJump={(n) => n < step && goTo(n)} />}
-
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={step}
-                {...slide}
-                transition={{ duration: reduce ? 0.15 : 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-              >
-                {step === 1 && (
-                  <StepDataDiri
-                    form={form}
-                    errors={errors}
-                    update={update}
-                    onBlur={blurValidate}
-                    onNext={() => next(1)}
-                  />
-                )}
-                {step === 2 && (
-                  <StepKelas
-                    form={form}
-                    errors={errors}
-                    update={update}
-                    onBack={() => goTo(1)}
-                    onNext={() => next(2)}
-                  />
-                )}
-                {step === 3 && (
-                  <StepRekam
-                    nama={form.nama}
-                    audio={audio}
-                    onAudio={gantiAudio}
-                    error={audioError}
-                    onBack={() => goTo(2)}
-                    onNext={() => goTo(4)}
-                  />
-                )}
-                {step === 4 && (
-                  <StepTinjau
-                    form={form}
-                    audio={audio}
-                    send={send}
-                    onEdit={goTo}
-                    onSubmit={submit}
-                  />
-                )}
-                {step === 5 && done && <Selesai nama={done.nama} waTerkirim={done.waTerkirim} />}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
-function Progress({ step, onJump }: { step: number; onJump: (n: number) => void }) {
-  const pct = ((step - 1) / (STEPS.length - 1)) * 75;
+/** Judul tiap langkah — dirender di pita hijau, bukan di dalam lembar isian. */
+const STEP_HEAD: Record<1 | 2 | 3 | 4, { eyebrow: string; title: React.ReactNode; desc: React.ReactNode }> = {
+  1: {
+    eyebrow: "Data diri",
+    title: (
+      <>
+        Kenalan <em>dulu</em>
+      </>
+    ),
+    desc: "Diisi orang tua atau wali murid yang akan belajar. Admin menghubungi Anda lewat WhatsApp.",
+  },
+  2: {
+    eyebrow: "Kelas",
+    title: (
+      <>
+        Pilih <em>kelas</em> Anda
+      </>
+    ),
+    desc: `Tatap muka di ${DAR_SYAFII.tempat}. Pilih yang pasti bisa Anda hadiri tiap pekan.`,
+  },
+  3: {
+    eyebrow: "Ujian masuk",
+    title: (
+      <>
+        Rekam <em>bacaan</em> Anda
+      </>
+    ),
+    desc: "Didengarkan pengajar untuk penempatan kelas. Tidak ada yang dinilai dari kecepatan.",
+  },
+  4: {
+    eyebrow: "Kirim",
+    title: (
+      <>
+        Periksa <em>sekali lagi</em>
+      </>
+    ),
+    desc: "Pastikan nomor WhatsApp benar — pengumuman dan tautan grup kelas dikirim ke sana.",
+  },
+};
+
+function StepHeader({
+  step,
+  adaRekaman,
+  onBack,
+  onJump,
+}: {
+  step: number;
+  adaRekaman: boolean;
+  onBack: () => void;
+  onJump: (n: number) => void;
+}) {
+  const head = STEP_HEAD[step as 1 | 2 | 3 | 4];
   return (
-    <nav className={s.progress} aria-label="Langkah pendaftaran">
-      <div className={s.progressTrack} />
-      <div className={s.progressFill} style={{ width: `${pct}%` }} />
-      {STEPS.map((label, i) => {
-        const n = i + 1;
-        const state = n < step ? "done" : n === step ? "current" : "todo";
-        return (
+    <header className={s.stepHead}>
+      <div className={`${s.stepHeadInner} ${s.col}`}>
+        <div className={s.stepBar}>
           <button
-            key={label}
             type="button"
-            className={s.progressNode}
-            data-state={state}
-            onClick={() => onJump(n)}
-            disabled={state !== "done"}
-            aria-current={state === "current" ? "step" : undefined}
+            className={s.roundBtn}
+            onClick={onBack}
+            aria-label={step === 1 ? "Kembali ke tentang program" : "Kembali ke langkah sebelumnya"}
           >
-            <Star8 size={36} filled={state !== "todo"}>
-              {state === "done" ? "✓" : n}
-            </Star8>
-            <span className={s.progressLabel}>{label}</span>
+            <ChevronLeft size={18} strokeWidth={2.2} />
           </button>
-        );
-      })}
-    </nav>
+          <Link
+            href="/"
+            aria-label="Muhajir Project Tilawah — beranda"
+            onClick={(e) => {
+              // Navigasi klien tidak memicu beforeunload, jadi rekaman yang
+              // belum dikirim perlu dijaga di sini sendiri.
+              if (adaRekaman && !window.confirm("Rekaman yang belum dikirim akan hilang. Tetap ke beranda?")) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <Image src="/logo-mpt.png" alt="" width={34} height={34} className={s.logo} priority />
+          </Link>
+          <span className={s.stepCount} aria-hidden="true">
+            {step} / {STEPS.length}
+          </span>
+        </div>
+
+        <nav className={s.bars} aria-label="Langkah pendaftaran">
+          {STEPS.map((label, i) => {
+            const n = i + 1;
+            const state = n < step ? "done" : n === step ? "current" : "todo";
+            return (
+              <button
+                key={label}
+                type="button"
+                className={s.bar}
+                data-state={state}
+                onClick={() => onJump(n)}
+                disabled={state !== "done"}
+                aria-current={state === "current" ? "step" : undefined}
+                aria-label={`Langkah ${n}: ${label}${state === "done" ? " (selesai, buka lagi)" : ""}`}
+              />
+            );
+          })}
+        </nav>
+
+        <div className={s.eyebrow}>{head.eyebrow}</div>
+        <h2 className={s.stepTitle}>{head.title}</h2>
+        <p className={s.stepDesc}>{head.desc}</p>
+      </div>
+    </header>
   );
 }

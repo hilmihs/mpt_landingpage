@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import { Instrument_Serif } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { DaftarDarSyafii } from "@/components/hits-dar-syafii/DaftarDarSyafii";
 import { DAR_SYAFII } from "@/lib/hits-dar-syafii";
 
 // Huruf tampilan khusus halaman ini; tidak dimuat di halaman lain.
-const display = Instrument_Serif({
-  variable: "--font-ds-display",
-  weight: "400",
-  style: ["normal", "italic"],
+const sans = Plus_Jakarta_Sans({
+  variable: "--font-ds-sans",
+  weight: ["400", "500", "600", "700", "800"],
   subsets: ["latin"],
   display: "swap",
 });
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function DaftarDarSyafiiPage() {
   return (
-    <div className={display.variable}>
+    <div className={sans.variable}>
       <DaftarDarSyafii />
     </div>
   );

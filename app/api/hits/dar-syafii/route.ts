@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
   const nomorWa = normalizeWaNumber(data.nomor_wa);
   if (!nomorWa) {
     return fail(400, "validation_failed", "Nomor WhatsApp tidak dikenali.", {
-      fields: { nomor_wa: "Gunakan format 62xxxxxxxxxx" },
+      fields: { nomor_wa: "Nomor WA belum benar — ketik setelah +62, cth. 81234567890" },
     });
   }
 

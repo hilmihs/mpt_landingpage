@@ -1,0 +1,129 @@
+/* Langkah 1 · Data diri — gaya khusus layar ini. Token & primitif isian
+ * ada di dar-syafii.module.css. */
+
+/* Dua isian sebaris: nama anak + kelas, usia + kota. */
+.row {
+  display: grid;
+  gap: 10px;
+  align-items: start;
+}
+.rowAnak { grid-template-columns: 1.5fr 1fr; }
+.rowUsia { grid-template-columns: 132px 1fr; }
+
+/* Kolom sempit: padding samping sedikit dikurangi seperti mockup. */
+.row .inputTight { padding: 0 14px; }
+
+/* Petunjuk bersama untuk satu baris, menempel ke baris di atasnya. */
+.rowHint { margin-top: -10px; }
+
+/* ---------------------------------------------------------------------
+ * Jenis kelamin: segmented control di trek krem
+ * ------------------------------------------------------------------- */
+
+.segTrack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 5px;
+  border-radius: 16px;
+  background: var(--ds-cream-2);
+}
+.segTrack[data-invalid="true"] { box-shadow: inset 0 0 0 1.5px var(--ds-danger); }
+
+.segOpt {
+  min-height: 46px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ds-ink-soft);
+  font-family: var(--ds-sans);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.segOpt:hover:not(:disabled):not([aria-checked="true"]) { background: rgba(255, 253, 247, 0.6); color: var(--ds-ink); }
+.segOpt[aria-checked="true"] {
+  background: var(--ds-green);
+  color: var(--ds-cream);
+  box-shadow: 0 8px 16px -10px rgba(30, 43, 39, 0.9);
+}
+.segOpt:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.segName { font-weight: 700; font-size: 14px; line-height: 1.3; }
+.segSub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ds-ink-mute);
+}
+.segOpt[aria-checked="true"] .segSub { color: rgba(246, 241, 227, 0.65); }
+
+/* ---------------------------------------------------------------------
+ * Usia: stepper − angka + dalam satu kotak
+ * ------------------------------------------------------------------- */
+
+.stepper {
+  display: grid;
+  /* Tombol 44px supaya target sentuh cukup; angka di tengah. */
+  grid-template-columns: 44px 1fr 44px;
+  align-items: stretch;
+  height: 52px;
+  border-radius: 14px;
+  border: 1.5px solid var(--ds-line);
+  background: var(--ds-paper);
+  overflow: hidden;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.stepper:focus-within {
+  border-color: var(--ds-gold-deep);
+  box-shadow: var(--ds-focus-ring);
+}
+.stepper:has(input[aria-invalid="true"]) { border-color: var(--ds-danger); }
+
+.stepperBtn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-ink-mute);
+  font: 400 20px var(--ds-sans);
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.stepperBtn:hover { color: var(--ds-ink); background: rgba(26, 36, 32, 0.04); }
+.stepperBtn:active { background: rgba(26, 36, 32, 0.08); }
+
+.stepperInput {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-ink);
+  font: 800 18px var(--ds-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.stepperInput::placeholder { color: #a3aaa6; }
+/* Cincin fokus sudah di kotak luar (:focus-within); spesifisitas dinaikkan
+ * supaya menang atas `.shell :focus-visible`. */
+.stepper .stepperInput:focus-visible { outline: none; }
+
+/* ---------------------------------------------------------------------
+ * Tombol & catatan kaki
+ * ------------------------------------------------------------------- */
+
+.submit { margin-top: 8px; }
+/* footNote bersama sudah ber-margin 12px; ditambah 6px = jarak 18px mockup. */
+.foot { padding-top: 6px; }

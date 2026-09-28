@@ -1,0 +1,461 @@
+/* =====================================================================
+ * Langkah 3 — Rekam ujian masuk (layar 1d)
+ * Isi lembar: chip surat, naskah bacaan berurutan, akordeon bantuan.
+ * Dok perekam mengambang di dasar layar supaya peserta bisa menggulir
+ * teks sambil merekam.
+ * ===================================================================== */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- Chip surat ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(156, 133, 64, 0.35);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ds-ink-soft);
+}
+.chipMain {
+  border-color: var(--ds-green);
+  background: var(--ds-green);
+  color: var(--ds-gold-soft);
+}
+
+.caution {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(212, 190, 116, 0.18);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ds-warn-ink);
+}
+
+/* ---------- Urutan bacaan 1–3 ---------- */
+
+.script {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 18px;
+  background: var(--ds-paper);
+  border: 1px solid var(--ds-line-soft);
+  overflow: hidden;
+}
+.scriptItem {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(26, 36, 32, 0.07);
+}
+.scriptItem:first-child { padding-top: 12px; padding-bottom: 12px; }
+.scriptItem:last-child { border-bottom: 0; }
+
+.num {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ds-gold-deep);
+}
+
+.say {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ds-ink);
+}
+.say b { color: var(--ds-gold-deep); }
+
+.scriptLabel {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+}
+
+.arabic {
+  font-family: var(--ds-arabic);
+  font-size: 22px;
+  line-height: 1.9;
+  text-align: right;
+  color: var(--ds-ink);
+}
+
+/* ---------- Ayat 1–6 ---------- */
+
+.ayatHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+.ayatTitle {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ds-gold-deep);
+}
+/* Tautan kecil, tapi bidang sentuhnya tetap 44px. */
+.latinBtn {
+  min-height: 44px;
+  margin: -12px 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font-family: var(--ds-sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ds-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.latinBtn:hover { color: var(--ds-gold-deep); }
+
+/* Bingkai emas bergradien: latar kertas di padding-box, gradien di
+ * border-box, border transparan memperlihatkan gradiennya. */
+.mushaf {
+  padding: 18px 18px 14px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--ds-paper), var(--ds-paper)) padding-box,
+    linear-gradient(135deg, #d4be74, #efe2b0 40%, #9c8540) border-box;
+  box-shadow: inset 0 0 0 5px #f8f1dc;
+}
+.ayat {
+  margin: 0;
+  font-family: var(--ds-arabic);
+  font-size: 27px;
+  line-height: 2.1;
+  text-align: right;
+  color: var(--ds-ink);
+}
+.ayahNum {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35em;
+  height: 1.35em;
+  margin: 0 0.15em;
+  font-size: 0.66em;
+  line-height: 1;
+  border: 1.5px solid var(--ds-gold);
+  border-radius: 50%;
+  color: var(--ds-gold-deep);
+  vertical-align: middle;
+}
+.latin {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(156, 133, 64, 0.35);
+  font-size: 13px;
+  line-height: 1.7;
+  font-style: italic;
+  color: var(--ds-ink-soft);
+}
+
+/* ---------- Akordeon ---------- */
+
+.accordion {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(26, 36, 32, 0.1);
+}
+.details {
+  border-bottom: 1px solid rgba(26, 36, 32, 0.1);
+}
+.details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 12px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ds-ink);
+  list-style: none;
+  cursor: pointer;
+}
+.details summary::-webkit-details-marker { display: none; }
+.details summary::after {
+  content: "+";
+  flex: none;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ds-gold-deep);
+}
+.details[open] summary::after { content: "−"; }
+.details p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ds-ink-soft);
+}
+
+/* ---------- Unggah & kembali ---------- */
+
+.upload {
+  margin: 0;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ds-ink-mute);
+}
+.upload button {
+  padding: 10px 2px;
+  margin: -10px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ds-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.upload button:hover:not(:disabled) { color: var(--ds-gold-deep); }
+.upload button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.uploadError {
+  justify-content: center;
+  text-align: center;
+}
+
+.back {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  font-family: var(--ds-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ds-ink-mute);
+  cursor: pointer;
+}
+.back:hover:not(:disabled) { color: var(--ds-ink); }
+.back:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- Dok perekam ----------
+ * sticky, bukan fixed: langkah dibungkus motion.div yang memakai transform,
+ * dan transform pada leluhur membuat position: fixed menempel ke leluhur
+ * itu, bukan ke layar. Karena dok berada di alur setelah lembar, di ujung
+ * gulir ia kembali ke tempatnya dan tidak pernah menutupi isi terakhir. */
+
+.dock {
+  position: sticky;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 30;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--ds-col);
+  padding: 0 12px;
+  margin: 4px auto calc(14px + env(safe-area-inset-bottom));
+}
+.dockInner {
+  border-radius: 28px;
+  padding: 14px 16px;
+  color: var(--ds-cream);
+  background: linear-gradient(180deg, rgba(46, 64, 59, 0.97), rgba(30, 43, 39, 0.98));
+  border: 1px solid rgba(212, 190, 116, 0.35);
+  box-shadow: 0 24px 50px -18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+/* Cincin fokus emas-tua bawaan terlalu redup di atas hijau gelap. */
+.dock .dockInner :focus-visible { outline-color: var(--ds-gold-soft); }
+
+.dockRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.mic {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mic:active:not(:disabled) { transform: scale(0.95); }
+.mic:disabled { opacity: 0.6; cursor: progress; }
+.mic[data-state="idle"] {
+  background: var(--ds-gold-grad);
+  color: var(--ds-deep);
+  box-shadow: 0 0 0 8px rgba(212, 190, 116, 0.18);
+}
+.mic[data-state="recording"] {
+  background: linear-gradient(180deg, #e98a6d, #b8654a);
+  color: #fff;
+  box-shadow: 0 0 0 8px rgba(233, 138, 109, 0.2);
+}
+.mic[data-state="ready"] {
+  background: rgba(246, 241, 227, 0.1);
+  color: var(--ds-gold-soft);
+  box-shadow: 0 0 0 8px rgba(246, 241, 227, 0.05);
+}
+.stopIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: currentColor;
+}
+
+.readout { min-width: 0; }
+.timer {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--ds-gold-soft);
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(246, 241, 227, 0.7);
+  overflow-wrap: anywhere;
+}
+.recDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff7d63;
+  animation: blink 1.1s ease-in-out infinite;
+}
+.pausedDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-gold);
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(246, 241, 227, 0.22);
+  background: transparent;
+  color: var(--ds-cream);
+  cursor: pointer;
+}
+.iconBtn:hover { background: rgba(246, 241, 227, 0.08); }
+
+.wave { margin-top: 12px; }
+
+.warn {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(212, 190, 116, 0.12);
+  border: 1px solid rgba(212, 190, 116, 0.35);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #f3e6bd;
+}
+.dockError {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(184, 101, 74, 0.2);
+  border: 1px solid rgba(233, 138, 109, 0.45);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #ffd9cc;
+}
+.dockLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: #ffd9cc;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.btnRedo,
+.btnNext {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 50px;
+  border-radius: 16px;
+  font-family: var(--ds-sans);
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btnRedo {
+  padding: 0 18px;
+  border: 1px solid rgba(246, 241, 227, 0.25);
+  background: transparent;
+  color: var(--ds-cream);
+  font-size: 14px;
+  font-weight: 700;
+}
+.btnRedo:hover { background: rgba(246, 241, 227, 0.06); }
+.btnNext {
+  padding: 0 16px;
+  border: 0;
+  background: var(--ds-gold-grad);
+  color: var(--ds-deep);
+  font-size: 14.5px;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.btnNext:hover { transform: translateY(-1px); }
+.btnRedo:active,
+.btnNext:active { transform: scale(0.98); }
