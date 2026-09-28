@@ -258,7 +258,7 @@ export function DaftarDarSyafii() {
       {step === 0 && <Pembuka onStart={mulai} />}
 
       {step >= 1 && (
-        <div ref={formTopRef}>
+        <div ref={formTopRef} className={inFlow ? s.flow : undefined}>
           {inFlow && (
             <StepHeader
               step={step}
@@ -424,6 +424,14 @@ function StepHeader({
         <div className={s.eyebrow}>{head.eyebrow}</div>
         <h2 className={s.stepTitle}>{head.title}</h2>
         <p className={s.stepDesc}>{head.desc}</p>
+
+        {/* Hanya tampil di layar lebar, mengisi dasar panel hijau. */}
+        <div className={s.stepAside} aria-hidden="true">
+          <p className={s.stepAyat} lang="ar" dir="rtl">
+            وَرَتِّلِ ٱلْقُرْءَانَ تَرْتِيلًا
+          </p>
+          <span>Muhajir Project Tilawah × Darsyafii</span>
+        </div>
       </div>
     </header>
   );

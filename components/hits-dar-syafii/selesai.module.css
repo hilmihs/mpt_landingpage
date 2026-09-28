@@ -240,6 +240,47 @@
   to { opacity: 1; }
 }
 
+/* Lembar krem — selebar kolom di HP, melebar di layar lebar. */
+.sheet {
+  width: 100%;
+  max-width: var(--ds-col);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------------------------------------------------------------------
+ * Layar lebar: tiga kartu berjajar, hero lebih lega.
+ * ------------------------------------------------------------------- */
+
+@media (min-width: 960px) {
+  .hero { padding: 88px 40px 96px; }
+  .glow { width: 720px; height: 720px; top: -200px; }
+  .badge { width: 132px; height: 132px; }
+  .title { font-size: 48px; }
+  .lead { max-width: 440px; font-size: 16px; }
+
+  /* Selektor ganda: harus menang atas .sheet bersama tanpa bergantung urutan impor CSS. */
+  .hero + .sheet {
+    max-width: 1080px;
+    margin-top: -36px;
+    border-radius: 32px 32px 0 0;
+    padding: 44px 48px 72px;
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 4px;
+  }
+  .card { padding: 22px; }
+  .stack .home {
+    align-self: center;
+    width: auto;
+    min-width: 320px;
+    margin-top: 20px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .glow,
   .badge,

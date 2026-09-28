@@ -409,6 +409,73 @@
   .hero { padding-bottom: 80px; }
 }
 
+/* ≥ 960px: hero dua kolom (teks + tombol di kiri, fakta di kanan) dan
+   lembar krem melebar dengan jadwal di kiri, langkah & info di kanan.
+   Selektor ganda dipakai supaya menang atas .col bersama tanpa bergantung
+   urutan impor CSS. */
+@media (min-width: 960px) {
+  .hero { padding-bottom: 120px; }
+  .hero::after { left: 32%; top: -240px; width: 820px; height: 820px; }
+
+  .hero .heroInner {
+    max-width: var(--ds-wide, 1120px);
+    padding: 32px 40px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    grid-template-areas:
+      "top top"
+      "pill facts"
+      "kicker facts"
+      "title facts"
+      "lead facts"
+      "cta facts";
+    column-gap: clamp(48px, 6vw, 96px);
+  }
+  .topBar { grid-area: top; }
+  .pill { grid-area: pill; justify-self: start; margin-top: 88px; }
+  .kicker { grid-area: kicker; }
+  .title { grid-area: title; font-size: clamp(52px, 5vw, 68px); }
+  .lead { grid-area: lead; max-width: 500px; font-size: 16.5px; }
+  .ctaWrap { grid-area: cta; align-items: flex-start; max-width: 440px; padding-top: 32px; }
+  /* Dasar kotak fakta sejajar dengan catatan di bawah tombol. */
+  .facts {
+    grid-area: facts;
+    align-self: end;
+    margin: 0 0 30px;
+  }
+  .fact { padding: 26px 24px; }
+  .factBig { font-size: 30px; }
+  .factSmall { font-size: 13px; }
+
+  .hero + .sheet {
+    max-width: var(--ds-wide, 1120px);
+    margin-top: -56px;
+    border-radius: 36px 36px 0 0;
+    padding: 52px 56px 72px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "jadwal langkah"
+      "jadwal info"
+      "cta cta"
+      "ayat ayat";
+    grid-template-rows: auto 1fr auto auto;
+    column-gap: 72px;
+  }
+  .secJadwal { grid-area: jadwal; }
+  .secLangkah { grid-area: langkah; }
+  .secLangkah .subHead { margin-top: 0; }
+  .secInfo { grid-area: info; }
+  .hero + .sheet .bottomCta {
+    grid-area: cta;
+    justify-self: center;
+    width: auto;
+    min-width: 340px;
+    margin-top: 40px;
+  }
+  .ayat { grid-area: ayat; font-size: 30px; }
+}
+
 /* ---------------------------------------------------------------------
  * Animasi masuk — halus, bertahap dari atas ke bawah.
  * ------------------------------------------------------------------- */

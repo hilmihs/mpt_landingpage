@@ -6,7 +6,6 @@ import { Camera, Check } from "lucide-react";
 import { DAR_SYAFII } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
 import x from "./selesai.module.css";
-import { Sheet } from "./Shared";
 
 /** Bintang 16 titik untuk lencana, viewBox 40×40. */
 const BADGE_STAR = Array.from({ length: 16 }, (_, i) => {
@@ -70,7 +69,8 @@ export function Selesai({ nama, waTerkirim }: { nama: string; waTerkirim: boolea
         </div>
       </div>
 
-      <Sheet>
+      {/* Bukan <Sheet>: di layar lebar lembar ini melebar untuk tiga kartu berjajar. */}
+      <div className={`${s.sheet} ${x.sheet}`}>
         <div className={x.stack}>
           <div className={s.eyebrow}>Sebelum hari pertama</div>
 
@@ -159,7 +159,7 @@ export function Selesai({ nama, waTerkirim }: { nama: string; waTerkirim: boolea
             Kembali ke beranda
           </Link>
         </div>
-      </Sheet>
+      </div>
     </>
   );
 }

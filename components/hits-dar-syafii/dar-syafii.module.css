@@ -399,6 +399,84 @@
 }
 .textLink:hover { color: var(--ds-gold-deep); }
 
+/* ---------------------------------------------------------------------
+ * Layar lebar (≥ 960px): langkah 1–4 jadi layar terbelah — panel hijau
+ * menempel di kiri setinggi layar, lembar isian di kanan. Kolom 560px di
+ * tengah lautan hijau terasa seperti halaman HP yang diperbesar.
+ * ------------------------------------------------------------------- */
+
+.stepAside { display: none; }
+
+@media (min-width: 960px) {
+  .shell { --ds-wide: 1120px; }
+
+  .flow {
+    display: grid;
+    grid-template-columns: minmax(380px, 5fr) 7fr;
+    align-items: start;
+    min-height: 100dvh;
+  }
+
+  .flow .stepHead {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    padding: 36px clamp(32px, 4.5vw, 72px) 36px;
+  }
+  .flow .stepHead::after {
+    content: "";
+    position: absolute;
+    right: -180px;
+    bottom: -220px;
+    width: 560px;
+    height: 560px;
+    background: radial-gradient(circle, rgba(212, 190, 116, 0.18), rgba(212, 190, 116, 0) 62%);
+    pointer-events: none;
+  }
+  .flow .stepHeadInner {
+    height: 100%;
+    max-width: 460px;
+    margin: 0 0 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .flow .bars { margin-top: 28px; }
+  /* Judul di tengah panel secara vertikal. */
+  .flow .stepHead .eyebrow { margin-top: auto; }
+  .flow .stepTitle { font-size: clamp(40px, 3.6vw, 52px); }
+  .flow .stepDesc { max-width: 380px; font-size: 15px; margin-bottom: auto; }
+
+  .flow .stepAside {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(212, 190, 116, 0.2);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(246, 241, 227, 0.45);
+  }
+  .stepAyat {
+    margin: 0;
+    font-family: var(--ds-arabic);
+    font-size: 26px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: left;
+    color: var(--ds-gold);
+  }
+
+  .flow .sheet {
+    max-width: 656px;
+    margin-top: 0;
+    border-radius: 0;
+    padding: 64px 48px 80px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell *,
   .shell *::before,

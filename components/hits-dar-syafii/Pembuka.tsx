@@ -113,7 +113,7 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
       </section>
 
       <div className={`${s.col} ${p.sheet} ${p.rise}`} style={d(7)}>
-        <section aria-labelledby="ds-pembuka-jadwal">
+        <section className={p.secJadwal} aria-labelledby="ds-pembuka-jadwal">
           <div className={s.eyebrow}>Jadwal tersedia</div>
           <h2 id="ds-pembuka-jadwal" className={p.sheetTitle}>
             Satu kelas, <em>tiap pekan</em>
@@ -142,7 +142,7 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
           </div>
         </section>
 
-        <section aria-labelledby="ds-pembuka-langkah">
+        <section className={p.secLangkah} aria-labelledby="ds-pembuka-langkah">
           <h2 id="ds-pembuka-langkah" className={`${s.eyebrow} ${p.subHead}`}>
             Tiga langkah
           </h2>
@@ -163,7 +163,7 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
 
         {/* Tidak ada di mockup, tapi fakta ini dulu tampil di pembuka dan
             ditanyakan calon peserta — dipertahankan dalam bentuk ringkas. */}
-        <section aria-labelledby="ds-pembuka-info">
+        <section className={p.secInfo} aria-labelledby="ds-pembuka-info">
           <h2 id="ds-pembuka-info" className={`${s.eyebrow} ${p.subHead}`}>
             Yang perlu diketahui
           </h2>
