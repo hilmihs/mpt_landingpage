@@ -85,7 +85,6 @@ export function StepTinjau({ form, audio, denganRekaman, send, onEdit, onSubmit 
           <Section title="Data diri" editLabel="Ubah data diri" step={1} onEdit={onEdit}>
             <dl className={t.rows}>
               <Row label="Nama" value={form.nama.trim()} />
-              <Row label="Anak" value={`${form.nama_anak.trim()} · ${form.kelas_anak.trim()}`} />
               <Row label="WhatsApp" value={normalizeWaNumber(form.nomor_wa) ?? form.nomor_wa} />
               <Row label="Email" value={form.email.trim().toLowerCase()} />
               <Row label="Usia · kota" value={`${form.usia} th · ${form.kota}`} />

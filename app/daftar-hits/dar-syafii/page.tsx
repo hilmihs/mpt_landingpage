@@ -1,15 +1,8 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
 import { DaftarDarSyafii } from "@/components/hits-dar-syafii/DaftarDarSyafii";
+import { dsSans } from "@/components/hits-dar-syafii/font";
 import { DAR_SYAFII } from "@/lib/hits-dar-syafii";
-
-// Huruf tampilan khusus halaman ini; tidak dimuat di halaman lain.
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-ds-sans",
-  weight: ["400", "500", "600", "700", "800"],
-  subsets: ["latin"],
-  display: "swap",
-});
+import { fetchFaq } from "@/lib/hits-tanya";
 
 export const metadata: Metadata = {
   title: `Daftar ${DAR_SYAFII.nama} — Muhajir Project Tilawah`,
@@ -17,10 +10,14 @@ export const metadata: Metadata = {
     "Kelas HITS untuk orang tua dan wali murid Darsyafii: perbaikan bacaan dan pendalaman huruf-huruf Al-Qur'an, offline di Masjid Dar Syafi'i, bebas biaya. Daftar langsung dari HP.",
 };
 
-export default function DaftarDarSyafiiPage() {
+// FAQ dibaca dari database tiap kunjungan — admin menandainya kapan saja.
+export const dynamic = "force-dynamic";
+
+export default async function DaftarDarSyafiiPage() {
+  const faq = await fetchFaq();
   return (
-    <div className={sans.variable}>
-      <DaftarDarSyafii />
+    <div className={dsSans.variable}>
+      <DaftarDarSyafii faq={faq} />
     </div>
   );
 }

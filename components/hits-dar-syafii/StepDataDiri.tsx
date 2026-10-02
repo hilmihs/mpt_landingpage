@@ -77,38 +77,6 @@ export function StepDataDiri({ form, errors, update, onBlur, onNext }: Props) {
           />
         </Field>
 
-        <div className={`${x.row} ${x.rowAnak}`}>
-          <Field id="ds-nama_anak" label="Nama anak" error={errors.nama_anak}>
-            <input
-              id="ds-nama_anak"
-              className={`${s.input} ${x.inputTight}`}
-              autoCapitalize="words"
-              placeholder="Nama lengkap anak"
-              value={form.nama_anak}
-              onChange={(e) => update("nama_anak", e.target.value)}
-              onBlur={() => onBlur("nama_anak")}
-              aria-invalid={Boolean(errors.nama_anak)}
-              aria-describedby="ds-nama_anak-msg ds-anak-hint"
-            />
-          </Field>
-          <Field id="ds-kelas_anak" label="Kelas" error={errors.kelas_anak}>
-            <input
-              id="ds-kelas_anak"
-              className={`${s.input} ${x.inputTight}`}
-              autoCapitalize="characters"
-              placeholder="cth. 2B SD"
-              value={form.kelas_anak}
-              onChange={(e) => update("kelas_anak", e.target.value)}
-              onBlur={() => onBlur("kelas_anak")}
-              aria-invalid={Boolean(errors.kelas_anak)}
-              aria-describedby="ds-kelas_anak-msg ds-anak-hint"
-            />
-          </Field>
-        </div>
-        <span className={`${s.hint} ${x.rowHint}`} id="ds-anak-hint">
-          Anak yang bersekolah di Darsyafii. Lebih dari satu anak? Pisahkan dengan koma, mis. 1A, 4C.
-        </span>
-
         <div className={s.field}>
           <span className={s.label} id="ds-jenis_kelamin-label">
             Konfirmasi jenis kelamin

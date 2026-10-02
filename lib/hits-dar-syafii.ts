@@ -108,6 +108,15 @@ export function perluRekaman(level: string): boolean {
   return level === "lanjutan";
 }
 
+/**
+ * Aturan penempatan yang harus diketahui pendaftar SEJAK AWAL: pendaftar
+ * Lanjutan yang dinilai lajnah masih buta huruf otomatis masuk HITS Dasar
+ * (lihat levelPenempatan). Tampil di pembuka, langkah pilih level, dan WA
+ * konfirmasi. Istilah "lahn" sengaja tidak dipakai untuk peserta.
+ */
+export const CATATAN_PENEMPATAN =
+  "Rekaman HITS Lanjutan didengarkan pengajar. Bila bacaan masih memiliki kesalahan fatal, Anda ditempatkan di kelas HITS Dasar.";
+
 /** Tiap bagian yang dibaca di rekaman, sesuai urutan di formulir lama. */
 export const TAAWUDZ = "أَعُوذُ بِٱللَّهِ مِنَ ٱلشَّيْطَـٰنِ ٱلرَّجِيمِ";
 export const BASMALAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
@@ -125,10 +134,6 @@ export const DURASI_WAJAR_MIN_SEC = 30;
 export const daftarSchema = z.object({
   email: z.string().trim().toLowerCase().email("Format email tidak valid").max(120),
   nama: z.string().trim().min(2, "Nama minimal 2 karakter").max(80),
-  // Program khusus wali murid — admin memakai dua isian ini untuk memastikan
-  // pendaftar memang orang tua/wali murid Darsyafii.
-  nama_anak: z.string().trim().min(2, "Nama anak minimal 2 karakter").max(160),
-  kelas_anak: z.string().trim().min(1, "Isi kelas anak").max(60),
   jenis_kelamin: z
     .enum(["ikhwan", "akhwat"], { message: "Konfirmasi jenis kelamin Anda" })
     .refine((g) => DAR_SYAFII.genderDibuka.includes(g), {
@@ -151,3 +156,85 @@ export const daftarSchema = z.object({
 
 export type DaftarInput = z.input<typeof daftarSchema>;
 export type DaftarData = z.output<typeof daftarSchema>;
+
+// ---------------------------------------------------------------------------
+// Penilaian rekaman oleh lajnah (admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ambang formula di spreadsheet lajnah: `=IF(L7 > 5, "Buta Huruf", …)`.
+ * Hasil formula hanya PEMBANDING di halaman admin — yang menentukan
+ * penempatan adalah pilihan manual lajnah (kolom `buta_huruf`).
+ */
+export const BATAS_JALIY_BUTA_HURUF = 5;
+
+/** Label pilihan persis seperti dropdown di spreadsheet; hanya untuk admin. */
+export const LABEL_BUTA_HURUF = { ya: "Buta Huruf", tidak: "Tidak Buta Huruf/Pemula" } as const;
+
+export function formulaButaHuruf(lahnJaliy: number | null): boolean | null {
+  if (lahnJaliy === null) return null;
+  return lahnJaliy > BATAS_JALIY_BUTA_HURUF;
+}
+
+/**
+ * Kelas yang benar-benar diikuti. Sama dengan kolom generated
+ * `level_penempatan` (migrasi 0015) — database yang jadi sumber kebenaran,
+ * fungsi ini untuk menampilkan hasilnya sebelum disimpan.
+ */
+export function levelPenempatan(level: string, butaHuruf: boolean | null): string {
+  return level === "lanjutan" && butaHuruf === true ? "dasar" : level;
+}
+
+const jumlahLahn = (nama: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^\d{1,3}$/, `Isi jumlah ${nama} dengan angka 0–999`)
+    .transform(Number);
+
+export const penilaianSchema = z.object({
+  id: z.uuid(),
+  lahn_jaliy: jumlahLahn("lahn jaliy"),
+  lahn_khofi: jumlahLahn("lahn khofi"),
+  buta_huruf: z
+    .enum(["ya", "tidak"], { message: "Pilih Buta Huruf atau Tidak Buta Huruf/Pemula" })
+    .transform((v) => v === "ya"),
+  keterangan: z
+    .string()
+    .trim()
+    .max(500, "Keterangan maksimal 500 karakter")
+    .transform((v) => (v === "" ? null : v)),
+});
+
+export type PenilaianInput = z.input<typeof penilaianSchema>;
+
+// ---------------------------------------------------------------------------
+// Tanya-jawab (pengganti "tanya lewat WA admin")
+// ---------------------------------------------------------------------------
+
+export const tanyaSchema = z.object({
+  nama: z.string().trim().min(2, "Nama minimal 2 karakter").max(80),
+  nomor_wa: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/[\s-]/g, ""))
+    .pipe(z.string().regex(WA_REGEX, "Nomor WA belum benar, cth. 081234567890")),
+  pertanyaan: z
+    .string()
+    .trim()
+    .min(5, "Tulis pertanyaan Anda minimal 5 karakter")
+    .max(1000, "Pertanyaan maksimal 1000 karakter"),
+});
+
+export type TanyaInput = z.input<typeof tanyaSchema>;
+
+export const jawabSchema = z.object({
+  id: z.uuid(),
+  jawaban: z.string().trim().min(1, "Jawaban belum diisi").max(3000, "Jawaban maksimal 3000 karakter"),
+  tampil_faq: z.boolean(),
+});
+
+/** Halaman tempat penanya membaca jawaban — tautannya dikirim lewat WhatsApp. */
+export function tanyaPath(slug: string): string {
+  return `/daftar-hits/dar-syafii/tanya/${slug}`;
+}

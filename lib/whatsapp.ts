@@ -195,6 +195,8 @@ export function tplHitsPendaftaranDiterima(args: {
   adminWaLabel: string;
   /** false untuk level yang mendaftar tanpa setoran rekaman. */
   denganRekaman?: boolean;
+  /** Aturan penempatan untuk pendaftar berekaman (CATATAN_PENEMPATAN). */
+  catatanRekaman?: string;
 }): string {
   const diterima = args.denganRekaman === false ? "" : " beserta rekaman ujian masuk";
   return [
@@ -202,6 +204,7 @@ export function tplHitsPendaftaranDiterima(args: {
     ``,
     `Pendaftaran ${args.programNama} angkatan ${args.angkatanLabel}${diterima} Anda sudah kami terima.`,
     `Jam belajar pilihan: ${args.jadwal}`,
+    ...(args.catatanRekaman && args.denganRekaman !== false ? [``, args.catatanRekaman] : []),
     ``,
     `Supaya pesan admin tidak tertolak, mohon:`,
     `1. WhatsApp → Setelan → Privasi → Grup → "Siapa yang dapat menambahkan saya ke grup" pilih "Semua Orang".`,
@@ -210,5 +213,27 @@ export function tplHitsPendaftaranDiterima(args: {
     `Peserta yang terpilih maupun tidak, insya Allah dikabari admin sebelum hari pertama KBM. Peserta terpilih akan menerima link grup WhatsApp.`,
     ``,
     `Jazakumullahu khairan.`,
+  ].join("\n");
+}
+
+/**
+ * Kabar ke penanya bahwa pertanyaannya tentang program HITS sudah dijawab.
+ * Isi jawaban sengaja tidak ikut: tautan itu satu-satunya tempat jawaban,
+ * jadi admin bisa memperbaikinya tanpa pesan lama yang keliru beredar.
+ */
+export function tplHitsPertanyaanDijawab(args: {
+  penanyaNama: string;
+  programNama: string;
+  jawabanUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.penanyaNama},`,
+    ``,
+    `Pertanyaan Anda tentang ${args.programNama} sudah dijawab admin Muhajir Project Tilawah.`,
+    ``,
+    `Baca jawabannya di sini:`,
+    args.jawabanUrl,
+    ``,
+    `Barakallahu fiikum.`,
   ].join("\n");
 }

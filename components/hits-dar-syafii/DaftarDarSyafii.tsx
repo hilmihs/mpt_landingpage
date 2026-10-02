@@ -7,7 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { DAR_SYAFII, daftarSchema, findJadwal, perluRekaman } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
-import { Pembuka } from "./Pembuka";
+import { Pembuka, type FaqItem } from "./Pembuka";
 import { StepDataDiri } from "./StepDataDiri";
 import { StepKelas } from "./StepKelas";
 import { StepRekam } from "./StepRekam";
@@ -37,7 +37,7 @@ function langkahUntuk(level: string) {
 }
 
 const STEP_FIELDS: Record<1 | 2, FieldKey[]> = {
-  1: ["email", "nama", "nama_anak", "kelas_anak", "jenis_kelamin", "nomor_wa", "usia", "kota"],
+  1: ["email", "nama", "jenis_kelamin", "nomor_wa", "usia", "kota"],
   2: ["jadwal", "level"],
 };
 
@@ -72,7 +72,7 @@ function validateStep(form: FormState, step: 1 | 2): Errors {
   return errs;
 }
 
-export function DaftarDarSyafii() {
+export function DaftarDarSyafii({ faq }: { faq: readonly FaqItem[] }) {
   const reduce = useReducedMotion();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -273,7 +273,7 @@ export function DaftarDarSyafii() {
 
   return (
     <div className={s.shell}>
-      {step === 0 && <Pembuka onStart={mulai} />}
+      {step === 0 && <Pembuka onStart={mulai} faq={faq} />}
 
       {step >= 1 && (
         <div ref={formTopRef} className={inFlow ? s.flow : undefined}>

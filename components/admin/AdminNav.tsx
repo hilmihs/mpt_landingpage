@@ -32,9 +32,11 @@ interface Props {
   nama: string;
   email: string;
   role: "super" | "staff";
+  /** Angka kecil di samping menu, per href — mis. pertanyaan HITS yang belum dijawab. */
+  badges?: Record<string, number>;
 }
 
-export function AdminNav({ nama, email, role }: Props) {
+export function AdminNav({ nama, email, role, badges = {} }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -141,6 +143,27 @@ export function AdminNav({ nama, email, role }: Props) {
               >
                 <Icon size={16} strokeWidth={2.2} />
                 {item.label}
+                {(badges[item.href] ?? 0) > 0 && (
+                  <span
+                    aria-label={`${badges[item.href]} perlu ditindaklanjuti`}
+                    style={{
+                      marginLeft: "auto",
+                      minWidth: 18,
+                      height: 18,
+                      padding: "0 5px",
+                      borderRadius: 999,
+                      background: "var(--danger)",
+                      color: "#fff",
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {badges[item.href]! > 99 ? "99+" : badges[item.href]}
+                  </span>
+                )}
               </Link>
             );
           })}

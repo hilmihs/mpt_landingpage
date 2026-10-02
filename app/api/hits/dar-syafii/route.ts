@@ -8,6 +8,7 @@ import {
   tplHitsPendaftaranDiterima,
 } from "@/lib/whatsapp";
 import {
+  CATATAN_PENEMPATAN,
   DAR_SYAFII,
   daftarSchema,
   findJadwal,
@@ -75,8 +76,6 @@ export async function POST(req: NextRequest) {
   const parsed = daftarSchema.safeParse({
     email: field("email"),
     nama: field("nama"),
-    nama_anak: field("nama_anak"),
-    kelas_anak: field("kelas_anak"),
     jenis_kelamin: field("jenis_kelamin"),
     nomor_wa: field("nomor_wa"),
     usia: field("usia"),
@@ -187,11 +186,11 @@ export async function POST(req: NextRequest) {
   try {
     await sql`
       INSERT INTO hits_pendaftaran (
-        id, program, angkatan, email, nama, nama_anak, kelas_anak, jenis_kelamin,
+        id, program, angkatan, email, nama, jenis_kelamin,
         nomor_wa, usia, kota, jadwal, level, audio_path, audio_duration_sec, audio_sumber
       ) VALUES (
         ${id}, ${DAR_SYAFII.program}, ${DAR_SYAFII.angkatan}, ${data.email},
-        ${data.nama}, ${data.nama_anak}, ${data.kelas_anak}, ${data.jenis_kelamin}, ${nomorWa}, ${data.usia}, ${data.kota},
+        ${data.nama}, ${data.jenis_kelamin}, ${nomorWa}, ${data.usia}, ${data.kota},
         ${jadwalLabel(jadwal)}, ${data.level}, ${audioPath},
         ${durasi === null ? null : Math.round(durasi * 10) / 10}, ${audio ? sumber : null}
       )
@@ -221,6 +220,7 @@ export async function POST(req: NextRequest) {
         jadwal: jadwalLabel(jadwal),
         adminWaLabel: DAR_SYAFII.adminWaLabel,
         denganRekaman: Boolean(audio),
+        catatanRekaman: CATATAN_PENEMPATAN,
       }),
     );
     waTerkirim = send.ok;

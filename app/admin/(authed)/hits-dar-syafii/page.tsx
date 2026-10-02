@@ -4,6 +4,9 @@ import { getCurrentAdmin } from "@/lib/auth/admin";
 import { sql } from "@/lib/db";
 import { signedAudioUrl } from "@/lib/storage";
 import { DAR_SYAFII, LEVELS } from "@/lib/hits-dar-syafii";
+import { countBelumDijawab } from "@/lib/hits-tanya";
+import { HitsTabs } from "@/components/admin/hits/HitsTabs";
+import { PenilaianRekaman } from "@/components/admin/hits/PenilaianRekaman";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +18,22 @@ interface Row {
   created_at: Date;
   email: string;
   nama: string;
-  nama_anak: string;
-  kelas_anak: string;
+  /** Hanya pendaftar sebelum 30 Sep 2026; formulir tidak lagi memintanya. */
+  nama_anak: string | null;
+  kelas_anak: string | null;
   nomor_wa: string;
   usia: number;
   kota: string;
   jadwal: string;
   level: string;
+  /** Kelas sebenarnya: Lanjutan yang dinilai buta huruf jadi Dasar (migrasi 0015). */
+  level_penempatan: string;
+  lahn_jaliy: number | null;
+  lahn_khofi: number | null;
+  buta_huruf: boolean | null;
+  penilaian_keterangan: string | null;
+  dinilai_at: Date | null;
+  dinilai_oleh: string | null;
   /** null untuk level yang mendaftar tanpa rekaman (selain HITS Lanjutan). */
   audio_path: string | null;
   audio_duration_sec: string | null;
@@ -34,7 +46,8 @@ interface Row {
 async function fetchRows(): Promise<Row[]> {
   return sql<Row[]>`
     SELECT id, created_at, email, nama, nama_anak, kelas_anak, nomor_wa, usia, kota, jadwal, level,
-           audio_path, audio_duration_sec, audio_sumber, wa_sent_at, wa_error,
+           level_penempatan, lahn_jaliy, lahn_khofi, buta_huruf, penilaian_keterangan,
+           dinilai_at, dinilai_oleh, audio_path, audio_duration_sec, audio_sumber, wa_sent_at, wa_error,
            created_at > now() - make_interval(days => ${RETENSI_HARI}) AS audio_masih_ada
       FROM hits_pendaftaran
      WHERE program = ${DAR_SYAFII.program}
@@ -55,19 +68,47 @@ function countBy<T>(list: T[], key: (x: T) => string): [string, number][] {
   return [...m.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-export default async function HitsDarSyafiiAdminPage() {
+const FILTER = [
+  { id: "semua", label: "Semua" },
+  { id: "belum", label: "Belum dinilai" },
+  { id: "buta", label: "Buta Huruf" },
+  { id: "tidak", label: "Tidak Buta Huruf/Pemula" },
+] as const;
+type FilterId = (typeof FILTER)[number]["id"];
+
+function lolosFilter(r: Row, f: FilterId): boolean {
+  if (f === "semua") return true;
+  // Yang bisa dinilai hanya yang berekaman; filter penilaian menyaring sisanya.
+  if (!r.audio_path) return false;
+  if (f === "belum") return r.buta_huruf === null;
+  if (f === "buta") return r.buta_huruf === true;
+  return r.buta_huruf === false;
+}
+
+export default async function HitsDarSyafiiAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nilai?: string }>;
+}) {
   const admin = await getCurrentAdmin();
   if (!admin) redirect("/admin/login");
 
-  const rows = await fetchRows();
+  const { nilai } = await searchParams;
+  const filter: FilterId = FILTER.some((f) => f.id === nilai) ? (nilai as FilterId) : "semua";
+
+  const [semua, belumDijawab] = await Promise.all([fetchRows(), countBelumDijawab()]);
+  const rows = semua.filter((r) => lolosFilter(r, filter));
+  const berekaman = semua.filter((r) => r.audio_path);
+  const belumDinilai = berekaman.filter((r) => r.buta_huruf === null).length;
   const urls = await Promise.all(
     rows.map((r) =>
       r.audio_path && r.audio_masih_ada ? signedAudioUrl(r.audio_path, 3600).catch(() => null) : null,
     ),
   );
   const levelNama = new Map<string, string>(LEVELS.map((l) => [l.id, l.nama]));
-  const perJadwal = countBy(rows, (r) => r.jadwal);
-  const perLevel = countBy(rows, (r) => levelNama.get(r.level) ?? r.level);
+  const perJadwal = countBy(semua, (r) => r.jadwal);
+  const perLevel = countBy(semua, (r) => levelNama.get(r.level) ?? r.level);
+  const perPenempatan = countBy(semua, (r) => levelNama.get(r.level_penempatan) ?? r.level_penempatan);
 
   return (
     <div style={{ maxWidth: 1280 }}>
@@ -101,14 +142,15 @@ export default async function HitsDarSyafiiAdminPage() {
             {DAR_SYAFII.nama}
           </h1>
           <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "6px 0 0", maxWidth: 640 }}>
-            {rows.length} pendaftar. Rekaman terhapus otomatis {RETENSI_HARI} hari
+            {semua.length} pendaftar, {berekaman.length} berekaman ({belumDinilai} belum dinilai).
+            Rekaman terhapus otomatis {RETENSI_HARI} hari
             setelah dikirim — dengarkan sebelum itu. Formulir publik:{" "}
             <a href="/daftar-hits/dar-syafii" target="_blank" style={{ color: "var(--accent-deep)" }}>
               /daftar-hits/dar-syafii
             </a>
           </p>
         </div>
-        {rows.length > 0 && (
+        {semua.length > 0 && (
           <a
             href="/api/admin/hits-dar-syafii/csv"
             className="btn-mpt btn-mpt-primary"
@@ -120,7 +162,9 @@ export default async function HitsDarSyafiiAdminPage() {
         )}
       </header>
 
-      {rows.length === 0 ? (
+      <HitsTabs aktif="pendaftar" belumDijawab={belumDijawab} />
+
+      {semua.length === 0 ? (
         <div className="card-mpt" style={{ padding: "48px 28px", textAlign: "center" }}>
           <Inbox size={28} style={{ color: "var(--accent)", marginBottom: 12 }} />
           <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0 }}>Belum ada pendaftar.</p>
@@ -128,25 +172,58 @@ export default async function HitsDarSyafiiAdminPage() {
       ) : (
         <>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", marginBottom: 18 }}>
-            <Tally title="Per level" items={perLevel} />
+            <Tally title="Per level (pilihan pendaftar)" items={perLevel} />
+            <Tally title="Per kelas penempatan" items={perPenempatan} />
             <Tally title="Per jam belajar" items={perJadwal} />
           </div>
 
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {FILTER.map((f) => {
+              const on = f.id === filter;
+              return (
+                <a
+                  key={f.id}
+                  href={f.id === "semua" ? "?" : `?nilai=${f.id}`}
+                  aria-current={on ? "page" : undefined}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    border: `1px solid ${on ? "var(--accent)" : "var(--line)"}`,
+                    background: on ? "color-mix(in oklab, var(--accent), transparent 88%)" : "transparent",
+                    color: on ? "var(--accent-deep)" : "var(--ink-soft)",
+                  }}
+                >
+                  {f.label}
+                </a>
+              );
+            })}
+          </div>
+
           <div className="card-mpt" style={{ padding: 0, overflow: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1320 }}>
               <thead>
                 <tr style={{ background: "var(--surface-soft)" }}>
                   <Th>Waktu</Th>
                   <Th>Nama</Th>
-                  <Th>Anak · kelas</Th>
                   <Th>WhatsApp</Th>
                   <Th>Usia · Kota</Th>
                   <Th>Jam belajar</Th>
                   <Th>Level</Th>
                   <Th>Rekaman</Th>
+                  <Th>Penilaian lajnah</Th>
                 </tr>
               </thead>
               <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: "28px 14px", textAlign: "center", fontSize: 13, color: "var(--ink-mute)" }}>
+                      Tidak ada pendaftar untuk filter ini.
+                    </td>
+                  </tr>
+                )}
                 {rows.map((r, i) => (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--line)", verticalAlign: "top" }}>
                     <Td>
@@ -159,10 +236,11 @@ export default async function HitsDarSyafiiAdminPage() {
                     <Td>
                       <div style={{ fontWeight: 700, color: "var(--ink)" }}>{r.nama}</div>
                       <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>{r.email}</div>
-                    </Td>
-                    <Td>
-                      {r.nama_anak}
-                      <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>kelas {r.kelas_anak}</div>
+                      {r.nama_anak && (
+                        <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>
+                          anak: {r.nama_anak} · kelas {r.kelas_anak}
+                        </div>
+                      )}
                     </Td>
                     <Td>
                       <a
@@ -182,7 +260,14 @@ export default async function HitsDarSyafiiAdminPage() {
                       <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>{r.kota}</div>
                     </Td>
                     <Td>{r.jadwal}</Td>
-                    <Td>{levelNama.get(r.level) ?? r.level}</Td>
+                    <Td>
+                      {levelNama.get(r.level) ?? r.level}
+                      {r.level_penempatan !== r.level && (
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--danger)" }}>
+                          → {levelNama.get(r.level_penempatan) ?? r.level_penempatan}
+                        </div>
+                      )}
+                    </Td>
                     <Td>
                       {urls[i] ? (
                         <>
@@ -200,6 +285,30 @@ export default async function HitsDarSyafiiAdminPage() {
                         <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>
                           terhapus (lewat {RETENSI_HARI} hari)
                         </span>
+                      )}
+                    </Td>
+                    <Td>
+                      {r.audio_path ? (
+                        <PenilaianRekaman
+                          id={r.id}
+                          level={r.level}
+                          awal={{
+                            lahn_jaliy: r.lahn_jaliy,
+                            lahn_khofi: r.lahn_khofi,
+                            buta_huruf: r.buta_huruf,
+                            keterangan: r.penilaian_keterangan,
+                            dinilai_oleh: r.dinilai_oleh,
+                            dinilai_label: r.dinilai_at
+                              ? r.dinilai_at.toLocaleString("id-ID", {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                  timeZone: "Asia/Jakarta",
+                                })
+                              : null,
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>—</span>
                       )}
                     </Td>
                   </tr>

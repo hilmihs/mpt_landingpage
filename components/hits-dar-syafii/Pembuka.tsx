@@ -18,7 +18,7 @@ const FACTS = [
 const LANGKAH = [
   {
     title: "Isi data diri",
-    body: "Nama, WhatsApp, data anak, usia, dan kota. Sekitar satu menit.",
+    body: "Nama, WhatsApp, usia, dan kota. Sekitar satu menit.",
   },
   {
     title: "Pilih jadwal & level",
@@ -26,7 +26,7 @@ const LANGKAH = [
   },
   {
     title: "Rekam ujian masuk",
-    body: "Khusus HITS Lanjutan: baca Asy-Syura ayat 1–6 langsung di halaman ini. HITS Dasar dan Alumni HITS tanpa rekaman.",
+    body: "Khusus HITS Lanjutan: baca Asy-Syura ayat 1–6 langsung di halaman ini. Bila bacaan masih memiliki kesalahan fatal, Anda ditempatkan di HITS Dasar. HITS Dasar dan Alumni HITS tanpa rekaman.",
   },
 ];
 
@@ -47,7 +47,13 @@ function waktuLabel(jam: string): string {
 /** Jeda animasi masuk bertahap. */
 const d = (i: number) => ({ animationDelay: `${i * 70}ms` });
 
-export function Pembuka({ onStart }: { onStart: () => void }) {
+export interface FaqItem {
+  id: string;
+  pertanyaan: string;
+  jawaban: string;
+}
+
+export function Pembuka({ onStart, faq }: { onStart: () => void; faq: readonly FaqItem[] }) {
   const grup = GRUP.filter((g) => DAR_SYAFII.genderDibuka.includes(g.gender))
     .map((g) => ({ ...g, jadwal: JADWAL.filter((j) => j.gender === g.gender) }))
     .filter((g) => g.jadwal.length > 0);
@@ -195,20 +201,31 @@ export function Pembuka({ onStart }: { onStart: () => void }) {
             <li className={p.infoItem}>
               <MessageCircle size={16} strokeWidth={2.4} aria-hidden="true" />
               <span>
-                Info lebih lanjut: Admin Muhajir Project Tilawah, WhatsApp{" "}
-                <a
-                  className={p.infoLink}
-                  href={`https://wa.me/${DAR_SYAFII.adminWa}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {DAR_SYAFII.adminWaLabel}
-                </a>
-                .
+                Ada pertanyaan?{" "}
+                <Link className={p.infoLink} href="/daftar-hits/dar-syafii/tanya">
+                  Tanya admin di sini
+                </Link>
+                {" "}— jawabannya kami kirim lewat tautan khusus untuk Anda.
               </span>
             </li>
           </ul>
         </section>
+
+        {faq.length > 0 && (
+          <section className={p.secFaq} aria-labelledby="ds-pembuka-faq">
+            <h2 id="ds-pembuka-faq" className={`${s.eyebrow} ${p.subHead}`}>
+              Pertanyaan yang sering diajukan
+            </h2>
+            <div className={p.faq}>
+              {faq.map((f) => (
+                <details key={f.id} className={p.faqItem}>
+                  <summary className={p.faqQ}>{f.pertanyaan}</summary>
+                  <p className={p.faqA}>{f.jawaban}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Tombol kedua: setelah membaca sampai bawah, tidak perlu gulir balik ke hero. */}
         <button

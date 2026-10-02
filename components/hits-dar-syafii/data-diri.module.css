@@ -1,17 +1,13 @@
 /* Langkah 1 · Data diri — gaya khusus layar ini. Token & primitif isian
  * ada di dar-syafii.module.css. */
 
-/* Dua isian sebaris: nama anak + kelas, usia + kota. */
+/* Dua isian sebaris: usia + kota. */
 .row {
   display: grid;
   gap: 10px;
   align-items: start;
 }
-.rowAnak { grid-template-columns: 1.5fr 1fr; }
 .rowUsia { grid-template-columns: 132px 1fr; }
-
-/* Kolom sempit: padding samping sedikit dikurangi seperti mockup. */
-.row .inputTight { padding: 0 14px; }
 
 /* Petunjuk bersama untuk satu baris, menempel ke baris di atasnya. */
 .rowHint { margin-top: -10px; }

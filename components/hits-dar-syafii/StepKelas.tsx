@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, MapPin } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { LEVELS, jadwalUntuk, perluRekaman } from "@/lib/hits-dar-syafii";
+import { CATATAN_PENEMPATAN, LEVELS, jadwalUntuk, perluRekaman } from "@/lib/hits-dar-syafii";
 import s from "./dar-syafii.module.css";
 import k from "./kelas.module.css";
 import { Sheet } from "./Shared";
@@ -170,6 +170,7 @@ export function StepKelas({ form, errors, update, onBack, onNext }: Props) {
             );
           })}
         </div>
+        <span className={s.hint}>{CATATAN_PENEMPATAN}</span>
         {errors.level && (
           <span className={s.error} id="ds-level-msg" role="alert">
             <CircleAlert size={14} strokeWidth={2.4} />

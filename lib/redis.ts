@@ -50,6 +50,11 @@ export function hitsDaftarRatelimit(): Ratelimit {
   return getOrCreateLimiter("hits-daftar", 5, 600);
 }
 
+/** 5 pertanyaan HITS per 10 menit per IP. */
+export function hitsTanyaRatelimit(): Ratelimit {
+  return getOrCreateLimiter("hits-tanya", 5, 600);
+}
+
 /** 10 HITS click-through per 5 menit per IP. */
 export function hitsClickRatelimit(): Ratelimit {
   return getOrCreateLimiter("hits", 10, 300);
